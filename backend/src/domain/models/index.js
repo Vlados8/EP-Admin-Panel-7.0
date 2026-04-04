@@ -26,6 +26,7 @@ const EmailAccount = require('./EmailAccount');
 const Email = require('./Email');
 const Attachment = require('./Attachment');
 const ProjectFolder = require('./ProjectFolder');
+const ProjectFile = require('./ProjectFile');
 
 // Associations
 
@@ -163,6 +164,14 @@ Email.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
 Project.hasMany(ProjectFolder, { foreignKey: 'project_id', as: 'folders', onDelete: 'CASCADE' });
 ProjectFolder.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
 
+Project.hasMany(ProjectFile, { foreignKey: 'project_id', as: 'files', onDelete: 'CASCADE' });
+ProjectFile.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+
+ProjectFolder.belongsTo(User, { foreignKey: 'created_by_id', as: 'creator' });
+ProjectFile.belongsTo(User, { foreignKey: 'created_by_id', as: 'creator' });
+ProjectFile.belongsTo(ProjectFolder, { foreignKey: 'folder_id', as: 'folder' });
+ProjectFolder.hasMany(ProjectFile, { foreignKey: 'folder_id', as: 'files', onDelete: 'CASCADE' });
+
 module.exports = {
     sequelize,
     Company,
@@ -191,5 +200,6 @@ module.exports = {
     EmailAccount,
     Email,
     Attachment,
-    ProjectFolder
+    ProjectFolder,
+    ProjectFile
 };

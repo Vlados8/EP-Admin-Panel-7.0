@@ -121,7 +121,9 @@ const sendAutoReply = async (clientEmail, clientName, itemId, subject, type = 's
     const fromEmail = `no-reply@${domain}`;
     const fromName = 'Empire Premium Team';
     
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    // Use relative path for production if frontend is served by backend, 
+    // but Emails need absolute URLs.
+    const frontendUrl = process.env.FRONTEND_URL || 'https://www.empire-premium-bau.de';
     const headerLogoUrl = `${frontendUrl}/assets/Empire%20Premium%20white.png`;
     const avatarLogoUrl = `${frontendUrl}/assets/Logo%20EP.png`;
 

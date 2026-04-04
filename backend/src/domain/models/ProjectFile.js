@@ -1,7 +1,7 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../../config/database');
 
-const ProjectFolder = sequelize.define('ProjectFolder', {
+const ProjectFile = sequelize.define('ProjectFile', {
     id: {
         type: DataTypes.UUID,
         defaultValue: DataTypes.UUIDV4,
@@ -15,6 +15,15 @@ const ProjectFolder = sequelize.define('ProjectFolder', {
             key: 'id'
         }
     },
+    folder_id: {
+        type: DataTypes.UUID,
+        allowNull: true,
+        references: {
+            model: 'project_folders',
+            key: 'id'
+        },
+        comment: 'If null, file is in the project root'
+    },
     name: {
         type: DataTypes.STRING,
         allowNull: false
@@ -22,22 +31,15 @@ const ProjectFolder = sequelize.define('ProjectFolder', {
     path: {
         type: DataTypes.STRING,
         allowNull: false,
-        comment: 'Relative path within the project uploads folder'
+        comment: 'Relative path within the project uploads folder (excluding the filename)'
     },
-    allowed_role_ids: {
-        type: DataTypes.JSON,
-        allowNull: true,
-        defaultValue: null,
-        comment: 'JSON array of role IDs. If null/empty, only Admins/Owner can see'
+    size: {
+        type: DataTypes.BIGINT,
+         allowNull: true
     },
-    is_public: {
-        type: DataTypes.BOOLEAN,
-        defaultValue: false
-    },
-    share_token: {
-        type: DataTypes.UUID,
-        unique: true,
-        defaultValue: DataTypes.UUIDV4
+    mime_type: {
+        type: DataTypes.STRING,
+        allowNull: true
     },
     created_by_id: {
         type: DataTypes.UUID,
@@ -48,7 +50,7 @@ const ProjectFolder = sequelize.define('ProjectFolder', {
         }
     }
 }, {
-    tableName: 'project_folders',
+    tableName: 'project_files',
     timestamps: true,
     indexes: [
         {
@@ -58,4 +60,4 @@ const ProjectFolder = sequelize.define('ProjectFolder', {
     ]
 });
 
-module.exports = ProjectFolder;
+module.exports = ProjectFile;

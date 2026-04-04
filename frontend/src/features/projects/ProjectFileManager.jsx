@@ -15,8 +15,12 @@ const ProjectFileManager = ({ project }) => {
     // Auth & Permissions
     const { user } = useSelector(state => state.auth);
     const userRole = user?.role?.name || user?.role; // Fallback for safety
-    const canManagePermissions = ['Admin', 'Büro', 'Projektleiter'].includes(userRole);
-    const canManageFiles = ['Admin', 'Büro', 'Projektleiter'].includes(userRole); // Assuming same for now
+    const isManagement = ['Admin', 'Büro', 'Projektleiter', 'Gruppenleiter'].includes(userRole);
+    
+    // Workers can create, but not delete, folders. They can only delete their own files.
+    // Management can do everything.
+    const canManagePermissions = isManagement;
+    const canManageFiles = true; // All roles can upload/create folders now
 
     // Gallery State
     const [isGalleryOpen, setIsGalleryOpen] = useState(false);
@@ -305,7 +309,16 @@ const ProjectFileManager = ({ project }) => {
 
                         {items.map((item, idx) => {
                             const displayName = getDisplayName(item.name, currentPath);
-                            const canDelete = !isStagesDir && !(currentPath === '' && item.name === 'stages');
+                            const isSpecialFolder = currentPath === '' && item.name === 'stages';
+                            
+                            // RBAC check:
+                            let canDelete = false;
+                            if (isManagement) {
+                                canDelete = !isSpecialFolder && !isStagesDir;
+                            } else {
+                                // Worker: Can delete files if they are the owner, but NEVER folders.
+                                canDelete = !item.isDirectory && item.created_by_id === user.id;
+                            }
 
                             return (
                                 <div key={idx} className="group relative bg-white/5 border border-white/10 hover:border-blue-500/50 hover:bg-white/10 rounded-xl p-3 flex flex-col items-center justify-between transition-all aspect-square text-center">
@@ -337,7 +350,8 @@ const ProjectFileManager = ({ project }) => {
                                             className="flex-1 w-full flex flex-col items-center justify-center cursor-pointer"
                                         >
                                             <i className="fa-solid fa-folder text-5xl text-blue-400 mb-3 drop-shadow-md"></i>
-                                            <span className="text-sm font-medium text-gray-200 truncate w-full px-2" title={displayName}>{displayName}</span>
+                                            <span className="text-sm font-medium text-gray-200 truncate w-full px-2" title={`${displayName}${item.creator_name ? ` (Erstellt von ${item.creator_name})` : ''}`}>{displayName}</span>
+                                            {item.creator_name && <span className="text-[10px] text-gray-500 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">von {item.creator_name}</span>}
                                         </div>
                                     ) : (
                                         <div
@@ -360,8 +374,11 @@ const ProjectFileManager = ({ project }) => {
                                                     className="fa-solid fa-file-lines text-5xl text-gray-400 mb-3 cursor-pointer hover:text-blue-400 transition-colors"
                                                 ></i>
                                             )}
-                                            <span className="text-xs font-medium text-gray-300 truncate w-full px-2" title={displayName}>{displayName}</span>
-                                            <span className="text-[10px] text-gray-500 mt-1">{formatSize(item.size)}</span>
+                                            <span className="text-xs font-medium text-gray-300 truncate w-full px-2" title={`${displayName}${item.creator_name ? ` (Hochgeladen von ${item.creator_name})` : ''}`}>{displayName}</span>
+                                            <div className="flex flex-col items-center mt-1">
+                                                <span className="text-[10px] text-gray-500">{formatSize(item.size)}</span>
+                                                {item.creator_name && <span className="text-[10px] text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity">von {item.creator_name}</span>}
+                                            </div>
 
                                             {/* Download Button */}
                                             <button

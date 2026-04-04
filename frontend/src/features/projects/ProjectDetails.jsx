@@ -6,6 +6,7 @@ import { useDispatch } from 'react-redux';
 import { setBreadcrumbOverride } from '../../store/slices/uiSlice';
 import ProjectEditModal from './ProjectEditModal';
 import ProjectFileManager from './ProjectFileManager';
+import { getImageUrl } from '../../utils/config';
 import usePermission from '../../hooks/usePermission';
 
 const ProjectDetails = () => {
@@ -298,7 +299,7 @@ const ProjectDetails = () => {
                         <div className="glass-card rounded-2xl p-6 relative overflow-hidden min-h-[200px] flex flex-col justify-end">
                             {project.main_image ? (
                                 <img
-                                    src={`http://localhost:3000${project.main_image}`}
+                                    src={getImageUrl(project.main_image)}
                                     alt="Project Hero"
                                     className="absolute inset-0 w-full h-full object-cover opacity-20"
                                 />
@@ -721,7 +722,7 @@ const ProjectDetails = () => {
                                                         <div className="flex flex-wrap gap-2">
                                                             {task.images?.map(img => (
                                                                 <div key={img.id} className={`relative w-16 h-16 rounded-lg overflow-hidden border transition-all ${imagesToDelete.includes(img.id) ? 'border-red-500 opacity-40 grayscale' : 'border-white/10'}`}>
-                                                                    <img src={`http://localhost:3000${img.path}`} alt="" className="w-full h-full object-cover" />
+                                                                    <img src={getImageUrl(img.path)} alt="" className="w-full h-full object-cover" />
                                                                     <button
                                                                         onClick={() => {
                                                                             if (imagesToDelete.includes(img.id)) {
@@ -803,10 +804,10 @@ const ProjectDetails = () => {
                                                             {task.images.map(img => (
                                                                 <div key={img.id} className="w-14 h-14 rounded-xl overflow-hidden border border-white/10 cursor-pointer hover:border-blue-500/50 transition-all shadow-lg">
                                                                     <img
-                                                                        src={`http://localhost:3000${img.path}`}
+                                                                        src={getImageUrl(img.path)}
                                                                         alt=""
                                                                         className="w-full h-full object-cover"
-                                                                        onClick={() => window.open(`http://localhost:3000${img.path}`, '_blank')}
+                                                                        onClick={() => window.open(getImageUrl(img.path), '_blank')}
                                                                     />
                                                                 </div>
                                                             ))}

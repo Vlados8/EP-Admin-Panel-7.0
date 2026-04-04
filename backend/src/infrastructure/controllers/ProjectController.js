@@ -11,7 +11,7 @@ exports.getAllProjects = async (req, res) => {
         const whereClause = {};
 
         // Role-based visibility filtering
-        if (!hasPermission(req.user, 'MANAGE_API_KEYS')) { // Not Admin/Büro
+        if (!hasPermission(req.user, 'MANAGE_USERS')) { // Not Admin/Büro
             if (userRole === 'Worker') {
                 // Workers only see projects they are assigned to
                 whereClause[Op.and] = [

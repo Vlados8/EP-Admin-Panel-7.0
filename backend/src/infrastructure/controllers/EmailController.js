@@ -468,7 +468,7 @@ exports.sendEmail = async (req, res, next) => {
         const inlineAttachments = [];
 
         // --- Branding (External Logo URLs) ---
-        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const frontendUrl = process.env.FRONTEND_URL || 'https://www.empire-premium-bau.de';
         const headerLogoUrl = `${frontendUrl}/assets/Empire%20Premium%20white.png`;
         const avatarLogoUrl = `${frontendUrl}/assets/Logo%20EP.png`;
 

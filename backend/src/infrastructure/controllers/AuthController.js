@@ -36,6 +36,9 @@ exports.login = async (req, res, next) => {
         // Generate Token
         const token = generateToken(user.id, user.role ? user.role.name : 'Worker');
 
+        const [firstName, ...lastNameParts] = (user.name || '').split(' ');
+        const lastName = lastNameParts.join(' ');
+
         res.status(200).json({
             status: 'success',
             token,
@@ -43,6 +46,8 @@ exports.login = async (req, res, next) => {
                 user: {
                     id: user.id,
                     name: user.name,
+                    firstName: firstName || user.name,
+                    lastName: lastName || '',
                     email: user.email,
                     role: user.role ? user.role.name : 'Worker',
                     company_id: user.company_id
@@ -58,10 +63,23 @@ exports.login = async (req, res, next) => {
 exports.getMe = async (req, res, next) => {
     try {
         // req.user is set by auth.protect middleware
+        const user = req.user;
+        const [firstName, ...lastNameParts] = (user.name || '').split(' ');
+        const lastName = lastNameParts.join(' ');
+
         res.status(200).json({
             status: 'success',
             data: {
-                user: req.user
+                user: {
+                    id: user.id,
+                    name: user.name,
+                    firstName: firstName || user.name,
+                    lastName: lastName || '',
+                    email: user.email,
+                    role: user.role ? (user.role.name || user.role) : 'Worker',
+                    company_id: user.company_id,
+                    company: user.company
+                }
             }
         });
     } catch (err) {

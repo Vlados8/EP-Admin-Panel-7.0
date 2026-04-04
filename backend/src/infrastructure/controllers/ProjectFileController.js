@@ -1,13 +1,25 @@
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
-const { ProjectFolder, Role, Project } = require('../../domain/models');
+const { ProjectFolder, ProjectFile, Role, Project, User } = require('../../domain/models');
 
 // Base uploads directory
 const UPLOADS_DIR = path.join(__dirname, '../../../../uploads/projects');
 
 // Temporary storage for incoming uploads before moving them
 const upload = multer({ dest: path.join(__dirname, '../../../../uploads/temp/') });
+
+const fixEncoding = (str) => {
+    if (!str) return str;
+    try {
+        const normalized = str.replace(/\u0110/g, '\u00D0').replace(/\u0111/g, '\u00D1');
+        const buf = Buffer.from(normalized, 'latin1');
+        const utf8 = buf.toString('utf8');
+        const hasCyrillic = /[\u0400-\u04FF]/.test(utf8);
+        const isProbablyCorrect = hasCyrillic || (utf8 !== normalized && !utf8.includes('\ufffd'));
+        return isProbablyCorrect ? utf8 : str;
+    } catch { return str; }
+};
 
 // Utility func to ensure requested path is secure and within project dir
 const getSecurePath = (projectId, requestedPath) => {
@@ -36,7 +48,7 @@ exports.listFiles = async (req, res) => {
     try {
         const { id } = req.params;
         const subPath = req.query.path || '';
-        const userRole = req.user.role; // Assuming auth middleware sets req.user
+        const userRole = req.user.role; 
 
         const { projectDir, targetPath } = getSecurePath(id, subPath);
         ensureProjectDir(projectDir);
@@ -56,13 +68,13 @@ exports.listFiles = async (req, res) => {
             });
 
             if (currentFolderRecord && currentFolderRecord.allowed_role_ids) {
-                const allowedRoles = Array.isArray(currentFolderRecord.allowed_role_ids) 
-                    ? currentFolderRecord.allowed_role_ids 
+                const allowedRoles = Array.isArray(currentFolderRecord.allowed_role_ids)
+                    ? currentFolderRecord.allowed_role_ids
                     : JSON.parse(currentFolderRecord.allowed_role_ids);
-                
+
                 // Admin and Büro always see everything
                 const isManagement = ['Admin', 'Büro'].includes(userRole.name);
-                
+
                 if (!isManagement && !allowedRoles.includes(userRole.id)) {
                     return res.status(403).json({ error: 'Access denied: You do not have permission to view this folder' });
                 }
@@ -73,49 +85,36 @@ exports.listFiles = async (req, res) => {
         const items = fs.readdirSync(targetPath, { withFileTypes: true });
 
         const folderRecords = await ProjectFolder.findAll({
-            where: { project_id: id, path: subPath }
+            where: { project_id: id, path: subPath },
+            include: [{ model: User, as: 'creator', attributes: ['id', 'name'] }]
         });
 
-        // Helper to fix garbled filenames (UTF-8 bytes misinterpreted as Latin-1)
-        const fixEncoding = (str) => {
-            if (!str) return str;
-            try {
-                // Pre-normalize common misinterpretations/normalization: 
-                // Ð/Ñ (Latin-1 D0/D1) often become Đ/đ (U+0110/U+0111)
-                const normalized = str.replace(/\u0110/g, '\u00D0').replace(/\u0111/g, '\u00D1');
-                const buf = Buffer.from(normalized, 'latin1');
-                const utf8 = buf.toString('utf8');
-                
-                // Heuristic: If it contains Cyrillic characters now and didn't before, it's fixed.
-                // Also check if it's generally valid UTF-8 without replacement chars.
-                const hasCyrillic = /[\u0400-\u04FF]/.test(utf8);
-                const isProbablyCorrect = hasCyrillic || (utf8 !== normalized && !utf8.includes('\ufffd'));
-                
-                return isProbablyCorrect ? utf8 : str;
-            } catch {
-                return str;
-            }
-        };
+        const fileRecords = await ProjectFile.findAll({
+            where: { project_id: id, path: subPath },
+            include: [{ model: User, as: 'creator', attributes: ['id', 'name'] }]
+        });
 
         const formattedItems = items.map(item => {
             const itemPath = path.join(targetPath, item.name);
             const stats = fs.statSync(itemPath);
             const relativePath = path.relative(UPLOADS_DIR, itemPath).replace(/\\/g, '/');
 
-            // Find metadata for this specific directory if it exists
-            const record = item.isDirectory() 
-                ? folderRecords.find(r => r.name === item.name) 
-                : null;
+            // Find metadata for this specific directory or file if it exists
+            const record = item.isDirectory()
+                ? folderRecords.find(r => r.name === item.name)
+                : fileRecords.find(r => r.name === item.name);
 
             return {
                 name: fixEncoding(item.name),
-                physicalName: item.name, // Keep original for reference
+                physicalName: item.name, 
                 isDirectory: item.isDirectory(),
                 size: stats.size,
                 createdAt: stats.birthtime,
                 updatedAt: stats.mtime,
                 url: item.isDirectory() ? null : `/uploads/projects/${relativePath}`,
-                permissions: record ? {
+                created_by_id: record ? record.created_by_id : null,
+                creator_name: (record && record.creator) ? record.creator.name : null,
+                permissions: record && item.isDirectory() ? {
                     allowed_role_ids: record.allowed_role_ids,
                     is_public: record.is_public,
                     share_token: record.share_token
@@ -128,13 +127,20 @@ exports.listFiles = async (req, res) => {
             // Admin and Büro bypass filtering
             if (['Admin', 'Büro'].includes(userRole.name)) return true;
 
-            if (!item.isDirectory || !item.permissions || !item.permissions.allowed_role_ids) return true;
-            
-            const allowedRoles = Array.isArray(item.permissions.allowed_role_ids)
-                ? item.permissions.allowed_role_ids
-                : JSON.parse(item.permissions.allowed_role_ids);
+            // If it's a file, we check folder permissions for visibility
+            // If it's a folder, check its own permissions
+            if (item.isDirectory) {
+                if (item.permissions && item.permissions.is_public) return true;
+                if (!item.permissions || !item.permissions.allowed_role_ids) return true;
 
-            return allowedRoles.includes(userRole.id);
+                const allowedRoles = Array.isArray(item.permissions.allowed_role_ids)
+                    ? item.permissions.allowed_role_ids
+                    : JSON.parse(item.permissions.allowed_role_ids);
+
+                return allowedRoles.includes(userRole.id);
+            }
+            
+            return true; // Files in a visible folder are visible
         });
 
         // Optional: Sort so directories come first
@@ -162,13 +168,10 @@ exports.createFolder = async (req, res) => {
 
         if (!name) return res.status(400).json({ error: 'Folder name is required' });
 
-        // Fix potential encoding issues from body-parser/client
-        const sanitizedName = Buffer.from(name, 'latin1').toString('utf8');
-
         const { projectDir, targetPath } = getSecurePath(id, folderPath);
         ensureProjectDir(projectDir);
 
-        const newFolderPath = path.join(targetPath, sanitizedName);
+        const newFolderPath = path.join(targetPath, name);
 
         if (fs.existsSync(newFolderPath)) {
             return res.status(400).json({ error: 'Folder already exists' });
@@ -179,9 +182,10 @@ exports.createFolder = async (req, res) => {
         // Save metadata to DB
         await ProjectFolder.create({
             project_id: id,
-            name: sanitizedName,
+            name: name,
             path: folderPath || '',
-            allowed_role_ids: allowed_role_ids || null
+            allowed_role_ids: allowed_role_ids || null,
+            created_by_id: req.user.id
         });
 
         res.status(201).json({
@@ -213,9 +217,21 @@ exports.uploadFiles = async (req, res) => {
             fs.mkdirSync(targetPath, { recursive: true });
         }
 
+        // Try to find the parent folder ID if we are uploading to a subpath
+        let folderId = null;
+        if (uploadPath) {
+            const pathParts = uploadPath.split('/').filter(Boolean);
+            const folderName = pathParts[pathParts.length - 1];
+            const parentPath = pathParts.slice(0, -1).join('/');
+            const folderRecord = await ProjectFolder.findOne({
+                where: { project_id: id, path: parentPath, name: folderName }
+            });
+            if (folderRecord) folderId = folderRecord.id;
+        }
+
         const uploadedFiles = [];
 
-        req.files.forEach(file => {
+        for (const file of req.files) {
             // Fix encoding: multer/busboy misinterprets UTF-8 as Latin-1
             let fileName = Buffer.from(file.originalname, 'latin1').toString('utf8');
             let finalPath = path.join(targetPath, fileName);
@@ -231,11 +247,23 @@ exports.uploadFiles = async (req, res) => {
             fs.renameSync(file.path, finalPath);
 
             const relativePath = path.relative(UPLOADS_DIR, finalPath).replace(/\\/g, '/');
+
+            // Save to DB
+            await ProjectFile.create({
+                project_id: id,
+                folder_id: folderId,
+                name: fileName,
+                path: uploadPath || '',
+                size: file.size,
+                mime_type: file.mimetype,
+                created_by_id: req.user.id
+            });
+
             uploadedFiles.push({
                 name: fileName,
                 url: `/uploads/projects/${relativePath}`
             });
-        });
+        }
 
         res.status(201).json({
             status: 'success',
@@ -259,23 +287,52 @@ exports.deleteItem = async (req, res) => {
     try {
         const { id } = req.params;
         const itemPath = req.query.path;
+        const userRole = req.user.role;
+        const userId = req.user.id;
 
         if (!itemPath) return res.status(400).json({ error: 'Path is required for deletion' });
 
         const { targetPath } = getSecurePath(id, itemPath);
-
         if (!fs.existsSync(targetPath)) {
             return res.status(404).json({ error: 'File or folder not found' });
         }
 
         const stats = fs.statSync(targetPath);
+        const name = path.basename(targetPath);
+        const parentRelativePath = path.dirname(itemPath) === '.' ? '' : path.dirname(itemPath);
+
+        // RBAC logic
+        const isManagement = ['Admin', 'Büro', 'Projektleiter', 'Gruppenleiter'].includes(userRole.name);
 
         if (stats.isDirectory()) {
-            // Delete directory recursively
-            fs.rmSync(targetPath, { recursive: true, force: true });
+            // 1. Management roles can delete any directory
+            if (isManagement) {
+                fs.rmSync(targetPath, { recursive: true, force: true });
+                await ProjectFolder.destroy({ where: { project_id: id, path: parentRelativePath, name: name } });
+                await ProjectFile.destroy({ where: { project_id: id, path: itemPath } }); // cleanup files in that path too
+            } else {
+                // 2. Workers (non-management) cannot delete any folder
+                return res.status(403).json({ error: 'Access denied: Worker role cannot delete folders' });
+            }
         } else {
-            // Delete file
-            fs.unlinkSync(targetPath);
+            // 3. For Files
+            if (isManagement) {
+                // Management can delete anything
+                fs.unlinkSync(targetPath);
+                await ProjectFile.destroy({ where: { project_id: id, path: parentRelativePath, name: name } });
+            } else {
+                // Worker can only delete if they are the creator
+                const fileRecord = await ProjectFile.findOne({
+                    where: { project_id: id, path: parentRelativePath, name: name }
+                });
+
+                if (fileRecord && fileRecord.created_by_id === userId) {
+                    fs.unlinkSync(targetPath);
+                    await fileRecord.destroy();
+                } else {
+                    return res.status(403).json({ error: 'Access denied: You can only delete your own files' });
+                }
+            }
         }
 
         res.status(200).json({
@@ -328,15 +385,17 @@ exports.updatePermissions = async (req, res) => {
         const { path: folderPath, name, allowed_role_ids } = req.body;
         const userRole = req.user.role;
 
-        // Restriction: Only Admin, Büro, and Projektleiter can change permissions
-        const allowedToManage = ['Admin', 'Büro', 'Projektleiter'].includes(userRole.name);
+        if (!name) return res.status(400).json({ error: 'Folder name is required' });
+
+        // Restriction: Only Admin, Büro, Projektleiter, and Gruppenleiter can change permissions
+        const allowedToManage = ['Admin', 'Büro', 'Projektleiter', 'Gruppenleiter'].includes(userRole.name);
         if (!allowedToManage) {
             return res.status(403).json({ error: 'Access denied: Insufficient permissions' });
         }
 
         const [folder, created] = await ProjectFolder.findOrCreate({
             where: { project_id: id, path: folderPath || '', name: name },
-            defaults: { allowed_role_ids }
+            defaults: { allowed_role_ids, created_by_id: req.user.id }
         });
 
         if (!created) {
@@ -346,6 +405,7 @@ exports.updatePermissions = async (req, res) => {
 
         res.status(200).json({ status: 'success', message: 'Permissions updated' });
     } catch (err) {
+        console.error('[updatePermissions ERROR]:', err);
         res.status(400).json({ error: err.message });
     }
 };
@@ -356,25 +416,34 @@ exports.togglePublicShare = async (req, res) => {
         const { path: folderPath, name } = req.body;
         const userRole = req.user.role;
 
-        // Restriction: Only Admin, Büro, and Projektleiter can manage links
-        const allowedToManage = ['Admin', 'Büro', 'Projektleiter'].includes(userRole.name);
+        if (!name) return res.status(400).json({ error: 'Folder name is required' });
+
+        // Restriction: Only Admin, Büro, Projektleiter, and Gruppenleiter can manage links
+        const allowedToManage = ['Admin', 'Büro', 'Projektleiter', 'Gruppenleiter'].includes(userRole.name);
         if (!allowedToManage) {
             return res.status(403).json({ error: 'Access denied: Insufficient permissions' });
         }
 
         const [folder] = await ProjectFolder.findOrCreate({
-            where: { project_id: id, path: folderPath || '', name: name }
+            where: { project_id: id, path: folderPath || '', name: name },
+            defaults: { created_by_id: req.user.id }
         });
+
+        // Ensure share_token exists (e.g. if we found an existing record without one)
+        if (!folder.share_token) {
+            folder.share_token = require('crypto').randomUUID();
+        }
 
         folder.is_public = !folder.is_public;
         await folder.save();
 
-        res.status(200).json({ 
-            status: 'success', 
+        res.status(200).json({
+            status: 'success',
             is_public: folder.is_public,
             share_token: folder.share_token
         });
     } catch (err) {
+        console.error('[togglePublicShare ERROR]:', err);
         res.status(400).json({ error: err.message });
     }
 };

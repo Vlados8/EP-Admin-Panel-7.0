@@ -30,6 +30,7 @@ app.use(cors({ origin: '*' }));
 // Healthcheck Route (Top priority for Railway)
 app.get('/api/v1/health', async (req, res) => {
     const sequelize = require('./config/database');
+    const { ProjectFolder, ProjectFile, User } = require('./domain/models');
     const fs = require('fs');
     const path = require('path');
 
@@ -114,6 +115,7 @@ try {
     const supportRoutes = require('./infrastructure/routes/supportRoutes');
     const emailRoutes = require('./infrastructure/routes/emailRoutes');
     const publicRoutes = require('./infrastructure/routes/publicRoutes');
+    const dashboardRoutes = require('./infrastructure/routes/dashboardRoutes');
 
     // --- PUBLIC WEBHOOKS ---
     // CRM Integrations (e.g. MyGo) - Uses simple multer for attachments
@@ -138,6 +140,7 @@ try {
     app.use('/api/v1/project-stages', require('./infrastructure/routes/projectStageRoutes'));
     app.use('/api/v1/support', supportRoutes);
     app.use('/api/v1/emails', emailRoutes);
+    app.use('/api/v1/dashboard', dashboardRoutes);
 
     // The problematic route
     const apiKeyRoutes = require(apiKeyRoutesPath);
@@ -196,7 +199,7 @@ if (require.main === module) {
         initWebSocket(server);
 
         // Import all models
-        require('./domain/models');
+        const { ProjectFolder, ProjectFile, User } = require('./domain/models');
 
         const PORT = process.env.PORT || 3000;
 
@@ -215,6 +218,9 @@ if (require.main === module) {
 
                 // MANUALLY FIX missing columns to resolve "Unknown column 'user_id'"
                 try {
+                    console.log('Verifying project_folders schema...');
+                    const [projectFolderResults] = await sequelize.query("SHOW TABLES LIKE 'project_folders'");
+
                     console.log('Verifying email_accounts schema...');
                     const [results] = await sequelize.query("SHOW COLUMNS FROM email_accounts LIKE 'user_id'");
                     if (results.length === 0) {
@@ -325,11 +331,47 @@ if (require.main === module) {
                         await sequelize.query("ALTER TABLE attachments ADD COLUMN task_id INT NULL AFTER note_id");
                     }
 
-                    console.log('Verifying project_folders schema...');
-                    const [projectFolderResults] = await sequelize.query("SHOW TABLES LIKE 'project_folders'");
                     if (projectFolderResults.length === 0) {
                         console.log('Creating project_folders table...');
                         await ProjectFolder.sync({ alter: true });
+                    } else {
+                        // Table exists, verify columns for permissions/sharing
+                        console.log('Verifying project_folders columns...');
+                        const [roleCols] = await sequelize.query("SHOW COLUMNS FROM project_folders LIKE 'allowed_role_ids'");
+                        if (roleCols.length === 0) {
+                            console.log('Adding allowed_role_ids to project_folders...');
+                            await sequelize.query("ALTER TABLE project_folders ADD COLUMN allowed_role_ids JSON NULL");
+                        }
+                        const [publicCols] = await sequelize.query("SHOW COLUMNS FROM project_folders LIKE 'is_public'");
+                        if (publicCols.length === 0) {
+                            console.log('Adding is_public to project_folders...');
+                            await sequelize.query("ALTER TABLE project_folders ADD COLUMN is_public BOOLEAN DEFAULT 0");
+                        }
+                        const [tokenCols] = await sequelize.query("SHOW COLUMNS FROM project_folders LIKE 'share_token'");
+                        if (tokenCols.length === 0) {
+                            console.log('Adding share_token to project_folders...');
+                            await sequelize.query("ALTER TABLE project_folders ADD COLUMN share_token CHAR(36) UNIQUE NULL");
+                        }
+                        const [createdCols] = await sequelize.query("SHOW COLUMNS FROM project_folders LIKE 'created_by_id'");
+                        if (createdCols.length === 0) {
+                            console.log('Adding created_by_id to project_folders...');
+                            await sequelize.query("ALTER TABLE project_folders ADD COLUMN created_by_id CHAR(36) NULL");
+                        }
+                        
+                        // Backfill share_tokens for existing folders that might have NULL
+                        console.log('Backfilling missing share_tokens...');
+                        const [folders] = await sequelize.query("SELECT id FROM project_folders WHERE share_token IS NULL");
+                        for (const folder of folders) {
+                            const newToken = require('crypto').randomUUID();
+                            await sequelize.query(`UPDATE project_folders SET share_token = '${newToken}' WHERE id = '${folder.id}'`);
+                        }
+                    }
+
+                    console.log('Verifying project_files schema...');
+                    const [projectFileResults] = await sequelize.query("SHOW TABLES LIKE 'project_files'");
+                    if (projectFileResults.length === 0) {
+                        console.log('Creating project_files table...');
+                        await ProjectFile.sync({ alter: true });
                     }
 
                     console.log('Schema verification complete.');

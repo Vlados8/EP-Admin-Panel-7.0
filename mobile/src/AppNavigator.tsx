@@ -17,6 +17,9 @@ import NotesScreen from './screens/NotesScreen';
 import TasksScreen from './screens/TasksScreen';
 import ProjectsScreen from './screens/ProjectsScreen';
 import EmailScreen from './screens/EmailScreen';
+import ProjectDetailScreen from './screens/ProjectDetailScreen';
+import TaskDetailScreen from './screens/TaskDetailScreen';
+import EmailDetailScreen from './screens/EmailDetailScreen';
 import { useAuth } from './context/AuthContext';
 
 const Stack = createNativeStackNavigator();
@@ -27,18 +30,18 @@ function MainTabs() {
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarActiveTintColor: 'black',
-        tabBarInactiveTintColor: 'gray',
+        tabBarActiveTintColor: '#3B82F6',
+        tabBarInactiveTintColor: '#6B7280',
         tabBarStyle: {
           paddingBottom: 10,
           paddingTop: 10,
           height: 70,
-          backgroundColor: 'white',
+          backgroundColor: '#0a0a0c',
           borderTopWidth: 1,
-          borderTopColor: '#F3F4F6',
+          borderTopColor: 'rgba(255, 255, 255, 0.1)',
         },
         tabBarIcon: ({ color, size }) => {
-          if (route.name === 'Dashboard') return <Home size={size} color={color} />;
+          if (route.name === 'Übersicht') return <Home size={size} color={color} />;
           if (route.name === 'Notizen') return <FileText size={size} color={color} />;
           if (route.name === 'Aufgaben') return <SquareCheck size={size} color={color} />;
           if (route.name === 'Projekte') return <Briefcase size={size} color={color} />;
@@ -52,10 +55,10 @@ function MainTabs() {
         },
       })}
     >
-      <Tab.Screen name="Dashboard" component={DashboardScreen} />
-      <Tab.Screen name="Notizen" component={NotesScreen} />
-      <Tab.Screen name="Aufgaben" component={TasksScreen} />
+      <Tab.Screen name="Übersicht" component={DashboardScreen} />
       <Tab.Screen name="Projekte" component={ProjectsScreen} />
+      <Tab.Screen name="Aufgaben" component={TasksScreen} />
+      <Tab.Screen name="Notizen" component={NotesScreen} />
       <Tab.Screen name="E-Mail" component={EmailScreen} />
     </Tab.Navigator>
   );
@@ -76,7 +79,12 @@ export default function AppNavigator() {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {user ? (
-          <Stack.Screen name="Main" component={MainTabs} />
+          <>
+            <Stack.Screen name="Main" component={MainTabs} />
+            <Stack.Screen name="ProjectDetail" component={ProjectDetailScreen} />
+            <Stack.Screen name="TaskDetail" component={TaskDetailScreen} />
+            <Stack.Screen name="EmailDetail" component={EmailDetailScreen} />
+          </>
         ) : (
           <Stack.Screen name="Auth" component={LoginScreen} />
         )}

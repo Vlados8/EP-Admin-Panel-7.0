@@ -4,6 +4,7 @@ import { useSelector } from 'react-redux';
 import api from '../../services/api';
 import ProjectWizard from './ProjectWizard';
 import usePermission from '../../hooks/usePermission';
+import { getImageUrl } from '../../utils/config';
 
 const Projects = () => {
     const { user: currentUser } = useSelector(state => state.auth);
@@ -189,7 +190,7 @@ const Projects = () => {
                                 <div className={`bg-black/40 h-32 relative overflow-hidden flex justify-between items-start border-b ${bannerClass}`}>
                                     {project.main_image ? (
                                         <img
-                                            src={`http://localhost:3000${project.main_image}`}
+                                            src={getImageUrl(project.main_image)}
                                             alt={project.title}
                                             className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-all duration-700 scale-100 group-hover:scale-110"
                                         />
