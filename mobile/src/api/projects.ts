@@ -56,7 +56,22 @@ export const createProjectFolder = async (id: number, folderData: { name: string
 export const deleteProjectFile = async (id: number, filePath: string) => {
   const { data } = await apiClient.delete(`/projects/${id}/files?path=${encodeURIComponent(filePath)}`);
   return data;
-};export const updateProjectFolderPermissions = async (id: number, folderData: { path: string, name: string, allowed_role_ids: number[] | null }) => {
+};export const updateProject = async (id: number, payload: any) => {
+  const { data } = await apiClient.patch(`/projects/${id}`, payload);
+  return data;
+};
+
+export const fetchCategories = async () => {
+  const { data } = await apiClient.get('/categories');
+  return data;
+};
+
+export const fetchSubcontractors = async () => {
+  const { data } = await apiClient.get('/subcontractors');
+  return data;
+};
+
+export const updateProjectFolderPermissions = async (id: number, folderData: { path: string, name: string, allowed_role_ids: number[] | null }) => {
   const { data } = await apiClient.patch(`/projects/${id}/files/permissions`, folderData);
   return data;
 };

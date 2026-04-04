@@ -45,9 +45,11 @@ import {
   Download,
   Share2,
   X,
-  Copy
+  Copy,
+  ExternalLink
 } from 'lucide-react-native';
 import { MonthCalendar } from '../components/MonthCalendar';
+import { useNavigation } from '@react-navigation/native';
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#6366F1'];
 const MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
@@ -70,14 +72,17 @@ interface NoteForm {
   content: string;
   color: string;
   date: string;
+  time: string;
   project_id: string | number;
 }
 
 export default function NotesScreen() {
+  const navigation = useNavigation<any>();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<any | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
   const [isViewerVisible, setIsViewerVisible] = useState(false);
   const [viewerImages, setViewerImages] = useState<{uri: string, fileName: string}[]>([]);
   
@@ -87,6 +92,7 @@ export default function NotesScreen() {
     content: '',
     color: COLORS[0],
     date: getISODate(),
+    time: '',
     project_id: '',
   });
   const [attachments, setAttachments] = useState<ImagePicker.ImagePickerAsset[]>([]);
@@ -180,6 +186,7 @@ export default function NotesScreen() {
         content: note.content || '',
         color: note.color || COLORS[0],
         date: note.date ? note.date.split('T')[0] : getISODate(),
+        time: note.time || '',
         project_id: note.project_id || '',
       });
     } else {
@@ -189,6 +196,7 @@ export default function NotesScreen() {
         content: '',
         color: COLORS[0],
         date: getISODate(),
+        time: '',
         project_id: '',
       });
     }
@@ -244,6 +252,15 @@ export default function NotesScreen() {
     }
   };
 
+  const onTimeChange = (event: any, selected: Date | undefined) => {
+    setShowTimePicker(false);
+    if (selected) {
+      const hours = (`0${selected.getHours()}`).slice(-2);
+      const minutes = (`0${selected.getMinutes()}`).slice(-2);
+      setFormData({ ...formData, time: `${hours}:${minutes}` });
+    }
+  };
+
   const removeAttachment = (index: number) => {
     setAttachments(prev => prev.filter((_, i) => i !== index));
   };
@@ -259,6 +276,7 @@ export default function NotesScreen() {
     data.append('content', formData.content);
     data.append('color', formData.color);
     data.append('date', formData.date);
+    if (formData.time) data.append('time', formData.time);
     if (formData.project_id) data.append('project_id', formData.project_id.toString());
 
     attachments.forEach((file: any, index) => {
@@ -387,13 +405,25 @@ export default function NotesScreen() {
               <Text className="text-gray-500 text-[10px] ml-1 uppercase font-bold">
                 {formatDate(note.date)}
               </Text>
+              {note.time && (
+                <View className="flex-row items-center ml-2">
+                   <Clock size={10} color="#6B7280" />
+                   <Text className="text-gray-400 text-[10px] ml-1 font-bold">{note.time}</Text>
+                </View>
+              )}
               {note.project && (
                 <>
                   <View className="w-1 h-1 bg-gray-700 rounded-full mx-2" />
-                  <Briefcase size={12} color="#3B82F6" />
-                  <Text className="text-brand-blue text-[10px] ml-1 font-bold">
-                    {note.project.project_number}
-                  </Text>
+                  <TouchableOpacity 
+                    onPress={() => navigation.navigate('ProjectDetail', { id: note.project.id })}
+                    className="flex-row items-center bg-brand-blue/10 px-1.5 py-0.5 rounded-md"
+                  >
+                    <Briefcase size={10} color="#3B82F6" />
+                    <Text className="text-blue-400 text-[10px] ml-1 font-bold">
+                      {note.project.project_number}
+                    </Text>
+                    <ExternalLink size={8} color="#3B82F6" className="ml-1" />
+                  </TouchableOpacity>
                 </>
               )}
             </View>
@@ -549,7 +579,7 @@ export default function NotesScreen() {
                 </GlassCard>
               </View>
 
-              {/* 2-Column: Date & Color */}
+              {/* Column: Date & Time */}
               <View className="flex-row justify-between mb-5">
                 {/* Date Picker */}
                 <View className="flex-1 mr-2">
@@ -570,23 +600,48 @@ export default function NotesScreen() {
                   )}
                 </View>
 
-                {/* Color Selection */}
+                {/* Time Picker */}
                 <View className="flex-1 ml-2">
-                  <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Farbe</Text>
-                  <GlassCard className="p-4 bg-black/40 border border-white/5 flex-row items-center justify-between">
-                    <Palette size={16} color={formData.color} />
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} className="ml-2">
-                      {COLORS.map((c) => (
-                        <TouchableOpacity
-                          key={c}
-                          onPress={() => setFormData({ ...formData, color: c })}
-                          className={`w-6 h-6 rounded-full mx-1 items-center justify-center ${formData.color === c ? 'border border-white scale-110' : ''}`}
-                          style={{ backgroundColor: c }}
-                        />
-                      ))}
-                    </ScrollView>
-                  </GlassCard>
+                  <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Zeit (Opt.)</Text>
+                  <TouchableOpacity onPress={() => setShowTimePicker(true)}>
+                    <GlassCard className="p-4 bg-black/40 border border-white/5 flex-row items-center justify-between">
+                      <Clock size={16} color="#6B7280" />
+                      <Text className="text-white font-bold">{formData.time || '--:--'}</Text>
+                    </GlassCard>
+                  </TouchableOpacity>
+                  {showTimePicker && (
+                    <DateTimePicker
+                      value={formData.time ? (() => {
+                        const [h, m] = formData.time.split(':');
+                        const d = new Date();
+                        d.setHours(parseInt(h), parseInt(m));
+                        return d;
+                      })() : new Date()}
+                      mode="time"
+                      is24Hour={true}
+                      display="default"
+                      onChange={onTimeChange}
+                    />
+                  )}
                 </View>
+              </View>
+
+              {/* Row: Color Selection */}
+              <View className="mb-5">
+                <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Farbe</Text>
+                <GlassCard className="p-4 bg-black/40 border border-white/5 flex-row items-center justify-between">
+                  <Palette size={16} color={formData.color} />
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} className="ml-2">
+                    {COLORS.map((c) => (
+                      <TouchableOpacity
+                        key={c}
+                        onPress={() => setFormData({ ...formData, color: c })}
+                        className={`w-6 h-6 rounded-full mx-1 items-center justify-center ${formData.color === c ? 'border border-white scale-110' : ''}`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </ScrollView>
+                </GlassCard>
               </View>
 
               {/* Project Selection */}
@@ -608,7 +663,7 @@ export default function NotesScreen() {
                         className={`px-3 py-2 rounded-lg mr-2 border ${formData.project_id === p.id ? 'bg-brand-blue border-brand-blue' : 'bg-white/5 border-white/5'}`}
                       >
                         <Text className={`text-xs font-bold ${formData.project_id === p.id ? 'text-white' : 'text-gray-400'}`}>
-                          {p.project_number}
+                          {p.project_number} - {p.title}
                         </Text>
                       </TouchableOpacity>
                     ))}

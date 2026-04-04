@@ -10,6 +10,7 @@ backend/sync_output.txt
 Thumbs.db
 .gemini/
 uploads/temp/
-package-lock.json
-frontend/package-lock.json
-backend/package-lock.json
+# Removed package-lock.json from ignore for Railway deployment
+# package-lock.json
+# frontend/package-lock.json
+# backend/package-lock.json

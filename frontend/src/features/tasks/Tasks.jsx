@@ -21,7 +21,8 @@ const Tasks = () => {
         status: 'In Arbeit',
         assigned_to_id: '',
         project_id: '',
-        due_date: ''
+        due_date: '',
+        time: '' // New field
     });
     const [selectedFiles, setSelectedFiles] = useState([]);
     const [filePreviews, setFilePreviews] = useState([]);
@@ -60,7 +61,7 @@ const Tasks = () => {
     }, []);
 
     const resetForm = () => {
-        setFormData({ title: '', description: '', status: 'In Arbeit', assigned_to_id: '', project_id: '', due_date: '' });
+        setFormData({ title: '', description: '', status: 'In Arbeit', assigned_to_id: '', project_id: '', due_date: '', time: '' });
         setSelectedFiles([]);
         filePreviews.forEach(p => URL.revokeObjectURL(p.url));
         setFilePreviews([]);
@@ -76,7 +77,8 @@ const Tasks = () => {
                 status: task.status,
                 assigned_to_id: task.assigned_to_id || '',
                 project_id: task.project_id || '',
-                due_date: task.due_date ? task.due_date.split('T')[0] : ''
+                due_date: task.due_date || '',
+                time: task.time || ''
             });
         } else {
             resetForm();
@@ -139,6 +141,7 @@ const Tasks = () => {
             if (formData.assigned_to_id) data.append('assigned_to_id', formData.assigned_to_id);
             if (formData.project_id) data.append('project_id', formData.project_id);
             if (formData.due_date) data.append('due_date', formData.due_date);
+            if (formData.time) data.append('time', formData.time);
 
             if (selectedFiles.length > 0) {
                 for (let i = 0; i < selectedFiles.length; i++) {
@@ -284,6 +287,7 @@ const Tasks = () => {
                                                 <span className={`text-xs mt-1 font-medium ${new Date(task.due_date) < new Date() && !isDone ? 'text-red-400' : 'text-gray-400'}`}>
                                                     <i className="fa-regular fa-calendar mr-1"></i>
                                                     Bis: {new Date(task.due_date).toLocaleDateString('de-DE')}
+                                                    {task.time && ` ${task.time}`}
                                                 </span>
                                             )}
                                         </div>
@@ -376,7 +380,10 @@ const Tasks = () => {
                             <h2 className="text-xl font-semibold text-white flex items-center gap-3">
                                 <i className="fa-solid fa-list-check text-blue-400"></i> {editingTask ? 'Aufgabe bearbeiten' : 'Neue Aufgabe'}
                             </h2>
-                            <button onClick={resetForm} className="text-gray-400 hover:text-white transition-colors">
+                             <button 
+                                onClick={() => { setIsModalOpen(false); resetForm(); }} 
+                                className="text-gray-400 hover:text-white transition-colors"
+                            >
                                 <i className="fa-solid fa-xmark"></i>
                             </button>
                         </div>
@@ -418,35 +425,46 @@ const Tasks = () => {
                                     )}
                                 </div>
                                 <div className="space-y-1">
-                                    <label className="text-xs font-medium text-gray-400 pl-1">Fälligkeitsdatum (Optional)</label>
+                                    <label className="text-xs font-medium text-gray-400 pl-1">Projekt (Optional)</label>
                                     <div className="relative">
-                                        <i className="fa-regular fa-calendar absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
-                                        <input
-                                            type="date"
-                                            value={formData.due_date}
-                                            onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-                                            className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors [&::-webkit-calendar-picker-indicator]:invert"
-                                        />
+                                        <i className="fa-solid fa-folder absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
+                                        <select
+                                            value={formData.project_id}
+                                            onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
+                                            className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors appearance-none [&>option]:bg-gray-900"
+                                        >
+                                            <option value="">Kein Projekt ausgewählt</option>
+                                            {projects.map(project => (
+                                                <option key={project.id} value={project.id}>
+                                                    {project.project_number} - {project.title}
+                                                </option>
+                                            ))}
+                                        </select>
                                     </div>
                                 </div>
                             </div>
 
                             <div className="space-y-1">
-                                <label className="text-xs font-medium text-gray-400 pl-1">Projekt (Optional)</label>
-                                <div className="relative">
-                                    <i className="fa-solid fa-folder absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
-                                    <select
-                                        value={formData.project_id}
-                                        onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
-                                        className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors appearance-none [&>option]:bg-gray-900"
-                                    >
-                                        <option value="">Kein Projekt ausgewählt</option>
-                                        {projects.map(project => (
-                                            <option key={project.id} value={project.id}>
-                                                {project.project_number} - {project.title}
-                                            </option>
-                                        ))}
-                                    </select>
+                                <label className="text-xs font-medium text-gray-400 pl-1">Fälligkeit (Datum & Zeit)</label>
+                                <div className="flex gap-2">
+                                    <div className="relative flex-1">
+                                        <i className="fa-regular fa-calendar absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
+                                        <input
+                                            type="date"
+                                            value={formData.due_date}
+                                            onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
+                                            className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors [&::-webkit-calendar-pickerindicator]:invert"
+                                        />
+                                    </div>
+                                    <div className="relative w-32">
+                                        <i className="fa-regular fa-clock absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
+                                        <input
+                                            type="time"
+                                            value={formData.time}
+                                            onChange={(e) => setFormData({ ...formData, time: e.target.value })}
+                                            className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors [&::-webkit-calendar-picker-indicator]:invert"
+                                        />
+                                    </div>
                                 </div>
                             </div>
 

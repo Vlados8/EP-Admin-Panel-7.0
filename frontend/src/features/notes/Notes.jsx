@@ -19,6 +19,7 @@ const Notes = () => {
         title: '',
         content: '',
         date: '',
+        time: '', // New field
         color: 'blue',
         project_id: '',
     });
@@ -41,7 +42,7 @@ const Notes = () => {
     const canManageNotes = usePermission('MANAGE_NOTES');
 
     const resetForm = () => {
-        setFormData({ title: '', content: '', date: '', color: 'blue', project_id: '' });
+        setFormData({ title: '', content: '', date: '', time: '', color: 'blue', project_id: '' });
         setSelectedFiles([]);
         filePreviews.forEach(p => URL.revokeObjectURL(p.url));
         setFilePreviews([]);
@@ -96,7 +97,8 @@ const Notes = () => {
         setFormData({
             title: note.title,
             content: note.content,
-            date: note.date.split('T')[0],
+            date: note.date, // Already DATEONLY from backend
+            time: note.time || '', // Directly from separate field
             color: note.color,
             project_id: note.project_id || '',
         });
@@ -155,6 +157,8 @@ const Notes = () => {
             data.append('title', formData.title);
             data.append('content', formData.content);
             data.append('date', formData.date);
+            if (formData.time) data.append('time', formData.time);
+            
             data.append('color', formData.color);
             if (formData.project_id) data.append('project_id', formData.project_id);
 
@@ -299,7 +303,10 @@ const Notes = () => {
                                         <div className="flex justify-between items-start mb-2">
                                             <div className="text-xs text-gray-400 flex flex-col gap-1">
                                                 <span>Von: {note.user?.name || 'Unbekannt'}</span>
-                                                <span>{new Date(note.date).toLocaleDateString('de-DE')}</span>
+                                                <span>
+                                                    {new Date(note.date).toLocaleDateString('de-DE')}
+                                                    {note.time && ` ${note.time}`}
+                                                </span>
                                                 {note.project && (
                                                     <span
                                                         onClick={() => navigate(`/projekte/${note.project.id}`)}
@@ -382,7 +389,10 @@ const Notes = () => {
                             <h2 className="text-xl font-semibold text-white flex items-center gap-3">
                                 <i className="fa-regular fa-note-sticky text-blue-400"></i> {editingNote ? 'Notiz bearbeiten' : 'Neue Notiz'}
                             </h2>
-                            <button onClick={resetForm} className="text-gray-400 hover:text-white transition-colors">
+                            <button 
+                                onClick={() => { setIsModalOpen(false); resetForm(); }} 
+                                className="text-gray-400 hover:text-white transition-colors"
+                            >
                                 <i className="fa-solid fa-xmark"></i>
                             </button>
                         </div>
@@ -402,10 +412,10 @@ const Notes = () => {
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                    <label className="text-xs font-medium text-gray-400 pl-1">Datum</label>
-                                    <div className="relative">
+                            <div className="space-y-1">
+                                <label className="text-xs font-medium text-gray-400 pl-1">Datum & Zeit</label>
+                                <div className="flex gap-2">
+                                    <div className="relative flex-1">
                                         <i className="fa-regular fa-calendar absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
                                         <input
                                             type="date"
@@ -415,8 +425,19 @@ const Notes = () => {
                                             className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors [&::-webkit-calendar-picker-indicator]:invert"
                                         />
                                     </div>
+                                    <div className="relative w-32">
+                                        <i className="fa-regular fa-clock absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
+                                        <input
+                                            type="time"
+                                            value={formData.time}
+                                            onChange={(e) => setFormData({ ...formData, time: e.target.value })}
+                                            className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors [&::-webkit-calendar-picker-indicator]:invert"
+                                        />
+                                    </div>
                                 </div>
+                            </div>
 
+                            <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1">
                                     <label className="text-xs font-medium text-gray-400 pl-1">Farbe</label>
                                     <div className="relative">
@@ -432,24 +453,24 @@ const Notes = () => {
                                         </select>
                                     </div>
                                 </div>
-                            </div>
 
-                            <div className="space-y-1">
-                                <label className="text-xs font-medium text-gray-400 pl-1">Projekt (Optional)</label>
-                                <div className="relative">
-                                    <i className="fa-solid fa-folder absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
-                                    <select
-                                        value={formData.project_id}
-                                        onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
-                                        className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors appearance-none [&>option]:bg-gray-900"
-                                    >
-                                        <option value="">Kein Projekt ausgewählt</option>
-                                        {projects.map(project => (
-                                            <option key={project.id} value={project.id}>
-                                                {project.project_number} - {project.title}
-                                            </option>
-                                        ))}
-                                    </select>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-medium text-gray-400 pl-1">Projekt (Optional)</label>
+                                    <div className="relative">
+                                        <i className="fa-solid fa-folder absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
+                                        <select
+                                            value={formData.project_id}
+                                            onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
+                                            className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors appearance-none [&>option]:bg-gray-900"
+                                        >
+                                            <option value="">Kein Projekt ausgewählt</option>
+                                            {projects.map(project => (
+                                                <option key={project.id} value={project.id}>
+                                                    {project.project_number} - {project.title}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
 

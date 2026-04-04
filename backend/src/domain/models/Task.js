@@ -27,6 +27,10 @@ const Task = sequelize.define('Task', {
         type: DataTypes.DATEONLY,
         allowNull: true
     },
+    time: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
     assigned_to_id: {
         type: DataTypes.UUID,
         allowNull: true // User ID doing the task

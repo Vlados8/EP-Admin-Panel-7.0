@@ -19,6 +19,10 @@ const Note = sequelize.define('Note', {
         type: DataTypes.DATEONLY,
         allowNull: false
     },
+    time: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
     color: {
         type: DataTypes.STRING,
         defaultValue: 'blue',

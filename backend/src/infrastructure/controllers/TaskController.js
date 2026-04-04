@@ -47,7 +47,7 @@ exports.getTasks = async (req, res, next) => {
 // Create a new task
 exports.createTask = async (req, res, next) => {
     try {
-        const { title, description, assigned_to_id, status, project_id, due_date } = req.body;
+        const { title, description, assigned_to_id, status, project_id, due_date, time } = req.body;
 
         let created_by_id = req.user?.id;
         if (!created_by_id) {
@@ -66,6 +66,7 @@ exports.createTask = async (req, res, next) => {
             assigned_to_id: assigned_to_id || null,
             project_id: project_id || null,
             due_date: due_date || null,
+            time: time || null,
             created_by_id
         });
 
@@ -116,7 +117,7 @@ exports.updateTask = async (req, res, next) => {
             }
         }
 
-        const { status, title, description, assigned_to_id, project_id, due_date } = req.body;
+        const { status, title, description, assigned_to_id, project_id, due_date, time } = req.body;
 
         if (status !== undefined) task.status = status;
         if (title !== undefined) task.title = title;
@@ -124,6 +125,7 @@ exports.updateTask = async (req, res, next) => {
         if (assigned_to_id !== undefined) task.assigned_to_id = assigned_to_id || null;
         if (project_id !== undefined) task.project_id = project_id || null;
         if (due_date !== undefined) task.due_date = due_date || null;
+        if (time !== undefined) task.time = time || null;
 
         await task.save();
 

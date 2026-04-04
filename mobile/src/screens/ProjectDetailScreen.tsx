@@ -36,10 +36,15 @@ import {
   createProjectFolder,
   deleteProjectFile,
   updateProjectFolderPermissions,
-  toggleProjectFolderPublic
+  toggleProjectFolderPublic,
+  updateProject,
+  fetchCategories,
+  fetchSubcontractors
 } from '../api/projects';
 import { fetchRoles } from '../api/roles';
+import { fetchUsers } from '../api/users';
 import * as Clipboard from 'expo-clipboard';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { ScreenLayout } from '../components/ScreenLayout';
 import { GlassCard } from '../components/GlassCard';
@@ -118,6 +123,25 @@ export default function ProjectDetailScreen() {
   const [shareToken, setShareToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // Edit Project State
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    title: '',
+    description: '',
+    address: '',
+    status: '',
+    progress: 0,
+    start_date: '',
+    end_date: '',
+    category_id: '' as string | number,
+    subcategory_id: '' as string | number,
+    budget: ''
+  });
+  const [assignedUsers, setAssignedUsers] = useState<{ user_id: number, role: string }[]>([]);
+  const [assignedSubcontractors, setAssignedSubcontractors] = useState<number[]>([]);
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+
   const modalPanResponder = React.useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -138,6 +162,36 @@ export default function ProjectDetailScreen() {
     queryKey: ['project-stages', id],
     queryFn: () => fetchProjectStages(id),
     enabled: activeTab === 'steps'
+  });
+
+  const { data: categoriesRes } = useQuery({
+    queryKey: ['categories'],
+    queryFn: fetchCategories,
+    enabled: isEditModalOpen
+  });
+
+  const { data: subcontractorsRes } = useQuery({
+    queryKey: ['subcontractors'],
+    queryFn: fetchSubcontractors,
+    enabled: isEditModalOpen
+  });
+
+  const { data: allUsersRes } = useQuery({
+    queryKey: ['users'],
+    queryFn: fetchUsers,
+    enabled: isEditModalOpen
+  });
+
+  const updateProjectMutation = useMutation({
+    mutationFn: (payload: any) => updateProject(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project', id] });
+      setIsEditModalOpen(false);
+      Alert.alert('Erfolg', 'Projekt wurde aktualisiert.');
+    },
+    onError: (err: any) => {
+      Alert.alert('Fehler', err.response?.data?.error || 'Projekt konnte nicht aktualisiert werden.');
+    }
   });
 
   const updateStageMutation = useMutation({
@@ -540,6 +594,57 @@ export default function ProjectDetailScreen() {
       ]
     );
   };
+
+
+  const handleOpenEditModal = () => {
+    const p = projectRes?.data?.project || projectRes;
+    if (!p) return;
+    
+    setEditFormData({
+      title: p.title || '',
+      description: p.description || '',
+      address: p.address || '',
+      status: p.status || 'Aktiv',
+      progress: p.progress || 0,
+      start_date: p.start_date ? p.start_date.split('T')[0] : '',
+      end_date: p.end_date ? p.end_date.split('T')[0] : '',
+      category_id: p.category_id || '',
+      subcategory_id: p.subcategory_id || '',
+      budget: p.budget?.toString() || ''
+    });
+    setAssignedUsers(p.assigned_personnel?.map((ap: any) => ({ user_id: ap.user_id, role: ap.role })) || []);
+    setAssignedSubcontractors(p.assigned_subcontractors?.map((as: any) => as.subcontractor_id) || []);
+    setIsEditModalOpen(true);
+  };
+
+  const handleTogglePersonnel = (userId: number, role: string) => {
+    setAssignedUsers(prev => {
+      const exists = prev.find(au => au.user_id === userId && au.role === role);
+      if (exists) {
+        return prev.filter(au => !(au.user_id === userId && au.role === role));
+      } else {
+        // For PL and GL, we might want to limit to one or just allow multiple as per DB
+        return [...prev, { user_id: userId, role }];
+      }
+    });
+  };
+
+  const handleSaveProjectEdit = () => {
+    if (!editFormData.title.trim()) {
+      Alert.alert('Fehler', 'Bite geben Sie einen Titel ein.');
+      return;
+    }
+    
+    updateProjectMutation.mutate({
+      ...editFormData,
+      assigned_users: assignedUsers,
+      assigned_subcontractors: assignedSubcontractors
+    });
+  };
+
+  const canEditProject = typeof user?.role === 'string' 
+    ? ['Admin', 'Büro', 'Projektleiter'].includes(user.role)
+    : ['Admin', 'Büro', 'Projektleiter'].includes((user?.role as any)?.name || '');
 
   const confirmDeleteFile = (item: any) => {
     Alert.alert(
@@ -1011,8 +1116,19 @@ export default function ProjectDetailScreen() {
             >
               <ChevronLeft size={24} color="white" />
             </TouchableOpacity>
-            <View className="bg-black/60 px-3 py-1.5 rounded-xl border border-white/20 blur-md">
-              <Text className="text-white font-bold text-[10px] tracking-widest uppercase">{project?.project_number}</Text>
+            
+            <View className="flex-row items-center">
+              {canEditProject && (
+                <TouchableOpacity
+                  onPress={handleOpenEditModal}
+                  className="w-10 h-10 rounded-full bg-black/40 items-center justify-center border border-white/20 mr-2"
+                >
+                  <FileText size={18} color="#3B82F6" />
+                </TouchableOpacity>
+              )}
+              <View className="bg-black/60 px-3 py-1.5 rounded-xl border border-white/20 blur-md">
+                <Text className="text-white font-bold text-[10px] tracking-widest uppercase">{project?.project_number}</Text>
+              </View>
             </View>
           </View>
 
@@ -1372,6 +1488,284 @@ export default function ProjectDetailScreen() {
       </Modal>
 
       {/* Full-screen Image Viewer */}
+      {/* Project Edit Modal */}
+      <Modal visible={isEditModalOpen} animationType="slide" transparent onRequestClose={() => setIsEditModalOpen(false)}>
+        <BlurView intensity={80} tint="dark" className="flex-1 justify-end">
+          <TouchableOpacity 
+             activeOpacity={1} 
+             onPress={Keyboard.dismiss} 
+             className="flex-1"
+          />
+          <GlassCard className="p-6 rounded-t-[40px] border-t border-white/10 bg-black/60" style={{ height: '85%' }}>
+            <View {...modalPanResponder.panHandlers} className="w-full pb-6 items-center">
+              <View className="w-12 h-1.5 bg-white/10 rounded-full" />
+            </View>
+
+            <View className="flex-row justify-between items-center mb-6">
+              <View className="flex-row items-center">
+                <View className="w-10 h-10 rounded-xl bg-brand-blue/10 items-center justify-center mr-3 border border-brand-blue/20">
+                  <FileText size={20} color="#3B82F6" />
+                </View>
+                <View>
+                  <Text className="text-white text-xl font-bold uppercase tracking-widest">Projekt bearbeiten</Text>
+                  <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">{project?.project_number}</Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={() => setIsEditModalOpen(false)}>
+                <Text className="text-gray-500 font-bold uppercase text-xs tracking-widest">Abbrechen</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} className="flex-1">
+              <View className="space-y-6 pb-12">
+                {/* Title */}
+                <View>
+                  <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Projekttitel</Text>
+                  <GlassCard className="p-0 overflow-hidden bg-black/40 border border-white/5">
+                    <TextInput
+                      value={editFormData.title}
+                      onChangeText={(txt) => setEditFormData({ ...editFormData, title: txt })}
+                      className="p-4 text-white font-bold"
+                      placeholder="Titel eingeben..."
+                      placeholderTextColor="#4B5563"
+                    />
+                  </GlassCard>
+                </View>
+
+                {/* Status & Progress */}
+                <View className="flex-row justify-between">
+                  <View className="flex-1 mr-2">
+                    <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Status</Text>
+                    <GlassCard className="p-2 bg-black/40 border border-white/5">
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
+                        {['Aktiv', 'Pausiert', 'Abgeschlossen'].map((s) => (
+                          <TouchableOpacity
+                            key={s}
+                            onPress={() => setEditFormData({ ...editFormData, status: s })}
+                            className={`px-3 py-2 rounded-lg mr-2 border ${editFormData.status === s ? 'bg-brand-blue border-brand-blue' : 'bg-white/5 border-white/5'}`}
+                          >
+                            <Text className={`text-[10px] font-bold ${editFormData.status === s ? 'text-white' : 'text-gray-400'}`}>{s}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </GlassCard>
+                  </View>
+
+                  <View className="w-24 ml-2">
+                    <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Fortschritt %</Text>
+                    <GlassCard className="p-0 overflow-hidden bg-black/40 border border-white/5">
+                      <TextInput
+                        value={(editFormData.progress || 0).toString()}
+                        onChangeText={(txt) => {
+                          const val = parseInt(txt) || 0;
+                          setEditFormData({ ...editFormData, progress: Math.min(100, Math.max(0, val)) });
+                        }}
+                        keyboardType="numeric"
+                        className="p-4 text-white font-black text-center"
+                        maxLength={3}
+                      />
+                    </GlassCard>
+                  </View>
+                </View>
+
+                {/* Visual Progress Bar */}
+                <View className="mt-[-12px]">
+                   <View className="h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
+                      <View style={{ width: `${editFormData.progress}%` }} className="h-full bg-brand-blue" />
+                   </View>
+                </View>
+
+                {/* Category & Subcategory */}
+                <View>
+                  <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Kategorie</Text>
+                  <GlassCard className="p-2 bg-black/40 border border-white/5">
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
+                      {categoriesRes?.data?.categories?.map((c: any) => (
+                        <TouchableOpacity
+                          key={c.id}
+                          onPress={() => setEditFormData({ ...editFormData, category_id: c.id, subcategory_id: '' })}
+                          className={`px-3 py-2 rounded-lg mr-2 border ${editFormData.category_id === c.id ? 'bg-brand-blue border-brand-blue' : 'bg-white/5 border-white/5'}`}
+                        >
+                          <Text className={`text-xs font-bold ${editFormData.category_id === c.id ? 'text-white' : 'text-gray-400'}`}>{c.name}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </GlassCard>
+                </View>
+
+                {editFormData.category_id && (
+                  <View>
+                    <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Unterkategorie</Text>
+                    <GlassCard className="p-2 bg-black/40 border border-white/5">
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
+                        {categoriesRes?.data?.categories?.find((c: any) => c.id === editFormData.category_id)?.subcategories?.map((s: any) => (
+                          <TouchableOpacity
+                            key={s.id}
+                            onPress={() => setEditFormData({ ...editFormData, subcategory_id: s.id })}
+                            className={`px-3 py-2 rounded-lg mr-2 border ${editFormData.subcategory_id === s.id ? 'bg-brand-blue border-brand-blue' : 'bg-white/5 border-white/5'}`}
+                          >
+                            <Text className={`text-xs font-bold ${editFormData.subcategory_id === s.id ? 'text-white' : 'text-gray-400'}`}>{s.name}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </GlassCard>
+                  </View>
+                )}
+
+                {/* Dates & Budget */}
+                <View className="flex-row justify-between">
+                  {/* Start Date */}
+                  <View className="flex-1 mr-2">
+                    <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Startdatum</Text>
+                    <TouchableOpacity onPress={() => setShowStartDatePicker(true)}>
+                      <GlassCard className="p-4 bg-black/40 border border-white/5 flex-row items-center justify-between">
+                        <Calendar size={16} color="#6B7280" />
+                        <Text className="text-white font-bold">{editFormData.start_date || 'N/A'}</Text>
+                      </GlassCard>
+                    </TouchableOpacity>
+                  </View>
+                  {/* End Date */}
+                  <View className="flex-1 ml-2">
+                    <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Enddatum</Text>
+                    <TouchableOpacity onPress={() => setShowEndDatePicker(true)}>
+                      <GlassCard className="p-4 bg-black/40 border border-white/5 flex-row items-center justify-between">
+                        <Calendar size={16} color="#6B7280" />
+                        <Text className="text-white font-bold">{editFormData.end_date || 'N/A'}</Text>
+                      </GlassCard>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {showStartDatePicker && (
+                  <DateTimePicker
+                    value={editFormData.start_date ? new Date(editFormData.start_date) : new Date()}
+                    mode="date" display="default"
+                    onChange={(event, date) => { setShowStartDatePicker(false); if (date) setEditFormData({ ...editFormData, start_date: date.toISOString().split('T')[0] }); }}
+                  />
+                )}
+                {showEndDatePicker && (
+                  <DateTimePicker
+                    value={editFormData.end_date ? new Date(editFormData.end_date) : new Date()}
+                    mode="date" display="default"
+                    onChange={(event, date) => { setShowEndDatePicker(false); if (date) setEditFormData({ ...editFormData, end_date: date.toISOString().split('T')[0] }); }}
+                  />
+                )}
+
+                {/* Financials & Address */}
+                <View className="flex-row justify-between">
+                  <View className="flex-1 mr-2">
+                    <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Budget (€)</Text>
+                    <GlassCard className="p-0 overflow-hidden bg-black/40 border border-white/5">
+                      <TextInput
+                        value={editFormData.budget}
+                        onChangeText={(txt) => setEditFormData({ ...editFormData, budget: txt })}
+                        keyboardType="numeric"
+                        className="p-4 text-white font-bold"
+                        placeholder="0.00"
+                        placeholderTextColor="#4B5563"
+                      />
+                    </GlassCard>
+                  </View>
+                  <View className="flex-[2] ml-2">
+                    <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Adresse</Text>
+                    <GlassCard className="p-0 overflow-hidden bg-black/40 border border-white/5">
+                      <TextInput
+                        value={editFormData.address}
+                        onChangeText={(txt) => setEditFormData({ ...editFormData, address: txt })}
+                        className="p-4 text-white font-bold"
+                        placeholder="Adresse..."
+                        placeholderTextColor="#4B5563"
+                      />
+                    </GlassCard>
+                  </View>
+                </View>
+
+                {/* Description */}
+                <View>
+                  <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Beschreibung</Text>
+                  <GlassCard className="p-0 overflow-hidden bg-black/40 border border-white/5">
+                    <TextInput
+                      value={editFormData.description}
+                      onChangeText={(txt) => setEditFormData({ ...editFormData, description: txt })}
+                      multiline numberOfLines={4}
+                      className="p-4 text-white min-h-[100px] text-left align-top"
+                      placeholder="Beschreibung..."
+                      placeholderTextColor="#4B5563"
+                    />
+                  </GlassCard>
+                </View>
+
+                {/* Team Assignment */}
+                <View className="pt-4 mt-4 border-t border-white/5">
+                   <View className="flex-row items-center mb-6">
+                      <View className="w-1 h-6 bg-brand-blue rounded-full mr-3" />
+                      <Text className="text-white font-bold uppercase tracking-widest text-sm">Team & Besetzung</Text>
+                   </View>
+
+                   {/* PL / GL / Workers */}
+                   {['Projektleiter', 'Gruppenleiter', 'Worker'].map((roleName) => (
+                     <View key={roleName} className="mb-6">
+                        <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">{roleName}</Text>
+                        <GlassCard className="p-2 bg-black/40 border border-white/5">
+                           <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
+                              {(allUsersRes || []).filter((u: any) => u.role?.name === roleName).map((u: any) => {
+                                const roleId = roleName.toLowerCase() as any;
+                                const isAssigned = assignedUsers.some(au => au.user_id === u.id && au.role === roleId);
+                                return (
+                                  <TouchableOpacity
+                                    key={u.id}
+                                    onPress={() => handleTogglePersonnel(u.id, roleId)}
+                                    className={`px-3 py-2 rounded-lg mr-2 border flex-row items-center ${isAssigned ? 'bg-brand-blue border-brand-blue' : 'bg-white/5 border-white/5'}`}
+                                  >
+                                    <User size={12} color={isAssigned ? 'white' : '#6B7280'} className="mr-1.5" />
+                                    <Text className={`text-[10px] font-bold ${isAssigned ? 'text-white' : 'text-gray-400'}`}>{u.name}</Text>
+                                  </TouchableOpacity>
+                                );
+                              })}
+                           </ScrollView>
+                        </GlassCard>
+                     </View>
+                   ))}
+
+                   {/* Subcontractors */}
+                   <View className="mb-6">
+                      <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Nachunternehmer</Text>
+                      <View className="flex-row flex-wrap">
+                        {(subcontractorsRes?.data?.subcontractors || []).map((sub: any) => {
+                          const isAssigned = assignedSubcontractors.includes(sub.id);
+                          return (
+                            <TouchableOpacity
+                              key={sub.id}
+                              onPress={() => setAssignedSubcontractors(prev => prev.includes(sub.id) ? prev.filter(sid => sid !== sub.id) : [...prev, sub.id])}
+                              className={`w-[48%] p-3 rounded-xl mb-2 border ${isAssigned ? 'bg-brand-blue/20 border-brand-blue' : 'bg-black/40 border-white/5'} ${assignedSubcontractors.indexOf(sub.id) % 2 === 0 ? 'mr-[4%]' : ''}`}
+                            >
+                              <Text className={`text-xs font-bold text-center ${isAssigned ? 'text-brand-blue' : 'text-gray-400'}`}>{sub.name}</Text>
+                              <Text className="text-[10px] text-center text-gray-600 font-bold uppercase tracking-tighter mt-1">{sub.trade}</Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                   </View>
+                </View>
+              </View>
+            </ScrollView>
+
+            {/* Save Button */}
+            <TouchableOpacity
+              onPress={handleSaveProjectEdit}
+              disabled={updateProjectMutation.isPending}
+              className="mt-4 bg-brand-blue py-5 rounded-2xl items-center shadow-lg shadow-blue-500/40"
+            >
+              {updateProjectMutation.isPending ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <Text className="text-white font-black uppercase tracking-[3px]">Projekt speichern</Text>
+              )}
+            </TouchableOpacity>
+          </GlassCard>
+        </BlurView>
+      </Modal>
+
       <ImageView
         images={viewerImages}
         imageIndex={currentViewerIndex}

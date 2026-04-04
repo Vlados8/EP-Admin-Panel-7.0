@@ -45,7 +45,7 @@ exports.getNotes = async (req, res, next) => {
 // Create a new note
 exports.createNote = async (req, res, next) => {
     try {
-        const { title, content, date, color, project_id } = req.body;
+        const { title, content, date, time, color, project_id } = req.body;
 
         let user_id = req.user.id;
 
@@ -57,6 +57,7 @@ exports.createNote = async (req, res, next) => {
             title,
             content,
             date,
+            time: time || null,
             color,
             project_id: project_id || null,
             user_id
@@ -142,13 +143,14 @@ exports.updateNote = async (req, res, next) => {
             return next(new AppError('Keine Berechtigung zum Bearbeiten dieser Notiz', 403));
         }
 
-        const { isDone, title, content, color, date, project_id } = req.body;
+        const { isDone, title, content, color, date, time, project_id } = req.body;
 
         if (isDone !== undefined) note.isDone = isDone;
         if (title !== undefined) note.title = title;
         if (content !== undefined) note.content = content;
         if (color !== undefined) note.color = color;
         if (date !== undefined) note.date = date;
+        if (time !== undefined) note.time = time || null;
         if (project_id !== undefined) note.project_id = project_id || null;
 
         await note.save();

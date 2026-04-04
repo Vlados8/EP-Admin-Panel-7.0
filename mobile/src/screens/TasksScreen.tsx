@@ -77,6 +77,7 @@ interface TaskForm {
   assigned_to_id: string | number;
   project_id: string | number;
   due_date: string;
+  time: string;
 }
 
 export default function TasksScreen() {
@@ -85,6 +86,7 @@ export default function TasksScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState<TaskForm>({
@@ -94,6 +96,7 @@ export default function TasksScreen() {
     assigned_to_id: '',
     project_id: '',
     due_date: getISODate(),
+    time: '',
   });
   const [attachments, setAttachments] = useState<ImagePicker.ImagePickerAsset[]>([]);
   const [editingTask, setEditingTask] = useState<any | null>(null);
@@ -202,6 +205,7 @@ export default function TasksScreen() {
         assigned_to_id: task.assigned_to_id || '',
         project_id: task.project_id || '',
         due_date: task.due_date ? task.due_date.split('T')[0] : getISODate(),
+        time: task.time || '',
       });
     } else {
       setEditingTask(null);
@@ -212,6 +216,7 @@ export default function TasksScreen() {
         assigned_to_id: '',
         project_id: '',
         due_date: getISODate(),
+        time: '',
       });
     }
     setAttachments([]);
@@ -266,6 +271,15 @@ export default function TasksScreen() {
     }
   };
 
+  const onTimeChange = (event: any, selected: Date | undefined) => {
+    setShowTimePicker(false);
+    if (selected) {
+      const hours = (`0${selected.getHours()}`).slice(-2);
+      const minutes = (`0${selected.getMinutes()}`).slice(-2);
+      setFormData({ ...formData, time: `${hours}:${minutes}` });
+    }
+  };
+
   const removeAttachment = (index: number) => {
     setAttachments(prev => prev.filter((_, i) => i !== index));
   };
@@ -283,6 +297,7 @@ export default function TasksScreen() {
     if (formData.assigned_to_id) data.append('assigned_to_id', formData.assigned_to_id.toString());
     if (formData.project_id) data.append('project_id', formData.project_id.toString());
     if (formData.due_date) data.append('due_date', formData.due_date);
+    if (formData.time) data.append('time', formData.time);
 
     attachments.forEach((file: any, index) => {
       data.append('files', {
@@ -427,6 +442,12 @@ export default function TasksScreen() {
               <Text className="text-[#EF4444] text-[10px] font-bold ml-1">
                 Bis: {task.due_date ? new Date(task.due_date).toLocaleDateString('de-DE') : 'Keine Frist'}
               </Text>
+              {task.time && (
+                <View className="flex-row items-center ml-2 border-l border-white/10 pl-2">
+                   <Clock size={10} color="#EF4444" />
+                   <Text className="text-[#EF4444] text-[10px] font-bold ml-1">{task.time}</Text>
+                </View>
+              )}
             </View>
           </View>
           
@@ -493,9 +514,20 @@ export default function TasksScreen() {
         <View className="flex-row justify-between items-center pt-3 border-t border-white/5 mt-2">
            <View className="flex-row items-center flex-1">
              <LogOut size={12} color="#6B7280" style={{ transform: [{ rotate: '180deg' }] }} className="mr-1" />
-             <Text className="text-gray-500 text-[10px] font-bold uppercase flex-1" numberOfLines={1}>
-                {task.project ? `${task.project.project_number} - ${task.project.title}` : 'Kein Projekt'}
-             </Text>
+             {task.project ? (
+               <TouchableOpacity 
+                 onPress={() => navigation.navigate('ProjectDetail', { id: task.project.id })}
+                 className="flex-1"
+               >
+                 <Text className="text-blue-400 text-[10px] font-bold uppercase" numberOfLines={1}>
+                    {task.project.project_number} - {task.project.title}
+                 </Text>
+               </TouchableOpacity>
+             ) : (
+               <Text className="text-gray-500 text-[10px] font-bold uppercase flex-1" numberOfLines={1}>
+                  Kein Projekt
+               </Text>
+             )}
            </View>
            
            {(task.assigned_to || task.creator) && (
@@ -626,6 +658,32 @@ export default function TasksScreen() {
                     mode="date"
                     display="default"
                     onChange={onDateChange}
+                  />
+                )}
+              </View>
+
+              {/* Due Time */}
+              <View className="mb-5">
+                <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Fälligkeitszeit (Optional)</Text>
+                <TouchableOpacity onPress={() => setShowTimePicker(true)}>
+                  <GlassCard className="p-4 bg-black/40 border border-white/5 flex-row items-center justify-between">
+                    <Clock size={16} color="#6B7280" />
+                    <Text className="text-white font-bold text-sm tracking-widest">{formData.time || '--:--'}</Text>
+                    <Clock size={16} color="#6B7280" />
+                  </GlassCard>
+                </TouchableOpacity>
+                {showTimePicker && (
+                  <DateTimePicker
+                    value={formData.time ? (() => {
+                      const [h, m] = formData.time.split(':');
+                      const d = new Date();
+                      d.setHours(parseInt(h), parseInt(m));
+                      return d;
+                    })() : new Date()}
+                    mode="time"
+                    is24Hour={true}
+                    display="default"
+                    onChange={onTimeChange}
                   />
                 )}
               </View>
