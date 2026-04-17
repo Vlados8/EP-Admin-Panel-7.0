@@ -3,7 +3,7 @@ const { Op } = require('sequelize');
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
-const puppeteer = require('puppeteer-core');
+const puppeteer = require('puppeteer'); // Use full puppeteer to access embedded browsers if system path fails
 const FormData = require('form-data');
 const Mailgun = require('mailgun.js');
 const { uploadToR2 } = require('../utils/storage');
@@ -205,19 +205,23 @@ exports.saveOffer = async (req, res) => {
                 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
                 'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
                 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-                'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'
+                'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+                '/usr/bin/google-chrome',
+                '/usr/bin/chromium',
+                '/usr/bin/chromium-browser'
             ];
             executablePath = possiblePaths.find(p => fs.existsSync(p));
         }
 
-        if (!executablePath) {
-            throw new Error("Could not find a valid Chrome or Edge installation for generating PDFs. Please set CHROME_PATH in .env");
+        const launchOptions = {
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+        };
+
+        if (executablePath) {
+            launchOptions.executablePath = executablePath;
         }
 
-        const browser = await puppeteer.launch({
-            executablePath: executablePath,
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
-        });
+        const browser = await puppeteer.launch(launchOptions);
         const page = await browser.newPage();
         await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
         await page.pdf({
