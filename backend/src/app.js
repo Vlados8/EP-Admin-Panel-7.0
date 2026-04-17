@@ -228,7 +228,7 @@ if (require.main === module) {
             const seedDatabase = require('./infrastructure/database/seeder');
             try {
                 console.log('Connecting to database and synchronizing...');
-                await sequelize.sync({ alter: false });
+                await sequelize.sync({ alter: { drop: false } });
                 console.log('Database synchronized successfully.');
 
                 // MANUALLY FIX missing columns to resolve "Unknown column 'user_id'"
