@@ -233,6 +233,13 @@ if (require.main === module) {
 
                 // MANUALLY FIX missing columns to resolve "Unknown column 'user_id'"
                 try {
+                    console.log('Verifying companies schema...');
+                    const [companySettingsCol] = await sequelize.query("SHOW COLUMNS FROM companies LIKE 'settings'");
+                    if (companySettingsCol.length === 0) {
+                        console.log('Adding missing settings column to companies...');
+                        await sequelize.query("ALTER TABLE companies ADD COLUMN settings JSON NULL");
+                    }
+
                     console.log('Verifying project_folders schema...');
                     const [projectFolderResults] = await sequelize.query("SHOW TABLES LIKE 'project_folders'");
 
