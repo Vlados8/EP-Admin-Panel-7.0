@@ -613,6 +613,10 @@ if (require.main === module) {
                         console.log('Adding column rfid_tag...');
                         await queryInterface.addColumn('users', 'rfid_tag', { type: require('sequelize').DataTypes.STRING, allowNull: true });
                     }
+                    if (!userTableTelephony.personnel_number) {
+                        console.log('Adding column personnel_number...');
+                        await queryInterface.addColumn('users', 'personnel_number', { type: require('sequelize').DataTypes.STRING, allowNull: true });
+                    }
 
                     console.log('Verifying time_logs table...');
                     const [timeLogTables] = await sequelize.query("SHOW TABLES LIKE 'time_logs'");
