@@ -224,8 +224,8 @@ if (require.main === module) {
         const PORT = process.env.PORT || 3001;
 
         // Start listening IMMEDIATELY so Railway healthcheck finds an open port
-        server.listen(PORT, '127.0.0.1', async () => {
-            console.log(`Server is now listening on http://127.0.0.1:${PORT}`);
+        server.listen(PORT, '0.0.0.0', async () => {
+            console.log(`Server is now listening on http://0.0.0.0:${PORT}`);
             logger.info(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
 
             // Perform DB sync/seed in background/after listen
