@@ -135,6 +135,11 @@ try {
     app.use('/api/v1/public', publicRoutes);
     // -----------------------
 
+    // Railway Healthcheck
+    app.get('/api/v1/health', (req, res) => {
+        res.status(200).json({ status: 'ok', timestamp: new Date() });
+    });
+
     app.use('/api/v1/auth', authRoutes);
     app.use('/api/v1/company', companyRoutes);
     app.use('/api/v1/users', userRoutes);
