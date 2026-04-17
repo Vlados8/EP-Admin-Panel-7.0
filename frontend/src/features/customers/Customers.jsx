@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import api from '../../services/api';
 import usePermission from '../../hooks/usePermission';
+import { usePhone } from '../../context/PhoneContext';
+import CallHistoryModal from '../communication/CallHistoryModal';
 
 const Customers = () => {
     const { user: currentUser } = useSelector(state => state.auth);
@@ -12,6 +14,9 @@ const Customers = () => {
     const [isEditing, setIsEditing] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const { makeCall, callState } = usePhone();
+    const [historyNumber, setHistoryNumber] = useState(null);
+    const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
     const [formData, setFormData] = useState({
         name: '',
@@ -277,13 +282,40 @@ const Customers = () => {
                                         <td className="p-4 text-gray-300">
                                             {client.contact_person || '-'}
                                         </td>
-                                        <td className="p-4">
-                                            <div className="flex flex-col gap-1 text-xs text-gray-400">
-                                                {client.phone && <div><i className="fa-solid fa-phone w-4 text-center"></i> {client.phone}</div>}
-                                                {client.email && <div><i className="fa-solid fa-envelope w-4 text-center"></i> {client.email}</div>}
-                                                {!client.phone && !client.email && <span>-</span>}
-                                            </div>
-                                        </td>
+                                         <td className="p-4">
+                                             <div className="flex flex-col gap-1 text-xs text-gray-400">
+                                                 {client.phone && (
+                                                     <div className="flex items-center gap-2">
+                                                         <i className="fa-solid fa-phone w-4 text-center"></i> 
+                                                         <span>{client.phone}</span>
+                                                         <div className="flex justify-center gap-2">
+                                                            <button 
+                                                                onClick={() => makeCall(client.phone)}
+                                                                disabled={callState !== 'idle' || !client.phone}
+                                                                className={`p-2 rounded-lg transition-all ${
+                                                                    callState !== 'idle' ? 'bg-gray-500/10 text-gray-500 cursor-not-allowed' : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-white'
+                                                                }`}
+                                                                title="Anrufen"
+                                                            >
+                                                                <i className="fa-solid fa-phone"></i>
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => {
+                                                                    setHistoryNumber(client.phone);
+                                                                    setIsHistoryOpen(true);
+                                                                }}
+                                                                className="p-2 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500 hover:text-white transition-all shadow-sm"
+                                                                title="Anrufverlauf"
+                                                            >
+                                                                <i className="fa-solid fa-clock-rotate-left"></i>
+                                                            </button>
+                                                        </div>
+                                                     </div>
+                                                 )}
+                                                 {client.email && <div><i className="fa-solid fa-envelope w-4 text-center"></i> {client.email}</div>}
+                                                 {!client.phone && !client.email && <span>-</span>}
+                                             </div>
+                                         </td>
                                         <td className="p-4">
                                             {getStatusBadge(client.status)}
                                         </td>
@@ -460,6 +492,11 @@ const Customers = () => {
                     </div>
                 </div>
             )}
+            <CallHistoryModal 
+                isOpen={isHistoryOpen} 
+                onClose={() => setIsHistoryOpen(false)} 
+                number={historyNumber} 
+            />
         </div>
     );
 };

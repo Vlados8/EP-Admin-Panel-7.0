@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 
 const InquiryDetailsModal = ({ inquiry, isOpen, onClose, onProjectCreate, onInquiryUpdated, onInquiryDeleted }) => {
+    const navigate = useNavigate();
     const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState({
         contact_name: inquiry?.contact_name || '',
@@ -99,6 +101,16 @@ const InquiryDetailsModal = ({ inquiry, isOpen, onClose, onProjectCreate, onInqu
         onProjectCreate(inquiry);
     };
 
+    const handleCreateOffer = async () => {
+        try {
+            // Automatically change status to 'proposal' (Angebot) when starting the offer creation
+            await api.patch(`/inquiries/${inquiry.id}`, { status: 'proposal' });
+        } catch (error) {
+            console.error('Error auto-updating status to proposal:', error);
+        }
+        navigate('/angebote/neu', { state: { inquiry } });
+    };
+
     return (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex justify-center z-50 p-4 overflow-y-auto">
             <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl w-full max-w-4xl shadow-2xl flex flex-col my-auto max-h-none md:max-h-[90vh]">
@@ -112,9 +124,14 @@ const InquiryDetailsModal = ({ inquiry, isOpen, onClose, onProjectCreate, onInqu
                                 {inquiry.category?.name || 'Keine Kategorie'}
                             </span>
                             {inquiry.project && (
-                                <span className="text-sm font-normal px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                <button
+                                    onClick={() => navigate(`/projekte/${inquiry.project.id}`)}
+                                    className="text-sm font-normal px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/40 transition-all flex items-center gap-1.5"
+                                    title="Zum Projekt springen"
+                                >
+                                    <i className="fa-solid fa-link text-[10px]"></i>
                                     Projekt ID: {inquiry.project.project_number}
-                                </span>
+                                </button>
                             )}
                         </h2>
                         <p className="text-gray-400 mt-1 text-sm">
@@ -125,9 +142,18 @@ const InquiryDetailsModal = ({ inquiry, isOpen, onClose, onProjectCreate, onInqu
                         <button
                             onClick={handleCreateProject}
                             className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                            title="Ein neues aktives Projekt aus этой Anfrage erstellen"
                         >
                             <i className="fa-solid fa-folder-plus"></i>
                             Projekt erstellen
+                        </button>
+                        <button
+                            onClick={handleCreateOffer}
+                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                            title="Ein Angebot basierend auf этой Anfrage erstellen"
+                        >
+                            <i className="fa-solid fa-file-invoice"></i>
+                            Angebot erstellen
                         </button>
                         <button onClick={onClose} className="p-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-white/5">
                             <i className="fa-solid fa-xmark text-xl"></i>

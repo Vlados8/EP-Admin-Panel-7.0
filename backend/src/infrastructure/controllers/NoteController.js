@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const AppError = require('../../utils/appError');
 const { hasPermission } = require('../../utils/permissions');
+const { uploadToR2, deleteFromR2 } = require('../utils/storage');
 
 // Get all notes, potentially filtered by date or month
 exports.getNotes = async (req, res, next) => {
@@ -63,16 +64,33 @@ exports.createNote = async (req, res, next) => {
             user_id
         });
 
-        // Handle File Uploads
+        // Handle File Uploads: upload to R2
         if (req.files && req.files.length > 0) {
             for (const file of req.files) {
-                await Attachment.create({
-                    note_id: newNote.id,
-                    file_name: file.originalname,
-                    file_url: `/uploads/notizen/${file.filename}`,
-                    file_size: file.size,
-                    content_type: file.mimetype
-                });
+                try {
+                    const r2Key = `notes/${file.filename}`;
+                    const fileUrl = await uploadToR2(file.path, r2Key, file.mimetype);
+
+                    await Attachment.create({
+                        note_id: newNote.id,
+                        file_name: file.originalname,
+                        file_url: fileUrl,
+                        file_size: file.size,
+                        content_type: file.mimetype
+                    });
+
+                    if (fs.existsSync(file.path)) {
+                        fs.unlinkSync(file.path);
+                    }
+                } catch (uploadErr) {
+                    const errorMsg = uploadErr.message || 'Unknown R2 error';
+                    console.error(`[NoteController] Failed to upload note attachment ${file.originalname} to R2:`, errorMsg);
+                    // Log more context to errors log if possible
+                    if (process.env.ENABLE_FILE_LOGGING === 'true') {
+                        const logger = require('../../utils/logger');
+                        logger.error(`Note Attachment Upload Failure: ${file.originalname} | Error: ${errorMsg}`);
+                    }
+                }
             }
         }
 
@@ -106,17 +124,29 @@ exports.deleteNote = async (req, res, next) => {
         }
 
         if (note.user_id !== req.user.id) {
-            return next(new AppError('Keine Berechtigung zum Löschen этой заметки', 403));
+            return next(new AppError('Keine Berechtigung zum Löschen dieser Notiz', 403));
         }
 
-        // Delete File Attachments from disk
+        // Delete File Attachments
         if (note.attachments && note.attachments.length > 0) {
-            note.attachments.forEach(att => {
-                const filePath = path.join(__dirname, '../../../../', att.file_url);
-                if (fs.existsSync(filePath)) {
-                    fs.unlinkSync(filePath);
+            for (const att of note.attachments) {
+                if (att.file_url.startsWith('http')) {
+                    // R2 File
+                    try {
+                        const urlObj = new URL(att.file_url);
+                        const key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
+                        await deleteFromR2(key);
+                    } catch (delErr) {
+                        console.error('Error deleting from R2:', delErr);
+                    }
+                } else {
+                    // Local File
+                    const filePath = path.join(__dirname, '../../../../', att.file_url);
+                    if (fs.existsSync(filePath)) {
+                        fs.unlinkSync(filePath);
+                    }
                 }
-            });
+            }
         }
 
         await note.destroy();
@@ -158,13 +188,29 @@ exports.updateNote = async (req, res, next) => {
         // Handle New File Uploads in Update
         if (req.files && req.files.length > 0) {
             for (const file of req.files) {
-                await Attachment.create({
-                    note_id: note.id,
-                    file_name: file.originalname,
-                    file_url: `/uploads/notizen/${file.filename}`,
-                    file_size: file.size,
-                    content_type: file.mimetype
-                });
+                try {
+                    const r2Key = `notes/${file.filename}`;
+                    const fileUrl = await uploadToR2(file.path, r2Key, file.mimetype);
+
+                    await Attachment.create({
+                        note_id: note.id,
+                        file_name: file.originalname,
+                        file_url: fileUrl,
+                        file_size: file.size,
+                        content_type: file.mimetype
+                    });
+
+                    if (fs.existsSync(file.path)) {
+                        fs.unlinkSync(file.path);
+                    }
+                } catch (uploadErr) {
+                    const errorMsg = uploadErr.message || 'Unknown R2 error';
+                    console.error(`[NoteController Update] Failed to upload note attachment ${file.originalname} to R2:`, errorMsg);
+                    if (process.env.ENABLE_FILE_LOGGING === 'true') {
+                        const logger = require('../../utils/logger');
+                        logger.error(`Note Update Attachment Upload Failure: ${file.originalname} | Error: ${errorMsg}`);
+                    }
+                }
             }
         }
 

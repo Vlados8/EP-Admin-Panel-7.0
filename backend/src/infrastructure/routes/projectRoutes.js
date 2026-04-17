@@ -21,7 +21,9 @@ router.route('/')
 
 router.route('/:id')
     .get(projectController.getProjectById)
-    .patch(projectController.updateProject)
+    .patch(upload.fields([
+        { name: 'mainImage', maxCount: 1 }
+    ]), projectController.updateProject)
     .delete(projectController.deleteProject);
 
 router.route('/:id/files')

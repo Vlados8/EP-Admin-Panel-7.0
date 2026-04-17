@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const { JWT_SECRET } = require('../../config/jwtConfig');
 const { User, Role, Company } = require('../../domain/models');
 const AppError = require('../../utils/appError');
 const { hasPermission } = require('../../utils/permissions');
@@ -10,10 +11,10 @@ const { hasPermission } = require('../../utils/permissions');
 exports.protect = async (req, res, next) => {
     try {
         let token;
-        
+
         // 1. Получение токена из заголовков
-        if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-            token = req.headers.authorization.split(' ')[1];
+        if (req.headers.authorization && /^bearer\s+/i.test(req.headers.authorization)) {
+            token = req.headers.authorization.split(/\s+/)[1];
         }
 
         if (!token) {
@@ -21,7 +22,7 @@ exports.protect = async (req, res, next) => {
         }
 
         // 2. Верификация токена
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const decoded = jwt.verify(token, JWT_SECRET);
 
         // 3. Проверка, существует ли пользователь
         const currentUser = await User.findByPk(decoded.id, {
@@ -37,6 +38,15 @@ exports.protect = async (req, res, next) => {
 
         // 4. Сохранение пользователя в объекте запроса
         req.user = currentUser;
+
+        // 5. Update last_seen_at (Throttle to once per minute to avoid excessive DB writes)
+        const now = new Date();
+        const lastSeen = currentUser.last_seen_at ? new Date(currentUser.last_seen_at) : new Date(0);
+        if (now.getTime() - lastSeen.getTime() > 60000) {
+            currentUser.last_seen_at = now;
+            currentUser.save().catch(err => console.error('Error updating last_seen_at:', err.message));
+        }
+
         next();
     } catch (err) {
         if (err.name === 'JsonWebTokenError') {

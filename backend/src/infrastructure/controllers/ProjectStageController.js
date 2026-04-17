@@ -3,6 +3,7 @@ const AppError = require('../../utils/appError');
 const fs = require('fs');
 const path = require('path');
 const { hasPermission } = require('../../utils/permissions');
+const { uploadToR2, deleteFromR2 } = require('../utils/storage');
 
 // Get all stages for a project
 exports.getStages = async (req, res, next) => {
@@ -68,27 +69,23 @@ exports.createStage = async (req, res, next) => {
             project_id
         });
 
-        // Handle uploaded images
+        // Handle uploaded images with R2
         if (req.files && req.files.length > 0) {
-            // Path: admin/uploads/projects/[projectId]/stages/[stageId]/
-            const stageDir = path.join(__dirname, '../../../../uploads/projects', String(project_id), 'stages', String(newStage.id));
-
-            if (!fs.existsSync(stageDir)) {
-                fs.mkdirSync(stageDir, { recursive: true });
-            }
-
             for (const file of req.files) {
-                const timestamp = Date.now();
-                const ext = path.extname(file.originalname);
-                const uniqueFileName = `${timestamp}_${file.originalname}`;
-                const newPath = path.join(stageDir, uniqueFileName);
+                try {
+                    const r2Key = `projects/${project_id}/stages/${newStage.id}/${Date.now()}_${file.originalname}`;
+                    const fileUrl = await uploadToR2(file.path, r2Key, file.mimetype);
 
-                fs.renameSync(file.path, newPath);
+                    await ProjectStageImage.create({
+                        project_stage_id: newStage.id,
+                        path: fileUrl
+                    });
 
-                await ProjectStageImage.create({
-                    project_stage_id: newStage.id,
-                    path: `/uploads/projects/${project_id}/stages/${newStage.id}/${uniqueFileName}`
-                });
+                    // Cleanup local temp
+                    if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+                } catch (err) {
+                    console.error('R2 Stage Image Upload Error:', err);
+                }
             }
         }
 
@@ -154,34 +151,42 @@ exports.updateStage = async (req, res, next) => {
                 });
 
                 for (const img of images) {
-                    const fullPath = path.join(__dirname, '../../../../', img.path);
-                    if (fs.existsSync(fullPath)) {
-                        fs.unlinkSync(fullPath);
+                    try {
+                        if (img.path && img.path.startsWith('http')) {
+                            // R2 Deletion
+                            const url = new URL(img.path);
+                            const key = url.pathname.startsWith('/') ? url.pathname.substring(1) : url.pathname;
+                            await deleteFromR2(key);
+                        } else {
+                            // Legacy Local Deletion
+                            const fullPath = path.join(__dirname, '../../../../', img.path);
+                            if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+                        }
+                    } catch (err) {
+                        console.error('Image Deletion Error:', err);
                     }
                     await img.destroy();
                 }
             }
         }
 
-        // Handle new image uploads
+        // Handle new image uploads with R2
         if (req.files && req.files.length > 0) {
-            const stageDir = path.join(__dirname, '../../../../uploads/projects', String(stage.project_id), 'stages', String(stage.id));
-
-            if (!fs.existsSync(stageDir)) {
-                fs.mkdirSync(stageDir, { recursive: true });
-            }
-
             for (const file of req.files) {
-                const timestamp = Date.now();
-                const uniqueFileName = `${timestamp}_${file.originalname}`;
-                const newPath = path.join(stageDir, uniqueFileName);
+                try {
+                    const r2Key = `projects/${stage.project_id}/stages/${stage.id}/${Date.now()}_${file.originalname}`;
+                    const fileUrl = await uploadToR2(file.path, r2Key, file.mimetype);
 
-                fs.renameSync(file.path, newPath);
+                    await ProjectStageImage.create({
+                        project_stage_id: stage.id,
+                        path: fileUrl
+                    });
 
-                await ProjectStageImage.create({
-                    project_stage_id: stage.id,
-                    path: `/uploads/projects/${stage.project_id}/stages/${stage.id}/${uniqueFileName}`
-                });
+                    // Cleanup local temp
+                    if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+                } catch (err) {
+                    console.error('R2 Stage Image Upload Error (Update):', err);
+                }
             }
         }
 
@@ -223,9 +228,23 @@ exports.deleteStage = async (req, res, next) => {
         const stageId = String(stage.id);
         const projectId = String(stage.project_id);
 
+        // Cleanup R2 images
+        try {
+            const images = await ProjectStageImage.findAll({ where: { project_stage_id: stage.id }, paranoid: false });
+            for (const img of images) {
+                if (img.path && img.path.startsWith('http')) {
+                    const url = new URL(img.path);
+                    const key = url.pathname.startsWith('/') ? url.pathname.substring(1) : url.pathname;
+                    await deleteFromR2(key);
+                }
+            }
+        } catch (err) {
+            console.error('R2 Stage Cleanup Error:', err);
+        }
+
         await stage.destroy();
 
-        // Clean up from FS
+        // Clean up from FS (legacy)
         const stageDir = path.join(__dirname, '../../../../uploads/projects', projectId, 'stages', stageId);
         if (fs.existsSync(stageDir)) {
             fs.rmSync(stageDir, { recursive: true, force: true });

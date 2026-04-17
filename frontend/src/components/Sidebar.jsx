@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import api from '../services/api';
 import socketService from '../services/socket';
+import { useCompany } from '../context/CompanyContext';
 
 const NavItem = ({ to, icon, label, isActive, badge }) => (
     <Link
@@ -38,7 +39,7 @@ const NavGroup = ({ label, items, currentPath, search }) => {
                 <span>{label}</span>
                 <i className={`fa-solid fa-chevron-${isOpen ? 'down' : 'right'} w-4 text-center`}></i>
             </button>
-            
+
             <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
                 <div className="flex flex-col gap-1">
                     {items.map(route => (
@@ -59,8 +60,10 @@ const NavGroup = ({ label, items, currentPath, search }) => {
 
 const Sidebar = ({ isOpen, onClose, currentPath }) => {
     const { user } = useSelector(state => state.auth);
+    const { companyData, getAssetUrl } = useCompany();
     const location = useLocation();
     const [emailAccounts, setEmailAccounts] = useState([]);
+    const [chatUnreadCount, setChatUnreadCount] = useState(0);
 
     const canViewUsers = usePermission('VIEW_USERS');
     const canViewSubcontractors = usePermission('VIEW_SUBCONTRACTORS');
@@ -85,33 +88,69 @@ const Sidebar = ({ isOpen, onClose, currentPath }) => {
         }
     };
 
+    const fetchChatUnread = async () => {
+        try {
+            const res = await api.get('/chat/unread-count');
+            setChatUnreadCount(res.data.data.count || 0);
+        } catch (err) {
+            console.error('Error fetching chat unread count for sidebar:', err);
+        }
+    };
+
     useEffect(() => {
+        if (!user) return; // Don't fetch or listen if no user
+
         fetchAccounts();
+        fetchChatUnread();
 
         // Listen for real-time email updates
         const handleNewEmail = () => {
-            console.log('New email received, updating sidebar badges...');
             fetchAccounts();
         };
 
+        // Listen for real-time chat updates
+        const handleChatUpdate = () => {
+            fetchChatUnread();
+        };
+
         socketService.on('new_email', handleNewEmail);
+        socketService.on('new_message', handleChatUpdate);
+        socketService.on('messages_read', handleChatUpdate);
 
         return () => {
             socketService.off('new_email', handleNewEmail);
+            socketService.off('new_message', handleChatUpdate);
+            socketService.off('messages_read', handleChatUpdate);
         };
-    }, [canViewEmails]); // Re-fetch if permission changes (rare but good practice)
+    }, [user, canViewEmails]); // Re-fetch/re-listen if user changes
 
     const baseMenu = [
         { path: '/dashboard', icon: 'fa-chart-line', label: 'Dashboard', show: true }, // Everyone sees Dashboard
         { path: '/notizen', icon: 'fa-note-sticky', label: 'Notizen', show: canViewNotes },
         { path: '/aufgaben', icon: 'fa-clipboard-list', label: 'Aufgaben', show: canViewTasks },
+        { path: '/dateien', icon: 'fa-folder-open', label: 'Dateimanager', show: true },
         { path: '/benutzer', icon: 'fa-users-gear', label: 'Benutzer', show: canViewUsers },
         { path: '/subunternehmer', icon: 'fa-truck-fast', label: 'Subunternehmer', show: canViewSubcontractors },
         { path: '/kunden', icon: 'fa-users', label: 'Kunden', show: canViewCustomers },
         { path: '/projekte', icon: 'fa-building', label: 'Projekte', show: canViewProjects },
+        { path: '/angebote', icon: 'fa-file-invoice-dollar', label: 'Angebote', show: true },
         { path: '/kategorien', icon: 'fa-tags', label: 'Kategorien', show: canViewCategories },
         { path: '/anfragen', icon: 'fa-inbox', label: 'Anfragen', show: canViewInquiries },
         { path: '/support', icon: 'fa-headset', label: 'Support', show: canViewSupport }
+    ].filter(item => item.show);
+
+    const communicationItems = [
+        { path: '/chat', icon: 'fa-comments', label: 'Chat', show: true, badge: chatUnreadCount > 0 ? chatUnreadCount : null },
+        { path: '/telefon', icon: 'fa-phone', label: 'Telefon', show: true },
+        { path: '/telefon/verlauf', icon: 'fa-clock-rotate-left', label: 'Anrufverlauf', show: true },
+        { path: '/telefon/globaler-verlauf', icon: 'fa-earth-europe', label: 'Globaler Verlauf', show: canManageApiKeys },
+        { path: '/telefon/einstellungen', icon: 'fa-gears', label: 'Einstellungen', show: true }
+    ].filter(item => item.show);
+
+    const timeTrackingItems = [
+        { path: '/zeiterfassung/terminal', icon: 'fa-clock', label: 'Terminal', show: true },
+        { path: '/zeiterfassung/protokolle', icon: 'fa-clipboard-list', label: 'Protokolle', show: true },
+        { path: '/settings/zeiterfassung', icon: 'fa-gears', label: 'Einstellungen', show: true }
     ].filter(item => item.show);
 
     let emailMenuItems = [];
@@ -119,9 +158,9 @@ const Sidebar = ({ isOpen, onClose, currentPath }) => {
         if (canManageEmails) {
             emailMenuItems.push({ path: '/settings/email-accounts', icon: 'fa-cogs', label: 'Einstellungen' });
         }
-        emailMenuItems.push({ 
-            path: '/email-messages', 
-            icon: 'fa-inbox', 
+        emailMenuItems.push({
+            path: '/email-messages',
+            icon: 'fa-inbox',
             label: 'Alle Nachrichten',
             badge: emailAccounts.reduce((sum, acc) => sum + (acc.unread_count || 0), 0) || null
         });
@@ -137,8 +176,11 @@ const Sidebar = ({ isOpen, onClose, currentPath }) => {
 
     const apiSettingsItems = [];
     if (canManageApiKeys) {
+        apiSettingsItems.push({ path: '/settings/company', icon: 'fa-building-shield', label: 'Firmenangaben' });
+        apiSettingsItems.push({ path: '/settings/storage', icon: 'fa-hard-drive', label: 'Speicherverwaltung' });
         apiSettingsItems.push({ path: '/settings/api-keys', icon: 'fa-key', label: 'API-Schlüssel' });
         apiSettingsItems.push({ path: '/settings/api-integration', icon: 'fa-code', label: 'API Integration' });
+        apiSettingsItems.push({ path: '/settings/ip-system', icon: 'fa-network-wired', label: 'IP System' });
     }
 
     const sidebarItems = (
@@ -146,11 +188,23 @@ const Sidebar = ({ isOpen, onClose, currentPath }) => {
             <div className="p-6 border-b border-white/10 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center border border-white/10 shrink-0 overflow-hidden">
-                        <img src="/assets/Logo EP white.png" alt="Empire Premium Bau Logo" className="w-full h-full object-contain p-1" />
+                        {companyData?.settings?.logoSmallWhite || companyData?.settings?.logoSmall ? (
+                            <img 
+                                src={getAssetUrl(companyData?.settings?.logoSmallWhite || companyData?.settings?.logoSmall)} 
+                                alt="Logo" 
+                                className="w-full h-full object-contain p-1" 
+                            />
+                        ) : (
+                            <img src="/assets/Logo EP white.png" alt="Empire Premium Bau Logo" className="w-full h-full object-contain p-1" />
+                        )}
                     </div>
                     <div className="flex flex-col">
-                        <h1 className="text-lg font-bold tracking-widest uppercase text-white leading-tight">Empire</h1>
-                        <span className="text-[10px] text-blue-400 tracking-widest uppercase font-semibold">Premium Bau</span>
+                        <h1 className="text-lg font-bold tracking-widest uppercase text-white leading-tight">
+                            {companyData?.settings?.logoUpperText || companyData?.name?.split(' ')[0] || 'Empire'}
+                        </h1>
+                        <span className="text-[10px] text-blue-400 tracking-widest uppercase font-semibold">
+                            {companyData?.settings?.logoLowerText || companyData?.name?.split(' ').slice(1).join(' ') || 'Premium Bau'}
+                        </span>
                     </div>
                 </div>
                 <button onClick={onClose} className="md:hidden text-gray-500 hover:text-white p-2">
@@ -175,22 +229,40 @@ const Sidebar = ({ isOpen, onClose, currentPath }) => {
                     ))}
                 </div>
 
+                {/* Kommunikation */}
+                {communicationItems.length > 0 && (
+                    <NavGroup
+                        label="Kommunikation"
+                        items={communicationItems}
+                        currentPath={currentPath}
+                    />
+                )}
+
+                {/* Zeiterfassung */}
+                {timeTrackingItems.length > 0 && (
+                    <NavGroup
+                        label="Zeiterfassung"
+                        items={timeTrackingItems}
+                        currentPath={currentPath}
+                    />
+                )}
+
                 {/* E-Mail System */}
                 {canViewEmails && emailMenuItems.length > 0 && (
-                    <NavGroup 
-                        label="E-Mail System" 
-                        items={emailMenuItems} 
-                        currentPath={currentPath} 
+                    <NavGroup
+                        label="E-Mail System"
+                        items={emailMenuItems}
+                        currentPath={currentPath}
                         search={location.search}
                     />
                 )}
 
                 {/* API Settings */}
                 {canManageApiKeys && apiSettingsItems.length > 0 && (
-                    <NavGroup 
-                        label="System & API" 
-                        items={apiSettingsItems} 
-                        currentPath={currentPath} 
+                    <NavGroup
+                        label="System & API"
+                        items={apiSettingsItems}
+                        currentPath={currentPath}
                     />
                 )}
             </nav>
@@ -210,7 +282,7 @@ const Sidebar = ({ isOpen, onClose, currentPath }) => {
     return (
         <>
             {/* Mobile Backdrop */}
-            <div 
+            <div
                 className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] md:hidden transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
                 onClick={onClose}
             ></div>

@@ -1,5 +1,7 @@
 const { Inquiry, Attachment, ApiKey } = require('../../domain/models');
 const AppError = require('../../utils/appError');
+const { uploadToR2 } = require('../utils/storage');
+const fs = require('fs');
 
 /**
  * Robust webhook handler for MyGo platform (and other external lead sources)
@@ -58,18 +60,35 @@ exports.handleMyGoWebhook = async (req, res, next) => {
             status: 'new'
         });
 
-        // 4. Handle Uploaded Files (from multer)
+        // 4. Handle Uploaded Files (from multer) with R2
         if (req.files && req.files.length > 0) {
-            console.log(`[MyGo Integration] Processing ${req.files.length} files`);
-            const attachmentRecords = req.files.map(file => ({
-                inquiry_id: inquiry.id,
-                email_id: null, // Critical: set to null to avoid Foreign Key constraint failure if it was mandatory
-                file_name: file.originalname,
-                file_url: `/uploads/emails/${file.filename}`, // Using existing email uploads path
-                file_size: file.size,
-                content_type: file.mimetype
-            }));
-            await Attachment.bulkCreate(attachmentRecords);
+            console.log(`[MyGo Integration] Processing ${req.files.length} files for R2`);
+            const attachmentRecords = [];
+            
+            for (const file of req.files) {
+                try {
+                    const r2Key = `inquiries/${inquiry.id}/${Date.now()}_${file.originalname}`;
+                    const fileUrl = await uploadToR2(file.path, r2Key, file.mimetype);
+
+                    attachmentRecords.push({
+                        inquiry_id: inquiry.id,
+                        email_id: null,
+                        file_name: file.originalname,
+                        file_url: fileUrl,
+                        file_size: file.size,
+                        content_type: file.mimetype
+                    });
+
+                    // Cleanup local temp
+                    if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+                } catch (uploadErr) {
+                    console.error(`[MyGo Integration] R2 Upload Error for ${file.originalname}:`, uploadErr);
+                }
+            }
+
+            if (attachmentRecords.length > 0) {
+                await Attachment.bulkCreate(attachmentRecords);
+            }
         }
 
         // 5. Update Key Usage Stats

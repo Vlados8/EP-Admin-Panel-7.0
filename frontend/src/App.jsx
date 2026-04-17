@@ -15,10 +15,19 @@ import Inquiries from './features/inquiries/Inquiries';
 import ProjectDetails from './features/projects/ProjectDetails';
 import ApiKeys from './pages/Settings/ApiKeys';
 import ApiIntegration from './pages/Settings/ApiIntegration';
+import CompanySettings from './features/system/CompanySettings';
 import Emails from './features/emails/Emails';
+import StorageManagement from './features/system/StorageManagement';
 import EmailMessages from './features/emails/EmailMessages';
 import EmailApi from './features/emails/EmailApi';
 import SharedFolderView from './features/shared/SharedFolderView';
+import Chat from './features/chat/Chat';
+import Offers from './features/offers/Offers';
+import OfferCreate from './features/offers/OfferCreate';
+import FileManager from './features/files/FileManager';
+import TimeTerminal from './features/timetracking/TimeTerminal';
+import TimeLogs from './features/timetracking/TimeLogs';
+import TimeSettings from './features/timetracking/TimeSettings';
 
 import { useEffect } from 'react';
 import socketService from './services/socket';
@@ -40,18 +49,28 @@ const RequireAuth = ({ children }) => {
     return children;
 };
 
+import { CompanyProvider } from './context/CompanyContext';
+import { PhoneProvider } from './context/PhoneContext';
+import PhonePage from './features/communication/PhonePage';
+import CallHistoryPage from './features/communication/CallHistoryPage';
+import AdminCallHistoryPage from './features/communication/AdminCallHistoryPage';
+import PhoneSettingsPage from './features/communication/PhoneSettingsPage';
+import TelephonyInstructionsPage from './features/communication/TelephonyInstructionsPage';
+
 function App() {
     return (
-        <BrowserRouter>
-            <Routes>
-                <Route path="/login" element={<Login />} />
-                <Route path="/shared/:token" element={<SharedFolderView />} />
+        <CompanyProvider>
+            <PhoneProvider>
+                <BrowserRouter>
+                <Routes>
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/shared/:token" element={<SharedFolderView />} />
 
-                <Route path="/" element={
-                    <RequireAuth>
-                        <MainLayout />
-                    </RequireAuth>
-                }>
+                    <Route path="/" element={
+                        <RequireAuth>
+                            <MainLayout />
+                        </RequireAuth>
+                    }>
                     <Route index element={<Navigate to="/dashboard" replace />} />
                     <Route path="dashboard" element={<Dashboard />} />
                     <Route path="notizen" element={<Notes />} />
@@ -64,16 +83,34 @@ function App() {
                     <Route path="kategorien" element={<Categories />} />
                     <Route path="anfragen" element={<Inquiries />} />
                     <Route path="support" element={<Support />} />
+                    <Route path="chat" element={<Chat />} />
+                    <Route path="angebote" element={<Offers />} />
+                    <Route path="angebote/neu" element={<OfferCreate />} />
+                    <Route path="dateien" element={<FileManager />} />
+                    <Route path="telefon" element={<PhonePage />} />
+                    <Route path="telefon/verlauf" element={<CallHistoryPage />} />
+                    <Route path="telefon/globaler-verlauf" element={<AdminCallHistoryPage />} />
+                    <Route path="telefon/einstellungen" element={<PhoneSettingsPage />} />
+                    <Route path="settings/ip-system" element={<TelephonyInstructionsPage />} />
                     <Route path="email-messages" element={<EmailMessages />} />
                     <Route path="settings">
                         <Route path="email-accounts" element={<Emails />} />
+                        <Route path="storage" element={<StorageManagement />} />
                         <Route path="email-api" element={<EmailApi />} />
                         <Route path="api-keys" element={<ApiKeys />} />
                         <Route path="api-integration" element={<ApiIntegration />} />
+                        <Route path="company" element={<CompanySettings />} />
+                        <Route path="zeiterfassung" element={<TimeSettings />} />
+                    </Route>
+                    <Route path="zeiterfassung">
+                        <Route path="terminal" element={<TimeTerminal />} />
+                        <Route path="protokolle" element={<TimeLogs />} />
                     </Route>
                 </Route>
             </Routes>
         </BrowserRouter>
+            </PhoneProvider>
+        </CompanyProvider>
     );
 }
 

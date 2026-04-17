@@ -5,6 +5,7 @@ import api from '../../services/api';
 import socketService from '../../services/socket';
 import ClientDetailsModal from '../customers/ClientDetailsModal';
 import MediaViewer from '../../components/common/MediaViewer';
+import { getImageUrl } from '../../utils/config';
 
 const EmailMessages = () => {
     const [messages, setMessages] = useState([]);
@@ -320,7 +321,7 @@ const EmailMessages = () => {
                                 return (
                                     <div 
                                         key={i} 
-                                        onClick={() => isMedia ? openGallery(selectedMessage.attachments, i) : window.open(`${api.defaults.baseURL.replace('/api/v1', '')}${file.file_url}`, '_blank')}
+                                        onClick={() => isMedia ? openGallery(selectedMessage.attachments, i) : window.open(getImageUrl(file.file_url), '_blank')}
                                         className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white/5 border border-white/10 hover:border-blue-500/50 transition-colors cursor-pointer group"
                                     >
                                         <i className={`fa-solid ${file.content_type?.startsWith('image/') ? 'fa-image' : file.content_type?.startsWith('video/') ? 'fa-video' : 'fa-file-lines'} text-blue-400`}></i>

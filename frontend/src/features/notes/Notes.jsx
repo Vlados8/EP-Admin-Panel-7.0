@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import usePermission from '../../hooks/usePermission';
 import MediaViewer from '../../components/common/MediaViewer';
+import { getImageUrl } from '../../utils/config';
 
 const Notes = () => {
     const { user: currentUser } = useSelector(state => state.auth);
@@ -358,7 +359,7 @@ const Notes = () => {
                                                         >
                                                             {att.content_type?.startsWith('image/') ? (
                                                                 <div className="w-8 h-8 rounded overflow-hidden bg-black/40 flex-shrink-0">
-                                                                    <img crossOrigin="anonymous" src={`${api.defaults.baseURL.replace('/api/v1', '')}${att.file_url}`} alt="" className="w-full h-full object-cover" />
+                                                                    <img crossOrigin="anonymous" src={getImageUrl(att.file_url)} alt="" className="w-full h-full object-cover" />
                                                                 </div>
                                                             ) : (
                                                                 <div className="w-8 h-8 rounded bg-blue-500/20 text-blue-400 flex items-center justify-center flex-shrink-0">

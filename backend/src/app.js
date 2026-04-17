@@ -15,15 +15,15 @@ app.set('trust proxy', 1);
 
 // Middlewares
 app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" },
-  contentSecurityPolicy: {
-    directives: {
-      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-      "img-src": ["'self'", "data:", "http://localhost:3001", "http://localhost:3000", "https://ui-avatars.com", "https://*.empire-premium.de", "https://*.empire-premium-bau.de", "https://*.railway.app"],
-      "script-src": ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
-      "style-src": ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com", "https://fonts.googleapis.com"]
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    contentSecurityPolicy: {
+        directives: {
+            ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+            "img-src": ["'self'", "data:", "http://localhost:3001", "http://localhost:3000", "https://ui-avatars.com", "https://*.empire-premium.de", "https://*.empire-premium-bau.de", "https://*.railway.app"],
+            "script-src": ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
+            "style-src": ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com", "https://fonts.googleapis.com"]
+        }
     }
-  }
 }));
 app.use(cors({ origin: '*' }));
 
@@ -78,6 +78,9 @@ app.use('/uploads', (req, res, next) => {
 
 // Request Logging Middleware
 app.use((req, res, next) => {
+    if (req.url.includes('company')) {
+        console.log(`[DEBUG] ${req.method} ${req.url} HEADERS:`, JSON.stringify(req.headers, null, 2));
+    }
     logger.info(`${req.method} ${req.url}`, {
         ip: req.ip,
         userAgent: req.get('User-Agent')
@@ -103,6 +106,7 @@ console.log('Target Path:', apiKeyRoutesPath);
 // Mount Routes (Wrapped in try/catch for Railway debugging)
 try {
     const authRoutes = require('./infrastructure/routes/authRoutes');
+    const companyRoutes = require('./infrastructure/routes/companyRoutes');
     const userRoutes = require('./infrastructure/routes/userRoutes');
     const roleRoutes = require('./infrastructure/routes/roleRoutes');
     const noteRoutes = require('./infrastructure/routes/noteRoutes');
@@ -112,21 +116,27 @@ try {
     const categoryRoutes = require('./infrastructure/routes/categoryRoutes');
     const inquiryRoutes = require('./infrastructure/routes/inquiryRoutes');
     const projectRoutes = require('./infrastructure/routes/projectRoutes');
+    const offerRoutes = require('./infrastructure/routes/offerRoutes');
     const supportRoutes = require('./infrastructure/routes/supportRoutes');
     const emailRoutes = require('./infrastructure/routes/emailRoutes');
     const publicRoutes = require('./infrastructure/routes/publicRoutes');
     const dashboardRoutes = require('./infrastructure/routes/dashboardRoutes');
+    const chatRoutes = require('./infrastructure/routes/chatRoutes');
+    const phoneRoutes = require('./infrastructure/routes/phoneRoutes');
+    const fileRoutes = require('./infrastructure/routes/fileRoutes');
+    const timeTrackingRoutes = require('./infrastructure/routes/timeTrackingRoutes');
 
     // --- PUBLIC WEBHOOKS ---
     // CRM Integrations (e.g. MyGo) - Uses simple multer for attachments
     const upload = require('multer')();
     app.post('/api/v1/integrations/mygo', upload.any(), require('./infrastructure/controllers/IntegrationController').handleMyGoWebhook);
-    
+
     // Public Shared Folder Routes (NO AUTH)
     app.use('/api/v1/public', publicRoutes);
     // -----------------------
 
     app.use('/api/v1/auth', authRoutes);
+    app.use('/api/v1/company', companyRoutes);
     app.use('/api/v1/users', userRoutes);
     app.use('/api/v1/roles', roleRoutes);
     app.use('/api/v1/notes', noteRoutes);
@@ -137,10 +147,15 @@ try {
     app.use('/api/v1/categories', categoryRoutes);
     app.use('/api/v1/inquiries', inquiryRoutes);
     app.use('/api/v1/projects', projectRoutes);
+    app.use('/api/v1/offers', offerRoutes);
     app.use('/api/v1/project-stages', require('./infrastructure/routes/projectStageRoutes'));
     app.use('/api/v1/support', supportRoutes);
     app.use('/api/v1/emails', emailRoutes);
     app.use('/api/v1/dashboard', dashboardRoutes);
+    app.use('/api/v1/chat', chatRoutes);
+    app.use('/api/v1/phone', phoneRoutes);
+    app.use('/api/v1/files', fileRoutes);
+    app.use('/api/v1/time-tracking', timeTrackingRoutes);
 
     // The problematic route
     const apiKeyRoutes = require(apiKeyRoutesPath);
@@ -199,13 +214,13 @@ if (require.main === module) {
         initWebSocket(server);
 
         // Import all models
-        const { ProjectFolder, ProjectFile, User } = require('./domain/models');
+        const { ProjectFolder, ProjectFile, User, Conversation, Participant, Message } = require('./domain/models');
 
-        const PORT = process.env.PORT || 3000;
+        const PORT = process.env.PORT || 3001;
 
         // Start listening IMMEDIATELY so Railway healthcheck finds an open port
-        server.listen(PORT, '0.0.0.0', async () => {
-            console.log(`Server is now listening on port ${PORT}`);
+        server.listen(PORT, '127.0.0.1', async () => {
+            console.log(`Server is now listening on http://127.0.0.1:${PORT}`);
             logger.info(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
 
             // Perform DB sync/seed in background/after listen
@@ -227,7 +242,7 @@ if (require.main === module) {
                         console.log('Adding missing user_id column to email_accounts...');
                         await sequelize.query("ALTER TABLE email_accounts ADD COLUMN user_id CHAR(36) NULL COMMENT 'Assigned user, null if shared'");
                     }
-                    
+
                     const [sharedResults] = await sequelize.query("SHOW COLUMNS FROM email_accounts LIKE 'is_shared'");
                     if (sharedResults.length === 0) {
                         console.log('Adding missing is_shared column to email_accounts...');
@@ -357,7 +372,7 @@ if (require.main === module) {
                             console.log('Adding created_by_id to project_folders...');
                             await sequelize.query("ALTER TABLE project_folders ADD COLUMN created_by_id CHAR(36) NULL");
                         }
-                        
+
                         // Backfill share_tokens for existing folders that might have NULL
                         console.log('Backfilling missing share_tokens...');
                         const [folders] = await sequelize.query("SELECT id FROM project_folders WHERE share_token IS NULL");
@@ -372,6 +387,232 @@ if (require.main === module) {
                     if (projectFileResults.length === 0) {
                         console.log('Creating project_files table...');
                         await ProjectFile.sync({ alter: true });
+                    }
+
+                    console.log('Verifying chat schema...');
+                    const [conversationResults] = await sequelize.query("SHOW TABLES LIKE 'conversations'");
+                    if (conversationResults.length === 0) {
+                        console.log('Creating chat tables...');
+                        await Conversation.sync({ alter: true });
+                        await Participant.sync({ alter: true });
+                        await Message.sync({ alter: true });
+                    } else {
+                        const [messageCaptionResults] = await sequelize.query("SHOW COLUMNS FROM messages LIKE 'caption'");
+                        if (messageCaptionResults.length === 0) {
+                            console.log('Adding missing caption column to messages...');
+                            await sequelize.query("ALTER TABLE messages ADD COLUMN caption TEXT NULL AFTER type");
+                        }
+
+                        const [messageReplyResults] = await sequelize.query("SHOW COLUMNS FROM messages LIKE 'reply_to_id'");
+                        if (messageReplyResults.length === 0) {
+                            console.log('Adding missing reply_to_id column to messages...');
+                            await sequelize.query("ALTER TABLE messages ADD COLUMN reply_to_id CHAR(36) NULL AFTER caption");
+                        }
+
+                        const [messageReactionResults] = await sequelize.query("SHOW COLUMNS FROM messages LIKE 'reactions'");
+                        if (messageReactionResults.length === 0) {
+                            console.log('Adding missing reactions column to messages...');
+                            await sequelize.query("ALTER TABLE messages ADD COLUMN reactions JSON NULL AFTER reply_to_id");
+                        } else {
+                            // Ensure it's not null and has a default value
+                            await sequelize.query("ALTER TABLE messages MODIFY COLUMN reactions JSON NOT NULL");
+                        }
+
+                        const [conversationAvatarResults] = await sequelize.query("SHOW COLUMNS FROM conversations LIKE 'avatar'");
+                        if (conversationAvatarResults.length === 0) {
+                            console.log('Adding missing avatar column to conversations...');
+                            await sequelize.query("ALTER TABLE conversations ADD COLUMN avatar VARCHAR(255) NULL AFTER company_id");
+                        }
+
+                        const [projectFileUrlResults] = await sequelize.query("SHOW COLUMNS FROM project_files LIKE 'file_url'");
+                        if (projectFileUrlResults.length === 0) {
+                            console.log('Adding missing file_url column to project_files...');
+                            await sequelize.query("ALTER TABLE project_files ADD COLUMN file_url TEXT NULL");
+                        }
+
+                        // Ensure message type enum includes video and voice
+                        try {
+                            console.log('Updating message type ENUM to include video and voice...');
+                            await sequelize.query("ALTER TABLE messages MODIFY COLUMN type ENUM('text', 'image', 'video', 'file', 'voice') DEFAULT 'text'");
+                        } catch (enumErr) {
+                            console.warn('ENUM update failed (likely already updated or different DB engine):', enumErr.message);
+                        }
+                    }
+
+                    console.log('Verifying users schema for storage...');
+                    const [storageLimitCols] = await sequelize.query("SHOW COLUMNS FROM users LIKE 'storage_limit_gb'");
+                    if (storageLimitCols.length === 0) {
+                        console.log('Adding storage_limit_gb to users...');
+                        await sequelize.query("ALTER TABLE users ADD COLUMN storage_limit_gb FLOAT DEFAULT 2.0");
+                    }
+                    const [storageUsedCols] = await sequelize.query("SHOW COLUMNS FROM users LIKE 'storage_used_bytes'");
+                    if (storageUsedCols.length === 0) {
+                        console.log('Adding storage_used_bytes to users...');
+                        await sequelize.query("ALTER TABLE users ADD COLUMN storage_used_bytes BIGINT DEFAULT 0");
+                    }
+
+                    const [lastSeenCols] = await sequelize.query("SHOW COLUMNS FROM users LIKE 'last_seen_at'");
+                    if (lastSeenCols.length === 0) {
+                        console.log('Adding last_seen_at to users...');
+                        await sequelize.query("ALTER TABLE users ADD COLUMN last_seen_at DATETIME NULL");
+                    }
+
+                    console.log('Verifying file_folders schema...');
+                    const [fileFolderResults] = await sequelize.query("SHOW TABLES LIKE 'file_folders'");
+                    if (fileFolderResults.length === 0) {
+                        console.log('Creating file_folders table...');
+                        const FileFolder = require('./domain/models/FileFolder');
+                        await FileFolder.sync({ alter: true });
+                    }
+
+                    console.log('Verifying file_favorites schema...');
+                    const [fileFavoriteResults] = await sequelize.query("SHOW TABLES LIKE 'file_favorites'");
+                    if (fileFavoriteResults.length === 0) {
+                        console.log('Creating file_favorites table...');
+                        const FileFavorite = require('./domain/models/FileFavorite');
+                        await FileFavorite.sync({ alter: true });
+                    } else {
+                        // More robust migration for folder_id and file_id nullability
+                        try {
+                            const [cols] = await sequelize.query("PRAGMA table_info(file_favorites)");
+                            const hasFolderId = cols.some(c => c.name === 'folder_id');
+                            const fileIdCol = cols.find(c => c.name === 'file_id');
+                            
+                            if (!hasFolderId) {
+                                console.log('Adding folder_id to file_favorites...');
+                                await sequelize.query("ALTER TABLE file_favorites ADD COLUMN folder_id CHAR(36) NULL");
+                            }
+
+                            // If file_id is NOT NULL in SQLite, we might need a workaround. 
+                            // But usually PRAGMA table_info will show 'notnull' property.
+                            if (fileIdCol && fileIdCol.notnull === 1) {
+                                console.log('Attempting to relax file_id in file_favorites (SQLite workaround)...');
+                                // Note: SQLite doesn't support MODIFY COLUMN. 
+                                // Since this is a small junction table, it's safer to just rely on sync() for complex changes if needed, 
+                                // but for now we try to keep it simple.
+                            }
+                        } catch (err) {
+                            // Fallback to MySQL style if PRAGMA fails
+                            console.log('Running MySQL fallback for file_favorites...');
+                            const [favFolderIdCols] = await sequelize.query("SHOW COLUMNS FROM file_favorites LIKE 'folder_id'");
+                            if (favFolderIdCols.length === 0) {
+                                await sequelize.query("ALTER TABLE file_favorites ADD COLUMN folder_id CHAR(36) NULL");
+                            }
+                            
+                            // Essential: ensure file_id is NULLABLE in MySQL
+                            const [favFileIdCols] = await sequelize.query("SHOW COLUMNS FROM file_favorites LIKE 'file_id'");
+                            if (favFileIdCols.length > 0 && favFileIdCols[0].Null === 'NO') {
+                                console.log('Making file_id nullable in MySQL file_favorites...');
+                                await sequelize.query("ALTER TABLE file_favorites MODIFY COLUMN file_id CHAR(36) NULL");
+                            }
+                        }
+                    }
+
+                    console.log('Verifying file_assets schema...');
+                    const [fileAssetResults] = await sequelize.query("SHOW TABLES LIKE 'file_assets'");
+                    if (fileAssetResults.length === 0) {
+                        console.log('Creating file_assets table...');
+                        const FileAsset = require('./domain/models/FileAsset');
+                        await FileAsset.sync({ alter: true });
+                    } else {
+                        const [folderIdCols] = await sequelize.query("SHOW COLUMNS FROM file_assets LIKE 'folder_id'");
+                        if (folderIdCols.length === 0) {
+                            console.log('Adding folder_id to file_assets...');
+                            await sequelize.query("ALTER TABLE file_assets ADD COLUMN folder_id CHAR(36) NULL");
+                        }
+                        
+                        const [assetShareCols] = await sequelize.query("SHOW COLUMNS FROM file_assets LIKE 'share_token'");
+                        if (assetShareCols.length === 0) {
+                            console.log('Adding sharing columns to file_assets...');
+                            await sequelize.query("ALTER TABLE file_assets ADD COLUMN share_token CHAR(36) UNIQUE NULL");
+                            await sequelize.query("ALTER TABLE file_assets ADD COLUMN is_external_shared TINYINT(1) DEFAULT 0");
+                        }
+                    }
+
+                    console.log('Checking sharing columns for file_folders...');
+                    const [folderShareCols] = await sequelize.query("SHOW COLUMNS FROM file_folders LIKE 'share_token'");
+                    if (folderShareCols.length === 0) {
+                        console.log('Adding sharing columns to file_folders...');
+                        await sequelize.query("ALTER TABLE file_folders ADD COLUMN share_token CHAR(36) UNIQUE NULL");
+                        await sequelize.query("ALTER TABLE file_folders ADD COLUMN is_external_shared TINYINT(1) DEFAULT 0");
+                    }
+
+                    console.log('Verifying users schema for SIP/Phone...');
+                    const queryInterface = sequelize.getQueryInterface();
+                    const userTableInfo = await queryInterface.describeTable('users');
+                    
+                    if (!userTableInfo.sip_user) {
+                        console.log('Adding column sip_user...');
+                        await queryInterface.addColumn('users', 'sip_user', { type: require('sequelize').DataTypes.STRING, allowNull: true });
+                    }
+                    if (!userTableInfo.sip_password) {
+                        console.log('Adding column sip_password...');
+                        await queryInterface.addColumn('users', 'sip_password', { type: require('sequelize').DataTypes.STRING, allowNull: true });
+                    }
+                    if (!userTableInfo.sip_domain) {
+                        console.log('Adding column sip_domain...');
+                        await queryInterface.addColumn('users', 'sip_domain', { type: require('sequelize').DataTypes.STRING, allowNull: true });
+                    }
+                    if (!userTableInfo.wss_url) {
+                        console.log('Adding column wss_url...');
+                        await queryInterface.addColumn('users', 'wss_url', { type: require('sequelize').DataTypes.STRING, allowNull: true });
+                    }
+
+                    console.log('Verifying call_logs table...');
+                    const [callLogTables] = await sequelize.query("SHOW TABLES LIKE 'call_logs'");
+                    if (callLogTables.length === 0) {
+                        console.log('Creating call_logs table manually...');
+                        // This is a fallback, sequelize.sync usually handles this but we want to be sure
+                        await sequelize.query(`
+                            CREATE TABLE IF NOT EXISTS call_logs (
+                                id CHAR(36) BINARY PRIMARY KEY,
+                                user_id CHAR(36) BINARY NOT NULL,
+                                direction ENUM('inbound', 'outbound') NOT NULL,
+                                remote_number VARCHAR(255) NOT NULL,
+                                duration_seconds INTEGER DEFAULT 0,
+                                status ENUM('completed', 'missed', 'failed', 'busy', 'no-answer') DEFAULT 'completed',
+                                created_at DATETIME NOT NULL,
+                                updated_at DATETIME NOT NULL
+                            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+                        `);
+                    } else {
+                        // Check if call_id exists
+                        const [callLogCols] = await sequelize.query("SHOW COLUMNS FROM call_logs LIKE 'call_id'");
+                        if (callLogCols.length === 0) {
+                            console.log('Adding call_id column to call_logs...');
+                            await queryInterface.addColumn('call_logs', 'call_id', { type: require('sequelize').DataTypes.STRING, allowNull: true, unique: true });
+                        }
+                    }
+
+                    console.log('Verifying users schema for advanced telephony...');
+                    const userTableTelephony = await queryInterface.describeTable('users');
+                    if (!userTableTelephony.is_receiving_calls) {
+                        console.log('Adding column is_receiving_calls...');
+                        await queryInterface.addColumn('users', 'is_receiving_calls', { type: require('sequelize').DataTypes.BOOLEAN, defaultValue: false });
+                    }
+                    if (!userTableTelephony.mobile_phone) {
+                        console.log('Adding column mobile_phone...');
+                        await queryInterface.addColumn('users', 'mobile_phone', { type: require('sequelize').DataTypes.STRING, allowNull: true });
+                    }
+                    if (!userTableTelephony.extension_id) {
+                        console.log('Adding column extension_id...');
+                        await queryInterface.addColumn('users', 'extension_id', { type: require('sequelize').DataTypes.STRING, allowNull: true });
+                    }
+                    if (!userTableTelephony.pin) {
+                        console.log('Adding column pin...');
+                        await queryInterface.addColumn('users', 'pin', { type: require('sequelize').DataTypes.STRING, allowNull: true });
+                    }
+                    if (!userTableTelephony.rfid_tag) {
+                        console.log('Adding column rfid_tag...');
+                        await queryInterface.addColumn('users', 'rfid_tag', { type: require('sequelize').DataTypes.STRING, allowNull: true });
+                    }
+
+                    console.log('Verifying time_logs table...');
+                    const [timeLogTables] = await sequelize.query("SHOW TABLES LIKE 'time_logs'");
+                    if (timeLogTables.length === 0) {
+                        console.log('Creating time_logs table...');
+                        const TimeLog = require('./domain/models/TimeLog');
+                        await TimeLog.sync({ alter: true });
                     }
 
                     console.log('Schema verification complete.');

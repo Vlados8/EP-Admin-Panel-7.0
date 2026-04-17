@@ -25,7 +25,7 @@ exports.getAllUsers = async (req, res, next) => {
 
 exports.createUser = async (req, res, next) => {
     try {
-        const { name, phone, password, role_id, manager_id, specialty } = req.body;
+        const { name, phone, password, role_id, manager_id, specialty, mobile_phone, extension_id, sip_user, sip_password, sip_domain, wss_url } = req.body;
         const email = req.body.email ? req.body.email.trim().toLowerCase() : null;
         const company_id = req.user.company_id;
 
@@ -48,7 +48,16 @@ exports.createUser = async (req, res, next) => {
             role_id: role_id || null,
             manager_id: manager_id || null,
             specialty: specialty || null,
-            company_id
+            company_id,
+            mobile_phone: mobile_phone || null,
+            extension_id: extension_id || null,
+            sip_user: sip_user || null,
+            sip_password: sip_password || null,
+            sip_domain: sip_domain || null,
+            wss_url: wss_url || null,
+            is_receiving_calls: req.body.is_receiving_calls || false,
+            pin: req.body.pin || null,
+            rfid_tag: req.body.rfid_tag || null
         });
 
         res.status(201).json({
@@ -62,7 +71,9 @@ exports.createUser = async (req, res, next) => {
                     role_id: newUser.role_id,
                     manager_id: newUser.manager_id,
                     specialty: newUser.specialty,
-                    company_id: newUser.company_id
+                    company_id: newUser.company_id,
+                    pin: newUser.pin,
+                    rfid_tag: newUser.rfid_tag
                 }
             }
         });
@@ -74,7 +85,7 @@ exports.createUser = async (req, res, next) => {
 exports.updateUser = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const { name, phone, role_id, status, manager_id, specialty } = req.body;
+        const { name, phone, role_id, status, manager_id, specialty, storage_limit_gb, mobile_phone, extension_id, is_receiving_calls, sip_user, sip_password, sip_domain, wss_url, pin, rfid_tag } = req.body;
         const email = req.body.email ? req.body.email.trim().toLowerCase() : null;
 
         const user = await User.findByPk(id);
@@ -100,6 +111,16 @@ exports.updateUser = async (req, res, next) => {
         
         user.specialty = specialty !== undefined ? specialty : user.specialty;
         user.status = status || user.status;
+        user.storage_limit_gb = storage_limit_gb !== undefined ? storage_limit_gb : user.storage_limit_gb;
+        user.mobile_phone = mobile_phone !== undefined ? mobile_phone : user.mobile_phone;
+        user.extension_id = extension_id !== undefined ? extension_id : user.extension_id;
+        user.is_receiving_calls = is_receiving_calls !== undefined ? is_receiving_calls : user.is_receiving_calls;
+        user.sip_user = sip_user !== undefined ? sip_user : user.sip_user;
+        user.sip_password = sip_password !== undefined ? sip_password : user.sip_password;
+        user.sip_domain = sip_domain !== undefined ? sip_domain : user.sip_domain;
+        user.wss_url = wss_url !== undefined ? wss_url : user.wss_url;
+        user.pin = pin !== undefined ? pin : user.pin;
+        user.rfid_tag = rfid_tag !== undefined ? rfid_tag : user.rfid_tag;
 
         // Password update
         if (req.body.password) {
@@ -119,7 +140,17 @@ exports.updateUser = async (req, res, next) => {
                     role_id: user.role_id,
                     manager_id: user.manager_id,
                     specialty: user.specialty,
-                    status: user.status
+                    status: user.status,
+                    storage_limit_gb: user.storage_limit_gb,
+                    storage_used_bytes: user.storage_used_bytes,
+                    is_receiving_calls: user.is_receiving_calls,
+                    mobile_phone: user.mobile_phone,
+                    extension_id: user.extension_id,
+                    sip_user: user.sip_user,
+                    sip_domain: user.sip_domain,
+                    wss_url: user.wss_url,
+                    pin: user.pin,
+                    rfid_tag: user.rfid_tag
                 }
             }
         });

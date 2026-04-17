@@ -19,8 +19,8 @@ const logger = winston.createLogger({
     ]
 });
 
-// Add file logging only if specifically requested or in development with a writable prefix
-if (process.env.ENABLE_FILE_LOGGING === 'true') {
+// Add file logging for debugging
+if (true || process.env.ENABLE_FILE_LOGGING === 'true') {
     logger.add(new winston.transports.DailyRotateFile({
         filename: 'logs/error-%DATE%.log',
         datePattern: 'YYYY-MM-DD',

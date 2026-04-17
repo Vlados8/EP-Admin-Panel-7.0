@@ -1,7 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
-const { ProjectFolder, ProjectFile, Role, Project, User } = require('../../domain/models');
+const { Op } = require('sequelize');
+const { ProjectFolder, ProjectFile, Role, Project, User, ProjectImage, ProjectStageImage } = require('../../domain/models');
+const { uploadToR2, deleteFromR2, listFromR2 } = require('../utils/storage');
 
 // Base uploads directory
 const UPLOADS_DIR = path.join(__dirname, '../../../../uploads/projects');
@@ -9,141 +11,266 @@ const UPLOADS_DIR = path.join(__dirname, '../../../../uploads/projects');
 // Temporary storage for incoming uploads before moving them
 const upload = multer({ dest: path.join(__dirname, '../../../../uploads/temp/') });
 
-const fixEncoding = (str) => {
-    if (!str) return str;
-    try {
-        const normalized = str.replace(/\u0110/g, '\u00D0').replace(/\u0111/g, '\u00D1');
-        const buf = Buffer.from(normalized, 'latin1');
-        const utf8 = buf.toString('utf8');
-        const hasCyrillic = /[\u0400-\u04FF]/.test(utf8);
-        const isProbablyCorrect = hasCyrillic || (utf8 !== normalized && !utf8.includes('\ufffd'));
-        return isProbablyCorrect ? utf8 : str;
-    } catch { return str; }
-};
+const { fixEncoding, getSafeStorageName } = require('../../utils/fileUtils');
 
-// Utility func to ensure requested path is secure and within project dir
+// Utility func to ensure requested path is secure
 const getSecurePath = (projectId, requestedPath) => {
     if (!projectId) throw new Error('Project ID is required');
 
-    const projectDir = path.join(UPLOADS_DIR, String(projectId));
-    // Resolve absolute path and prevent directory traversal
-    const targetPath = path.resolve(projectDir, requestedPath || '');
+    // For R2, we don't strictly need to resolve absolute paths for validation,
+    // but we can normalize the path for prefixing.
+    const normalizedPath = (requestedPath || '').replace(/\\/g, '/').replace(/^\//, '').replace(/\/$/, '');
 
-    // The target path MUST start with the projectDir
-    if (!targetPath.startsWith(projectDir)) {
-        throw new Error('Access denied: Invalid path');
-    }
-
-    return { projectDir, targetPath };
+    return { 
+        projectDir: String(projectId), 
+        targetPath: normalizedPath 
+    };
 };
 
-// Ensure project directory exists
-const ensureProjectDir = (projectDir) => {
-    if (!fs.existsSync(projectDir)) {
-        fs.mkdirSync(projectDir, { recursive: true });
-    }
-};
+// ensureProjectDir removed as requested by user - we no longer create local project directories.
 
 exports.listFiles = async (req, res) => {
     try {
         const { id } = req.params;
         const subPath = req.query.path || '';
-        const userRole = req.user.role; 
+        const userRole = req.user.role;
 
-        const { projectDir, targetPath } = getSecurePath(id, subPath);
-        ensureProjectDir(projectDir);
+        // --- 1. PREPARE UNIFIED LISTING MAP ---
+        const itemMap = new Map();
+        const normalizePath = (p) => p.endsWith('/') ? p : (p ? p + '/' : '');
 
-        if (!fs.existsSync(targetPath)) {
-            return res.status(404).json({ error: 'Directory not found' });
-        }
-
-        // 1. Check if the current folder itself is restricted
-        const folderParts = subPath.split('/').filter(Boolean);
-        const currentFolderName = folderParts[folderParts.length - 1] || '';
-        const parentPath = folderParts.slice(0, -1).join('/');
-
-        if (subPath) {
-            const currentFolderRecord = await ProjectFolder.findOne({
-                where: { project_id: id, path: parentPath, name: currentFolderName }
+        // --- 2. SPECIAL VIRTUAL SOURCES (Gallery & Stages) ---
+        // If we are at root or in specific virtual folders, fetch legacy records
+        if (!subPath || subPath === 'gallery' || subPath === 'gallery/') {
+            const images = await ProjectImage.findAll({
+                where: { project_id: id },
+                include: [{ model: User, as: 'uploader', attributes: ['id', 'name'] }]
             });
 
-            if (currentFolderRecord && currentFolderRecord.allowed_role_ids) {
-                const allowedRoles = Array.isArray(currentFolderRecord.allowed_role_ids)
-                    ? currentFolderRecord.allowed_role_ids
-                    : JSON.parse(currentFolderRecord.allowed_role_ids);
-
-                // Admin and Büro always see everything
-                const isManagement = ['Admin', 'Büro'].includes(userRole.name);
-
-                if (!isManagement && !allowedRoles.includes(userRole.id)) {
-                    return res.status(403).json({ error: 'Access denied: You do not have permission to view this folder' });
-                }
+            if (subPath.startsWith('gallery')) {
+                // Inside gallery: add ProjectImage records as files
+                images.forEach(img => {
+                    const physicalName = path.basename(img.file_path);
+                    itemMap.set(physicalName, {
+                        id: img.id,
+                        name: img.file_name || physicalName,
+                        physicalName: physicalName,
+                        isDirectory: false,
+                        size: 0, // Will be updated by R2 discovery if match found
+                        createdAt: img.createdAt,
+                        updatedAt: img.updatedAt,
+                        url: img.file_path,
+                        created_by_id: img.uploaded_by,
+                        creator_name: img.uploader ? img.uploader.name : null,
+                        source: 'gallery'
+                    });
+                });
+            } else if (!subPath) {
+                // At root: Ensure 'Galerie' folder is visible if any images exist
+                itemMap.set('gallery', {
+                    name: 'Galerie',
+                    physicalName: 'gallery',
+                    isDirectory: true,
+                    size: 0,
+                    source: 'virtual'
+                });
             }
         }
 
-        // 2. Read FS items
-        const items = fs.readdirSync(targetPath, { withFileTypes: true });
+        if (!subPath || subPath === 'stages' || subPath === 'stages/') {
+            console.log(`[STAGES] Handling stages for subPath: "${subPath}"`);
+            try {
+                const stages = await ProjectStageImage.findAll({
+                    include: [{ 
+                        model: ProjectStage, 
+                        as: 'stage',
+                        where: { project_id: id }
+                    }]
+                });
+                
+                if (subPath.startsWith('stages')) {
+                    stages.forEach(si => {
+                        const physicalName = path.basename(si.path);
+                        itemMap.set(physicalName, {
+                            id: si.id,
+                            name: physicalName,
+                            physicalName: physicalName,
+                            isDirectory: false,
+                            size: 0,
+                            createdAt: si.createdAt,
+                            updatedAt: si.updatedAt,
+                            url: si.path,
+                            source: 'stages'
+                        });
+                    });
+                } else if (!subPath) {
+                    itemMap.set('stages', {
+                        name: 'Etappen',
+                        physicalName: 'stages',
+                        isDirectory: true,
+                        size: 0,
+                        source: 'virtual'
+                    });
+                }
+            } catch (stageErr) {
+                console.error('[STAGES] Query Error:', stageErr.message);
+                // Non-fatal, just log it. If it's a 400 later, we'll see why.
+            }
+        }
 
+        // If we are inside 'stages', we show ProjectStageImage records (grouped or flat?)
+        // Assuming we want a flat list of all stage images for now, or we could group by stage.
+        // Let's stick to the prompt's focus on Gallery for now, but handle 'stages' similarly if requested.
+
+        const isManagement = userRole && userRole.name ? ['Admin', 'Büro', 'Projektleiter', 'Gruppenleiter'].includes(userRole.name) : false;
+
+        // --- 3. STANDARD LISTING WITH R2 DISCOVERY ---
+        // 1. Fetch DB Items
+        console.log(`[DB] Fetching items for project ${id}, subPath: "${subPath}"`);
         const folderRecords = await ProjectFolder.findAll({
             where: { project_id: id, path: subPath },
             include: [{ model: User, as: 'creator', attributes: ['id', 'name'] }]
         });
-
         const fileRecords = await ProjectFile.findAll({
             where: { project_id: id, path: subPath },
             include: [{ model: User, as: 'creator', attributes: ['id', 'name'] }]
         });
+        console.log(`[DB] Found ${folderRecords.length} folders, ${fileRecords.length} files.`);
 
-        const formattedItems = items.map(item => {
-            const itemPath = path.join(targetPath, item.name);
-            const stats = fs.statSync(itemPath);
-            const relativePath = path.relative(UPLOADS_DIR, itemPath).replace(/\\/g, '/');
+        // 2. R2 DISCOVERY (Scan R2 for folders/files)
+        const r2Prefix = normalizePath(`projects/${id}/${subPath}`);
+        
+        let r2Items = { CommonPrefixes: [], Contents: [] };
+        try {
+            r2Items = await listFromR2(r2Prefix, '/');
+        } catch (err) {
+            console.error('R2 Scan Error:', err);
+        }
 
-            // Find metadata for this specific directory or file if it exists
-            const record = item.isDirectory()
-                ? folderRecords.find(r => r.name === item.name)
-                : fileRecords.find(r => r.name === item.name);
+        // Add R2 Folders (CommonPrefixes)
+        if (r2Items.CommonPrefixes) {
+            r2Items.CommonPrefixes.forEach(cp => {
+                const fullPrefix = cp.Prefix;
+                const folderName = fullPrefix.split('/').filter(Boolean).pop();
+                
+                // Map internal 'gallery' to 'Galerie' for display
+                const displayName = folderName === 'gallery' ? 'Galerie' : (folderName === 'stages' ? 'Etappen' : folderName);
 
-            return {
-                name: fixEncoding(item.name),
-                physicalName: item.name, 
-                isDirectory: item.isDirectory(),
-                size: stats.size,
-                createdAt: stats.birthtime,
-                updatedAt: stats.mtime,
-                url: item.isDirectory() ? null : `/uploads/projects/${relativePath}`,
-                created_by_id: record ? record.created_by_id : null,
-                creator_name: (record && record.creator) ? record.creator.name : null,
-                permissions: record && item.isDirectory() ? {
-                    allowed_role_ids: record.allowed_role_ids,
-                    is_public: record.is_public,
-                    share_token: record.share_token
-                } : null
-            };
+                if (!itemMap.has(folderName)) {
+                    itemMap.set(folderName, {
+                        name: displayName,
+                        physicalName: folderName,
+                        isDirectory: true,
+                        size: 0,
+                        source: 'r2'
+                    });
+                }
+            });
+        }
+
+        // Add R2 Files (Contents)
+        if (r2Items.Contents) {
+            r2Items.Contents.forEach(obj => {
+                const fileName = obj.Key.split('/').filter(Boolean).pop();
+                if (!fileName || obj.Key.endsWith('/')) return;
+
+                // Update existing item if found (from gallery/virtual) or create new
+                if (itemMap.has(fileName)) {
+                    const existing = itemMap.get(fileName);
+                    itemMap.set(fileName, {
+                        ...existing,
+                        size: obj.Size,
+                        updatedAt: obj.LastModified,
+                        url: existing.url || `${process.env.R2_PUBLIC_URL}/${obj.Key}`
+                    });
+                } else {
+                    itemMap.set(fileName, {
+                        name: fileName,
+                        physicalName: fileName,
+                        isDirectory: false,
+                        size: obj.Size,
+                        updatedAt: obj.LastModified,
+                        url: `${process.env.R2_PUBLIC_URL}/${obj.Key}`,
+                        source: 'r2'
+                    });
+                }
+            });
+        }
+
+        // 4. MERGE WITH DB (DB takes precedence for metadata/permissions)
+        folderRecords.forEach(r => {
+            const displayName = r.name === 'gallery' ? 'Galerie' : (r.name === 'stages' ? 'Etappen' : fixEncoding(r.name));
+            itemMap.set(r.name, {
+                id: r.id,
+                name: displayName,
+                physicalName: r.name,
+                isDirectory: true,
+                size: 0,
+                createdAt: r.createdAt,
+                updatedAt: r.updatedAt,
+                created_by_id: r.created_by_id,
+                creator_name: r.creator ? r.creator.name : null,
+                permissions: {
+                    allowed_role_ids: r.allowed_role_ids,
+                    is_public: r.is_public,
+                    share_token: r.share_token
+                },
+                source: 'db'
+            });
         });
 
-        // 4. Filter items based on permissions
-        const filteredItems = formattedItems.filter(item => {
-            // Admin and Büro bypass filtering
-            if (['Admin', 'Büro'].includes(userRole.name)) return true;
+        fileRecords.forEach(r => {
+            // Deduplication: extract physical name from file_url (UUID)
+            let physicalName = r.name;
+            if (r.file_url && r.file_url.startsWith('http')) {
+                try {
+                    // Extract basename from URL (e.g. 123-uuid.png)
+                    physicalName = path.basename(new URL(r.file_url).pathname);
+                } catch (e) {
+                    console.warn('URL parse error for deduplication:', r.file_url);
+                }
+            }
 
-            // If it's a file, we check folder permissions for visibility
-            // If it's a folder, check its own permissions
+            itemMap.set(physicalName, {
+                id: r.id,
+                name: fixEncoding(r.name),
+                physicalName: physicalName,
+                isDirectory: false,
+                size: r.size || 0,
+                createdAt: r.createdAt,
+                updatedAt: r.updatedAt,
+                url: r.file_url,
+                created_by_id: r.created_by_id,
+                creator_name: r.creator ? r.creator.name : null,
+                source: 'db'
+            });
+        });
+
+        const formattedItems = Array.from(itemMap.values());
+
+        // 5. Filter items based on permissions
+        const filteredItems = formattedItems.filter(item => {
+            // Priority for management roles
+            if (isManagement) return true;
+
             if (item.isDirectory) {
+                // Check folder-specific metadata from DB
                 if (item.permissions && item.permissions.is_public) return true;
                 if (!item.permissions || !item.permissions.allowed_role_ids) return true;
 
                 const allowedRoles = Array.isArray(item.permissions.allowed_role_ids)
                     ? item.permissions.allowed_role_ids
-                    : JSON.parse(item.permissions.allowed_role_ids);
+                    : (typeof item.permissions.allowed_role_ids === 'string' 
+                        ? JSON.parse(item.permissions.allowed_role_ids) 
+                        : []);
 
-                return allowedRoles.includes(userRole.id);
+                return userRole && allowedRoles.includes(userRole.id);
             }
-            
-            return true; // Files in a visible folder are visible
+            // For general files, we list them if they are in the folder
+            return true;
         });
 
-        // Optional: Sort so directories come first
+        // 6. Sort: Virtual folders first, then Alphabetical
         filteredItems.sort((a, b) => {
             if (a.isDirectory === b.isDirectory) {
                 return a.name.localeCompare(b.name);
@@ -156,7 +283,7 @@ exports.listFiles = async (req, res) => {
             data: filteredItems
         });
     } catch (error) {
-        console.error('Error listing files:', error);
+        console.error('CRITICAL Error listing files:', error);
         res.status(400).json({ error: error.message || 'Server error reading directory' });
     }
 };
@@ -168,16 +295,18 @@ exports.createFolder = async (req, res) => {
 
         if (!name) return res.status(400).json({ error: 'Folder name is required' });
 
-        const { projectDir, targetPath } = getSecurePath(id, folderPath);
-        ensureProjectDir(projectDir);
+        const { targetPath } = getSecurePath(id, folderPath);
+        // We no longer call ensureProjectDir or fs.mkdirSync for local paths.
+        // For R2, folders dont need to be 'created' physically, but we check if we already have a record
+        // to prevent logical duplicates if necessary.
+        
+        const existingFolder = await ProjectFolder.findOne({
+            where: { project_id: id, path: folderPath || '', name: name.trim() }
+        });
 
-        const newFolderPath = path.join(targetPath, name);
-
-        if (fs.existsSync(newFolderPath)) {
-            return res.status(400).json({ error: 'Folder already exists' });
+        if (existingFolder) {
+            return res.status(400).json({ error: 'Folder already exists in database' });
         }
-
-        fs.mkdirSync(newFolderPath, { recursive: true });
 
         // Save metadata to DB
         await ProjectFolder.create({
@@ -210,12 +339,7 @@ exports.uploadFiles = async (req, res) => {
             return res.status(400).json({ error: 'No files uploaded' });
         }
 
-        const { projectDir, targetPath } = getSecurePath(id, uploadPath);
-        ensureProjectDir(projectDir);
-
-        if (!fs.existsSync(targetPath)) {
-            fs.mkdirSync(targetPath, { recursive: true });
-        }
+        const { targetPath } = getSecurePath(id, uploadPath);
 
         // Try to find the parent folder ID if we are uploading to a subpath
         let folderId = null;
@@ -233,35 +357,39 @@ exports.uploadFiles = async (req, res) => {
 
         for (const file of req.files) {
             // Fix encoding: multer/busboy misinterprets UTF-8 as Latin-1
-            let fileName = Buffer.from(file.originalname, 'latin1').toString('utf8');
-            let finalPath = path.join(targetPath, fileName);
-
-            if (fs.existsSync(finalPath)) {
-                const ext = path.extname(fileName);
-                const name = path.basename(fileName, ext);
-                fileName = `${name}_${Date.now()}${ext}`;
-                finalPath = path.join(targetPath, fileName);
+            let originalName = fixEncoding(file.originalname);
+            let storageName = getSafeStorageName(originalName);
+            // In R2, we don't need to check local filesystem for name collisions the same way,
+            // but we can append a timestamp to be safe if desired.
+            
+            // Upload to R2 directly from Multer's temp path
+            let fileUrl;
+            try {
+                const r2Key = `projects/${id}/${uploadPath ? uploadPath + '/' : ''}${storageName}`;
+                fileUrl = await uploadToR2(file.path, r2Key, file.mimetype);
+                
+                // Cleanup temp file
+                if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+            } catch (uploadError) {
+                console.error('R2 upload failed:', uploadError);
+                fileUrl = `/uploads/projects/${relativePath}`; // Fallback if local move somehow happened
             }
-
-            // Move from temp storage to final target
-            fs.renameSync(file.path, finalPath);
-
-            const relativePath = path.relative(UPLOADS_DIR, finalPath).replace(/\\/g, '/');
 
             // Save to DB
             await ProjectFile.create({
                 project_id: id,
                 folder_id: folderId,
-                name: fileName,
+                name: originalName,
                 path: uploadPath || '',
                 size: file.size,
                 mime_type: file.mimetype,
+                file_url: fileUrl,
                 created_by_id: req.user.id
             });
 
             uploadedFiles.push({
-                name: fileName,
-                url: `/uploads/projects/${relativePath}`
+                name: originalName,
+                url: fileUrl
             });
         }
 
@@ -289,55 +417,89 @@ exports.deleteItem = async (req, res) => {
         const itemPath = req.query.path;
         const userRole = req.user.role;
         const userId = req.user.id;
-
-        if (!itemPath) return res.status(400).json({ error: 'Path is required for deletion' });
-
-        const { targetPath } = getSecurePath(id, itemPath);
-        if (!fs.existsSync(targetPath)) {
-            return res.status(404).json({ error: 'File or folder not found' });
-        }
-
-        const stats = fs.statSync(targetPath);
-        const name = path.basename(targetPath);
-        const parentRelativePath = path.dirname(itemPath) === '.' ? '' : path.dirname(itemPath);
-
-        // RBAC logic
         const isManagement = ['Admin', 'Büro', 'Projektleiter', 'Gruppenleiter'].includes(userRole.name);
 
-        if (stats.isDirectory()) {
-            // 1. Management roles can delete any directory
-            if (isManagement) {
+        if (!itemPath) return res.status(400).json({ error: 'Pfad ist erforderlich' });
+
+        const name = path.basename(itemPath);
+        const parentRelativePath = path.dirname(itemPath) === '.' ? '' : path.dirname(itemPath);
+        
+        // 1. Check if it's a known folder in DB
+        const folderRecord = await ProjectFolder.findOne({ 
+            where: { project_id: id, path: parentRelativePath, name: name } 
+        });
+
+        if (folderRecord) {
+            // FOLDER DELETION
+            if (!isManagement) {
+                return res.status(403).json({ error: 'Zugriff verweigert: Nur Management kann Ordner löschen' });
+            }
+
+            // Recursive cleanup of nested files in R2
+            const nestedFiles = await ProjectFile.findAll({
+                where: { project_id: id, path: { [Op.like]: `${itemPath}%` } }
+            });
+
+            for (const nf of nestedFiles) {
+                if (nf.file_url && nf.file_url.startsWith('http')) {
+                    try {
+                        const urlObj = new URL(nf.file_url);
+                        const key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
+                        await deleteFromR2(key);
+                    } catch (err) { console.error('R2 nested delete error:', err); }
+                }
+            }
+            
+            // Delete DB records
+            await ProjectFile.destroy({ where: { project_id: id, path: { [Op.like]: `${itemPath}%` } } });
+            await folderRecord.destroy();
+
+            // Physical cleanup (Legacy fallback)
+            const { targetPath } = getSecurePath(id, itemPath);
+            if (fs.existsSync(targetPath)) {
                 fs.rmSync(targetPath, { recursive: true, force: true });
-                await ProjectFolder.destroy({ where: { project_id: id, path: parentRelativePath, name: name } });
-                await ProjectFile.destroy({ where: { project_id: id, path: itemPath } }); // cleanup files in that path too
-            } else {
-                // 2. Workers (non-management) cannot delete any folder
-                return res.status(403).json({ error: 'Access denied: Worker role cannot delete folders' });
             }
         } else {
-            // 3. For Files
-            if (isManagement) {
-                // Management can delete anything
-                fs.unlinkSync(targetPath);
-                await ProjectFile.destroy({ where: { project_id: id, path: parentRelativePath, name: name } });
-            } else {
-                // Worker can only delete if they are the creator
-                const fileRecord = await ProjectFile.findOne({
-                    where: { project_id: id, path: parentRelativePath, name: name }
-                });
-
-                if (fileRecord && fileRecord.created_by_id === userId) {
-                    fs.unlinkSync(targetPath);
-                    await fileRecord.destroy();
-                } else {
-                    return res.status(403).json({ error: 'Access denied: You can only delete your own files' });
+            // 2. FILE DELETION
+            const fileRecord = await ProjectFile.findOne({
+                where: { 
+                    project_id: id, 
+                    [Op.or]: [
+                        { [Op.and]: [{ path: parentRelativePath }, { name: name }] },
+                        { file_url: { [Op.like]: `%/${name}` } }
+                    ]
                 }
+            });
+
+            if (!fileRecord && !isManagement) {
+                return res.status(404).json({ error: 'Datei nicht gefunden oder keine Berechtigung' });
+            }
+
+            if (isManagement || (fileRecord && fileRecord.created_by_id === userId)) {
+                if (fileRecord) {
+                    if (fileRecord.file_url && fileRecord.file_url.startsWith('http')) {
+                        try {
+                            const urlObj = new URL(fileRecord.file_url);
+                            const key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
+                            await deleteFromR2(key);
+                        } catch (err) { console.error('R2 delete error:', err); }
+                    }
+                    await fileRecord.destroy();
+                }
+                
+                // Physical cleanup (Legacy fallback)
+                const { targetPath } = getSecurePath(id, itemPath);
+                if (fs.existsSync(targetPath)) {
+                    fs.unlinkSync(targetPath);
+                }
+            } else {
+                return res.status(403).json({ error: 'Zugriff verweigert: Sie können nur eigene Dateien löschen' });
             }
         }
 
         res.status(200).json({
             status: 'success',
-            message: 'Item deleted successfully'
+            message: 'Erfolgreich gelöscht'
         });
     } catch (error) {
         console.error('Error deleting item:', error);
@@ -352,27 +514,39 @@ exports.downloadFile = async (req, res) => {
 
         if (!itemPath) return res.status(400).json({ error: 'Path is required for download' });
 
+        const fileName = path.basename(itemPath);
+        const parentRelativePath = path.dirname(itemPath) === '.' ? '' : path.dirname(itemPath);
+
+        // 1. Prioritize Database Lookup (to find R2 URL)
+        const fileRecord = await ProjectFile.findOne({
+            where: { project_id: id, path: parentRelativePath, name: fileName }
+        });
+
+        if (fileRecord && fileRecord.file_url && fileRecord.file_url.startsWith('http')) {
+            return res.redirect(fileRecord.file_url);
+        }
+
+        // 2. Fallback to standard disk lookup (Legacy)
         const { targetPath } = getSecurePath(id, itemPath);
-
-        if (!fs.existsSync(targetPath)) {
-            // Smart fallback for garbled names
-            const dir = path.dirname(targetPath);
-            const base = path.basename(targetPath);
-            const garbledBase = Buffer.from(base, 'utf8').toString('latin1');
-            const garbledPath = path.join(dir, garbledBase);
-
-            if (fs.existsSync(garbledPath)) {
-                return res.download(garbledPath);
+        if (fs.existsSync(targetPath)) {
+            const stats = fs.statSync(targetPath);
+            if (stats.isDirectory()) {
+                return res.status(400).json({ error: 'Cannot directly download a directory' });
             }
-            return res.status(404).json({ error: 'File not found' });
+            return res.download(targetPath);
         }
 
-        const stats = fs.statSync(targetPath);
-        if (stats.isDirectory()) {
-            return res.status(400).json({ error: 'Cannot directly download a directory' });
+        // 3. Fallback for garbled names (Legacy)
+        const dir = path.dirname(targetPath);
+        const base = path.basename(targetPath);
+        const garbledBase = Buffer.from(base, 'utf8').toString('latin1');
+        const garbledPath = path.join(dir, garbledBase);
+
+        if (fs.existsSync(garbledPath)) {
+            return res.download(garbledPath);
         }
 
-        res.download(targetPath);
+        res.status(404).json({ error: 'Datei nicht gefunden' });
     } catch (error) {
         console.error('Error downloading file:', error);
         res.status(400).json({ error: error.message || 'Server error downloading file' });

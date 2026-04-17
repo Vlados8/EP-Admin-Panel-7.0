@@ -25,7 +25,7 @@ const Projects = () => {
         try {
             setLoading(true);
             const [projectsRes, clientsRes] = await Promise.all([
-                api.get('/projects'),
+                api.get('/projects?excludeStatus=angebot'),
                 api.get('/clients')
             ]);
             setProjects(Array.isArray(projectsRes.data?.data?.projects) ? projectsRes.data.data.projects : (Array.isArray(projectsRes.data) ? projectsRes.data : []));

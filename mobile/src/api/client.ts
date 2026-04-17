@@ -9,18 +9,18 @@ const getBaseUrl = () => {
     console.log('[API] Using environment URL:', process.env.EXPO_PUBLIC_API_URL);
     return process.env.EXPO_PUBLIC_API_URL;
   }
-  
+
   // Get host dev machine IP for real device debugging
   const debuggerHost = Constants.expoConfig?.hostUri || Constants.manifest2?.extra?.expoGo?.debuggerHost;
-  
+
   if (!debuggerHost && !__DEV__) {
     // Production default? 
     // Usually environment variable should handle it, but fallback to localhost
   }
-  
+
   const address = debuggerHost ? debuggerHost.split(':')[0] : 'localhost';
   const url = `http://${address}:3001/api/v1`;
-  
+
   console.log('[API] Debugger Host:', debuggerHost);
   console.log('[API] Detected Base URL:', url);
   return url;

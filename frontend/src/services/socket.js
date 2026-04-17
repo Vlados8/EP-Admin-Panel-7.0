@@ -13,12 +13,15 @@ class SocketService {
         this.socket = null;
     }
 
-    connect(companyId, userId) {
+    connect() {
         if (this.socket) return;
+        
+        const token = localStorage.getItem('token');
+        if (!token) return;
 
         this.socket = io(SOCKET_URL, {
-            query: { companyId, userId },
-            transports: ['websocket'], // Force websocket for stability
+            auth: { token },
+            transports: ['websocket'],
             reconnection: true,
             reconnectionAttempts: 10,
             reconnectionDelay: 1000
@@ -45,6 +48,7 @@ class SocketService {
     }
 
     on(event, callback) {
+        if (!this.socket) this.connect();
         if (this.socket) {
             this.socket.on(event, callback);
         }
@@ -57,6 +61,7 @@ class SocketService {
     }
 
     emit(event, data) {
+        if (!this.socket) this.connect();
         if (this.socket) {
             this.socket.emit(event, data);
         }

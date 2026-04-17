@@ -1,10 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSelector } from 'react-redux';
+import { useLocation } from 'react-router-dom';
 import api from '../../services/api';
 import usePermission from '../../hooks/usePermission';
 import InquiryDetailsModal from './InquiryDetailsModal';
 import ProjectCreateModal from '../projects/ProjectCreateModal';
 import ProjectWizard from '../projects/ProjectWizard';
+import { usePhone } from '../../context/PhoneContext';
+import CallHistoryModal from '../communication/CallHistoryModal';
 
 const COLUMNS = [
     { id: 'new', title: 'Neu', icon: 'fa-star', color: 'text-blue-400', bg: 'bg-blue-500/10' },
@@ -16,6 +19,7 @@ const COLUMNS = [
 ];
 
 const Inquiries = () => {
+    const location = useLocation();
     const { user: currentUser } = useSelector(state => state.auth);
     const [inquiries, setInquiries] = useState([]);
     const [categories, setCategories] = useState([]);
@@ -38,6 +42,10 @@ const Inquiries = () => {
     });
     const [checkboxSelections, setCheckboxSelections] = useState([]);
     const [viewMode, setViewMode] = useState('board'); // 'board' or 'list'
+    const { makeCall, callState } = usePhone();
+    
+    const [historyNumber, setHistoryNumber] = useState(null);
+    const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
     const canManageInquiries = usePermission('MANAGE_INQUIRIES');
     const canDeleteInquiryPerm = usePermission('MANAGE_USERS'); // Proxy for Admin/Office
@@ -59,6 +67,16 @@ const Inquiries = () => {
     };
 
     useEffect(() => { fetchData(); }, []);
+
+    // Auto-open inquiry from navigation state
+    useEffect(() => {
+        if (location.state?.openInquiryId && inquiries.length > 0) {
+            const inq = inquiries.find(i => i.id === location.state.openInquiryId);
+            if (inq) {
+                setSelectedInquiry(inq);
+            }
+        }
+    }, [location.state, inquiries]);
 
     const handleStatusChange = async (inquiryId, newStatus) => {
         try {
@@ -224,9 +242,20 @@ const Inquiries = () => {
                 )}
             </div>
             <h4 className="font-semibold text-white mb-1 line-clamp-2">{inquiry.title}</h4>
-            <div className="flex items-center gap-2 text-xs text-gray-400 mb-3">
-                <i className="fa-solid fa-user text-[10px]"></i>
-                <span className="truncate">{inquiry.contact_name}</span>
+            <div className="flex items-center justify-between gap-2 text-xs text-gray-400 mb-3">
+                <div className="flex items-center gap-2 truncate">
+                    <i className="fa-solid fa-user text-[10px]"></i>
+                    <span className="truncate">{inquiry.contact_name}</span>
+                </div>
+                {inquiry.contact_phone && (
+                    <button
+                        onClick={(e) => { e.stopPropagation(); makeCall(inquiry.contact_phone); }}
+                        className="w-8 h-8 rounded-lg bg-green-500/20 text-green-400 flex items-center justify-center hover:bg-green-500 hover:text-white transition-all shadow-sm"
+                        title="Anrufen"
+                    >
+                        <i className="fa-solid fa-phone text-[10px]"></i>
+                    </button>
+                )}
             </div>
 
             {inquiry.answers && inquiry.answers.length > 0 && (
@@ -347,7 +376,33 @@ const Inquiries = () => {
                                                 <td className="p-4 align-top">
                                                     <div className="text-sm">
                                                         <div className="text-gray-300 font-medium">{inq.contact_name}</div>
-                                                        <div className="text-gray-500 text-xs mt-0.5 break-all max-w-[200px]">{inq.contact_email || inq.contact_phone}</div>
+                                                        <div className="flex items-center gap-2 text-gray-500 text-xs mt-0.5 max-w-[200px]">
+                                                            <span className="truncate">{inq.contact_email || inq.contact_phone}</span>
+                                                            {inq.contact_phone && (
+                                                                <div className="flex gap-1">
+                                                                    <button
+                                                                        onClick={() => makeCall(inq.contact_phone)}
+                                                                        disabled={callState !== 'idle' || !inq.contact_phone}
+                                                                        className={`shrink-0 w-6 h-6 rounded-md flex items-center justify-center transition-all ${
+                                                                            callState !== 'idle' ? 'bg-gray-500/10 text-gray-500 cursor-not-allowed' : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-white'
+                                                                        }`}
+                                                                        title="Anrufen"
+                                                                    >
+                                                                        <i className="fa-solid fa-phone text-[8px]"></i>
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            setHistoryNumber(inq.contact_phone);
+                                                                            setIsHistoryOpen(true);
+                                                                        }}
+                                                                        className="shrink-0 w-6 h-6 rounded-md bg-blue-500/10 text-blue-400 hover:bg-blue-500 hover:text-white flex items-center justify-center transition-all"
+                                                                        title="Anrufverlauf"
+                                                                    >
+                                                                        <i className="fa-solid fa-clock-rotate-left text-[8px]"></i>
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </td>
 
@@ -718,6 +773,11 @@ const Inquiries = () => {
                     setProjectWizardData(null);
                 }}
                 initialData={projectWizardData}
+            />
+            <CallHistoryModal 
+                isOpen={isHistoryOpen} 
+                onClose={() => setIsHistoryOpen(false)} 
+                number={historyNumber} 
             />
         </div>
     );

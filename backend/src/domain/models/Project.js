@@ -32,7 +32,7 @@ const Project = sequelize.define('Project', {
     status: {
         type: DataTypes.STRING,
         allowNull: false,
-        defaultValue: 'aktiv' // aktiv, pausiert, abgeschlossen, storniert
+        defaultValue: 'aktiv' // angebot, aktiv, pausiert, abgeschlossen, storniert
     },
     progress: {
         type: DataTypes.INTEGER,

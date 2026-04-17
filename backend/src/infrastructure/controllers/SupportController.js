@@ -185,3 +185,23 @@ exports.addResponse = async (req, res, next) => {
         next(err);
     }
 };
+
+exports.deleteTicket = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const ticket = await SupportTicket.findByPk(id);
+
+        if (!ticket) {
+            return res.status(404).json({ status: 'fail', message: 'Ticket not found' });
+        }
+
+        await ticket.destroy();
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Ticket deleted successfully'
+        });
+    } catch (err) {
+        next(err);
+    }
+};

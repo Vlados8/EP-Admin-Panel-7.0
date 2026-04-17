@@ -1,9 +1,10 @@
-const { Project, Category, Subcategory, ProjectUser, ProjectSubcontractor, User, Client, Subcontractor, ProjectStage, ProjectStageImage, ProjectImage, ProjectAnswer, Question, Answer } = require('../../domain/models');
+const { Project, Category, Subcategory, ProjectUser, ProjectSubcontractor, User, Client, Subcontractor, ProjectStage, ProjectStageImage, ProjectImage, ProjectAnswer, Question, Answer, ProjectFolder, ProjectFile, Task, Note, SupportTicket, Inquiry, InquiryAnswer } = require('../../domain/models');
 const { Op } = require('sequelize');
 const sequelize = require('../../config/database');
 const fs = require('fs');
 const path = require('path');
 const { hasPermission } = require('../../utils/permissions');
+const { uploadToR2, deleteFromR2, deletePrefixFromR2 } = require('../utils/storage');
 
 exports.getAllProjects = async (req, res) => {
     try {
@@ -13,22 +14,26 @@ exports.getAllProjects = async (req, res) => {
         // Role-based visibility filtering
         if (!hasPermission(req.user, 'MANAGE_USERS')) { // Not Admin/Büro
             if (userRole === 'Worker') {
-                // Workers only see projects they are assigned to
                 whereClause[Op.and] = [
                     sequelize.literal(`EXISTS (SELECT 1 FROM project_users AS pu WHERE pu.project_id = Project.id AND pu.user_id = '${req.user.id}')`)
                 ];
             } else if (userRole === 'Projektleiter') {
-                // PL see projects they are in OR projects where no Projektleiter is assigned yet
                 whereClause[Op.or] = [
                     sequelize.literal(`EXISTS (SELECT 1 FROM project_users AS pu WHERE pu.project_id = Project.id AND pu.user_id = '${req.user.id}')`),
                     sequelize.literal(`NOT EXISTS (SELECT 1 FROM project_users AS pu WHERE pu.project_id = Project.id AND pu.role = 'projektleiter')`)
                 ];
             } else if (userRole === 'Gruppenleiter') {
-                // GL now only see projects they are assigned to (as per audio feedback)
                 whereClause[Op.and] = [
                     sequelize.literal(`EXISTS (SELECT 1 FROM project_users AS pu WHERE pu.project_id = Project.id AND pu.user_id = '${req.user.id}')`)
                 ];
             }
+        }
+
+        // Status-based filtering
+        if (req.query.status) {
+            whereClause.status = req.query.status;
+        } else if (req.query.excludeStatus) {
+            whereClause.status = { [Op.ne]: req.query.excludeStatus };
         }
 
         const projects = await Project.findAll({
@@ -96,7 +101,8 @@ exports.getProjectById = async (req, res) => {
                         { model: Question, as: 'question' },
                         { model: Answer, as: 'answer' }
                     ]
-                }
+                },
+                { model: Inquiry, as: 'source_inquiry' }
             ]
         });
         if (!project) return res.status(404).json({ error: 'Project not found' });
@@ -136,8 +142,8 @@ exports.createProject = async (req, res) => {
     if (!hasPermission(req.user, 'MANAGE_PROJECTS')) {
         return res.status(403).json({ error: 'Keine Berechtigung zum Erstellen von Projekten' });
     }
-
     const t = await sequelize.transaction();
+    // Local directory creation removed - everything on R2
 
     try {
         const { title, description, address, status, progress, start_date, end_date, budget, client_id, category_id, subcategory_id, inquiry_id } = req.body;
@@ -230,47 +236,65 @@ exports.createProject = async (req, res) => {
             }
         }
 
-        // --- Handle Photo Uploads ---
+        // --- Handle Photo Uploads with R2 ---
         if (req.files && (req.files.photos || req.files.mainImage)) {
-            const projectDir = path.join(__dirname, '../../../../uploads/projects', String(newProject.id));
-
-            if (!fs.existsSync(projectDir)) {
-                fs.mkdirSync(projectDir, { recursive: true });
-            }
-
             // Handle Main Image
             if (req.files.mainImage && req.files.mainImage.length > 0) {
                 const file = req.files.mainImage[0];
-                const timestamp = Date.now();
-                const ext = path.extname(file.originalname);
-                const mainFileName = `main_${timestamp}${ext}`;
-                const newFilePath = path.join(projectDir, mainFileName);
-                fs.renameSync(file.path, newFilePath);
+                try {
+                    const r2Key = `projects/${newProject.id}/main_${Date.now()}${path.extname(file.originalname)}`;
+                    const fileUrl = await uploadToR2(file.path, r2Key, file.mimetype);
 
-                await newProject.update({
-                    main_image: `/uploads/projects/${newProject.id}/${mainFileName}`
-                }, { transaction: t });
+                    await newProject.update({ main_image: fileUrl }, { transaction: t });
+
+                    // Cleanup local temp
+                    if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+                } catch (err) {
+                    console.error('R2 Main Image Upload Error:', err);
+                }
             }
 
             // Handle Additional Photos
             if (req.files.photos && req.files.photos.length > 0) {
-                const imageRecords = [];
-                const timestamp = Date.now();
-
-                req.files.photos.forEach((file, index) => {
-                    const ext = path.extname(file.originalname);
-                    const uniqueFileName = `${timestamp}_${index}${ext}`;
-                    const newFilePath = path.join(projectDir, uniqueFileName);
-                    fs.renameSync(file.path, newFilePath);
-
-                    imageRecords.push({
+                // Ensure a "Galerie" folder exists in the database
+                await ProjectFolder.findOrCreate({
+                    where: { 
+                        project_id: newProject.id, 
+                        path: '', 
+                        name: 'gallery' // Internal name
+                    },
+                    defaults: {
+                        name: 'gallery',
+                        path: '',
                         project_id: newProject.id,
-                        file_path: `/uploads/projects/${newProject.id}/${uniqueFileName}`,
-                        file_name: uniqueFileName,
-                        uploaded_by: creatorId
-                    });
+                        created_by_id: creatorId
+                    },
+                    transaction: t
                 });
-                await ProjectImage.bulkCreate(imageRecords, { transaction: t });
+
+                const imageRecords = [];
+                for (const file of req.files.photos) {
+                    try {
+                        const r2Key = `projects/${newProject.id}/gallery/${Date.now()}_${file.originalname}`;
+                        const fileUrl = await uploadToR2(file.path, r2Key, file.mimetype);
+
+                        imageRecords.push({
+                            project_id: newProject.id,
+                            file_path: fileUrl,
+                            file_name: file.originalname,
+                            uploaded_by: creatorId
+                        });
+
+                        // Cleanup local temp
+                        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+                    } catch (err) {
+                        console.error('R2 Gallery Upload Error:', err);
+                    }
+                }
+                
+                if (imageRecords.length > 0) {
+                    await ProjectImage.bulkCreate(imageRecords, { transaction: t });
+                }
             }
         }
 
@@ -346,8 +370,20 @@ exports.updateProject = async (req, res) => {
         if (basicInfo.start_date !== undefined) basicInfo.start_date = parseDate(basicInfo.start_date);
         if (basicInfo.end_date !== undefined) basicInfo.end_date = parseDate(basicInfo.end_date);
 
+        const oldStatus = project.status;
         // Update basic info
         await project.update(basicInfo, { transaction: t });
+
+        // If status changed to 'aktiv', check if it came from 'angebot' and update Inquiry
+        if (basicInfo.status === 'aktiv' && oldStatus === 'angebot') {
+             const inquiry = await Inquiry.findOne({ 
+                 where: { project_id: project.id },
+                 transaction: t
+             });
+             if (inquiry) {
+                 await inquiry.update({ status: 'won' }, { transaction: t });
+             }
+        }
 
         // --- Handle Personnel Assignments ---
         if (assigned_users) {
@@ -407,6 +443,36 @@ exports.updateProject = async (req, res) => {
             }
         }
 
+        // --- Handle Main Image Upload ---
+        if (req.files && req.files.mainImage && req.files.mainImage.length > 0) {
+            const file = req.files.mainImage[0];
+            try {
+                // 1. Delete old image if it exists
+                if (project.main_image && project.main_image.startsWith('http')) {
+                    try {
+                        const oldUrl = new URL(project.main_image);
+                        const oldKey = oldUrl.pathname.startsWith('/') ? oldUrl.pathname.substring(1) : oldUrl.pathname;
+                        await deleteFromR2(oldKey);
+                    } catch (urlErr) {
+                        console.warn('Could not delete old main image (invalid URL?):', project.main_image);
+                    }
+                }
+
+                // 2. Upload new image
+                const r2Key = `projects/${project.id}/main_${Date.now()}${path.extname(file.originalname)}`;
+                const fileUrl = await uploadToR2(file.path, r2Key, file.mimetype);
+
+                // 3. Update project record
+                await project.update({ main_image: fileUrl }, { transaction: t });
+
+                // 4. Cleanup local temp
+                if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+            } catch (err) {
+                console.error('R2 Main Image Update Error:', err);
+                // We continue with basic info update even if image fails, or we could throw.
+            }
+        }
+
         await t.commit();
 
         const updatedProject = await Project.findByPk(req.params.id, {
@@ -463,30 +529,54 @@ exports.deleteProject = async (req, res) => {
 
         const t = await sequelize.transaction();
         try {
-            // Delete dynamic associations to prevent foreign key constraint fails
-            await ProjectUser.destroy({ where: { project_id: project.id }, transaction: t });
-            await ProjectSubcontractor.destroy({ where: { project_id: project.id }, transaction: t });
-            await ProjectAnswer.destroy({ where: { project_id: project.id }, transaction: t });
-            await ProjectImage.destroy({ where: { project_id: project.id }, transaction: t });
+            const id = project.id;
 
-            const stages = await ProjectStage.findAll({ where: { project_id: project.id }, transaction: t });
+            // 1. Static associations (Many-to-Many or Direct Links)
+            await ProjectUser.destroy({ where: { project_id: id }, transaction: t });
+            await ProjectSubcontractor.destroy({ where: { project_id: id }, transaction: t });
+            await ProjectAnswer.destroy({ where: { project_id: id }, transaction: t });
+            await ProjectImage.destroy({ where: { project_id: id }, transaction: t });
+            await ProjectFile.destroy({ where: { project_id: id }, transaction: t });
+            await ProjectFolder.destroy({ where: { project_id: id }, transaction: t });
+
+            // 2. Activities & Support
+            await Task.destroy({ where: { project_id: id }, transaction: t });
+            await Note.destroy({ where: { project_id: id }, transaction: t });
+            await SupportTicket.destroy({ where: { project_id: id }, transaction: t });
+
+            // 3. Inquiries (And their answers)
+            const linkedInquiries = await Inquiry.findAll({ where: { project_id: id }, transaction: t });
+            for (const inq of linkedInquiries) {
+                await InquiryAnswer.destroy({ where: { inquiry_id: inq.id }, transaction: t });
+                await inq.destroy({ transaction: t });
+            }
+
+            // 4. Stages & Stage Images
+            const stages = await ProjectStage.findAll({ where: { project_id: id }, transaction: t });
             for (const stage of stages) {
                 await ProjectStageImage.destroy({ where: { project_stage_id: stage.id }, transaction: t });
                 await stage.destroy({ transaction: t });
             }
 
+            // 5. Finally delete the project itself
             await project.destroy({ transaction: t });
+
             await t.commit();
         } catch (dbError) {
             await t.rollback();
-            throw dbError; // Caught by outer try-catch
+            throw dbError;
         }
 
-        // Delete associated directory after DB commit succeeds
-        if (fs.existsSync(projectDir)) {
-            fs.rmSync(projectDir, { recursive: true, force: true });
+        // 6. Cleanup R2 files recursively after DB commit succeeds
+        try {
+            const prefix = `projects/${project.id}/`;
+            await deletePrefixFromR2(prefix);
+        } catch (err) {
+            console.error('R2 Project Recursive Cleanup Error:', err);
         }
 
+        // Legacy local directory deletion removed - everything on R2/DB
+        
         res.json({ message: 'Project and associated files deleted successfully' });
     } catch (error) {
         console.error('Error deleting project:', error);

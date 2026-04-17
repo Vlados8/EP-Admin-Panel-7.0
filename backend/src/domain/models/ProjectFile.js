@@ -48,6 +48,11 @@ const ProjectFile = sequelize.define('ProjectFile', {
             model: 'users',
             key: 'id'
         }
+    },
+    file_url: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+        comment: 'Public URL of the file (e.g. R2 URL)'
     }
 }, {
     tableName: 'project_files',

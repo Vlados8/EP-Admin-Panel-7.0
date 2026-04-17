@@ -12,5 +12,6 @@ router.post('/', flexibleAuth, supportController.createTicket); // Гибкий 
 router.get('/:id', auth.protect, supportController.getTicketDetails);
 router.patch('/:id/status', auth.protect, auth.restrictTo('Admin', 'Büro'), supportController.updateTicketStatus);
 router.post('/:id/responses', auth.protect, auth.restrictTo('Admin', 'Büro'), supportController.addResponse);
+router.delete('/:id', auth.protect, auth.restrictTo('Admin', 'Büro'), supportController.deleteTicket);
 
 module.exports = router;

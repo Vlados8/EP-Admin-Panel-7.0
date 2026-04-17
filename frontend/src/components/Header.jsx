@@ -1,10 +1,12 @@
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { logout } from '../store/slices/authSlice';
+import { usePhone } from '../context/PhoneContext';
 
 const Header = ({ title, onMenuClick }) => {
     const dispatch = useDispatch();
     const navigate = useNavigate();
+    const phone = usePhone();
     const { user } = useSelector((state) => state.auth);
 
     const handleLogout = () => {
@@ -25,6 +27,27 @@ const Header = ({ title, onMenuClick }) => {
             </div>
 
             <div className="flex items-center gap-6">
+                {/* Browser Call Reception Toggle */}
+                <div className="hidden lg:flex items-center gap-3 bg-white/5 border border-white/10 rounded-full py-1.5 pl-4 pr-1.5">
+                    <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Browser-Anrufe</span>
+                    <button 
+                        onClick={() => phone.setIsReceivingCalls(!phone.isReceivingCalls)}
+                        className={`w-10 h-5 rounded-full relative transition-all duration-300 ${
+                            phone.isReceivingCalls ? 'bg-blue-600 shadow-[0_0_10px_rgba(37,99,235,0.4)]' : 'bg-white/10'
+                        }`}
+                    >
+                        <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all duration-300 shadow-sm ${
+                            phone.isReceivingCalls ? 'left-6' : 'left-1'
+                        }`}></div>
+                    </button>
+                    {phone.isReceivingCalls && (
+                        <span className="flex h-2 w-2 relative">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                        </span>
+                    )}
+                </div>
+
                 <div className="hidden md:relative">
                     <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
                     <input

@@ -15,6 +15,22 @@ const Company = sequelize.define('Company', {
     billing_plan: {
         type: DataTypes.ENUM('free', 'pro', 'enterprise'),
         defaultValue: 'pro'
+    },
+    settings: {
+        type: DataTypes.JSON,
+        allowNull: true,
+        get() {
+            const rawValue = this.getDataValue('settings');
+            // Support double-stringified JSON which can happen in some MariaDB/MySQL environments
+            if (typeof rawValue === 'string') {
+                try {
+                    return JSON.parse(rawValue);
+                } catch (e) {
+                    return {};
+                }
+            }
+            return rawValue || {};
+        }
     }
 }, {
     tableName: 'companies'

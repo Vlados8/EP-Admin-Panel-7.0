@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../../services/api';
+import { getImageUrl } from '../../utils/config';
 
-const MediaViewer = ({ isOpen, onClose, items = [], initialIndex = 0 }) => {
+const MediaViewer = ({ isOpen, onClose, items = [], initialIndex = 0, onShare }) => {
     const [currentIndex, setCurrentIndex] = useState(initialIndex);
     const [zoom, setZoom] = useState(1);
 
@@ -40,7 +41,7 @@ const MediaViewer = ({ isOpen, onClose, items = [], initialIndex = 0 }) => {
         if (!currentItem) return;
         
         try {
-            const fileUrl = `${baseUrl}${currentItem.file_url}`;
+            const fileUrl = getImageUrl(currentItem.file_url);
             const response = await fetch(fileUrl);
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
@@ -53,14 +54,18 @@ const MediaViewer = ({ isOpen, onClose, items = [], initialIndex = 0 }) => {
             window.URL.revokeObjectURL(url);
         } catch (err) {
             console.error('Download error:', err);
-            // Fallback: open in new tab
-            window.open(`${baseUrl}${currentItem.file_url}`, '_blank');
+            window.open(getImageUrl(currentItem.file_url), '_blank');
         }
     };
 
     const handleOpenInNewTab = (e) => {
         if (e) e.stopPropagation();
-        window.open(`${baseUrl}${currentItem.file_url}`, '_blank');
+        window.open(getImageUrl(currentItem.file_url), '_blank');
+    };
+
+    const internalShare = (e) => {
+        if (e) e.stopPropagation();
+        if (onShare) onShare(currentItem);
     };
 
     useEffect(() => {
@@ -71,11 +76,27 @@ const MediaViewer = ({ isOpen, onClose, items = [], initialIndex = 0 }) => {
     if (!isOpen || items.length === 0) return null;
 
     const currentItem = items[currentIndex];
-    const baseUrl = api.defaults.baseURL.replace('/api/v1', '');
-    const isImage = currentItem.content_type?.startsWith('image/') || 
-                    currentItem.file_name?.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i);
-    const isVideo = currentItem.content_type?.startsWith('video/') || 
-                    currentItem.file_name?.match(/\.(mp4|webm|ogg|mov)$/i);
+    
+    // DEBUG: Log the structure to help identify mismatches in structure
+    // console.log('MediaViewer currentItem:', currentItem);
+
+    // Support both FileAsset (name, mime_type, size) and Attachment (file_name, content_type, file_size)
+    const name = currentItem.name || currentItem.file_name || '';
+    const type = currentItem.mime_type || currentItem.content_type || '';
+    const size = currentItem.size || currentItem.file_size || 0;
+    const url = currentItem.file_url || currentItem.url || '';
+
+    const isImage = type.startsWith('image/') || 
+                    name.match(/\.(jpg|jpeg|png|gif|webp|svg|avif)$/i) ||
+                    url.match(/\.(jpg|jpeg|png|gif|webp|svg|avif)(\?.*)?$/i);
+                    
+    const isVideo = type.startsWith('video/') || 
+                    name.match(/\.(mp4|webm|ogg|mov)$/i) ||
+                    url.match(/\.(mp4|webm|ogg|mov)(\?.*)?$/i);
+                    
+    const isPDF = type === 'application/pdf' || 
+                   name.toLowerCase().endsWith('.pdf') ||
+                   url.toLowerCase().split(/[?#]/)[0].endsWith('.pdf');
 
     return createPortal(
         <div 
@@ -83,16 +104,23 @@ const MediaViewer = ({ isOpen, onClose, items = [], initialIndex = 0 }) => {
             onClick={onClose}
         >
             {/* Header / Controls */}
-            <div className="absolute top-0 inset-x-0 p-6 flex justify-between items-center z-10 bg-gradient-to-b from-black/60 to-transparent">
+            <div className="absolute top-0 inset-x-0 p-6 flex justify-between items-center z-10 bg-gradient-to-b from-black/80 to-transparent">
                 <div className="flex flex-col">
                     <h3 className="text-white font-bold tracking-tight truncate max-w-sm md:max-w-xl">
-                        {currentItem.file_name}
+                        {name}
                     </h3>
                     <p className="text-gray-400 text-xs">
-                        {currentIndex + 1} von {items.length} • {currentItem.file_size ? (currentItem.file_size / (1024 * 1024)).toFixed(2) : '0.00'} MB
+                        {currentIndex + 1} von {items.length} • {size ? (size / (1024 * 1024)).toFixed(2) : '0.00'} MB
                     </p>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
+                    <button 
+                        onClick={internalShare}
+                        className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all border border-white/10"
+                        title="Teilen"
+                    >
+                        <i className="fa-solid fa-share-nodes"></i>
+                    </button>
                     <button 
                         onClick={handleOpenInNewTab}
                         className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all border border-white/10"
@@ -118,7 +146,7 @@ const MediaViewer = ({ isOpen, onClose, items = [], initialIndex = 0 }) => {
             </div>
 
             {/* Main Content Area */}
-            <div className="flex-1 flex items-center justify-center p-4 md:p-12 relative overflow-hidden">
+            <div className="flex-1 flex items-center justify-center p-4 md:p-12 md:pt-24 relative overflow-hidden">
                 {/* Navigation Arrows */}
                 {items.length > 1 && (
                     <>
@@ -139,14 +167,14 @@ const MediaViewer = ({ isOpen, onClose, items = [], initialIndex = 0 }) => {
 
                 {/* Media Content */}
                 <div 
-                    className="max-w-full max-h-full flex items-center justify-center select-none"
+                    className="w-full h-full flex items-center justify-center select-none"
                     onClick={(e) => e.stopPropagation()}
                 >
                     {isImage ? (
                         <img 
                             crossOrigin="anonymous"
-                            src={`${baseUrl}${currentItem.file_url}`} 
-                            alt={currentItem.file_name}
+                            src={getImageUrl(currentItem.file_url)} 
+                            alt={name}
                             className="max-w-full max-h-[85vh] object-contain shadow-2xl rounded-sm transition-transform duration-300"
                             style={{ transform: `scale(${zoom})` }}
                             onDoubleClick={() => setZoom(prev => prev === 1 ? 2 : 1)}
@@ -156,18 +184,26 @@ const MediaViewer = ({ isOpen, onClose, items = [], initialIndex = 0 }) => {
                             controls 
                             autoPlay
                             crossOrigin="anonymous"
-                            className="max-w-full max-h-[85vh] shadow-2xl rounded-sm"
+                            className="max-w-full h-auto max-h-[85vh] shadow-2xl rounded-sm"
                             onClick={(e) => e.stopPropagation()}
                         >
-                            <source src={`${baseUrl}${currentItem.file_url}`} type={currentItem.content_type || 'video/mp4'} />
+                            <source src={getImageUrl(currentItem.file_url)} type={type || 'video/mp4'} />
                             Ihr Browser unterstützt das Video-Tag nicht.
                         </video>
+                    ) : isPDF ? (
+                        <div className="w-full h-full max-w-5xl bg-white/5 border border-white/10 rounded-xl overflow-hidden shadow-2xl animate-[slideUp_0.4s_ease-out]">
+                            <iframe 
+                                src={`${getImageUrl(currentItem.file_url)}#toolbar=0`}
+                                className="w-full h-full border-none"
+                                title={name}
+                            />
+                        </div>
                     ) : (
                         <div className="flex flex-col items-center gap-6 p-12 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-md max-w-lg w-full">
                             <i className="fa-solid fa-file-invoice text-8xl text-blue-500/50"></i>
                             <div className="text-center">
                                 <p className="text-white text-xl font-bold mb-2">Keine Vorschau verfügbar</p>
-                                <p className="text-gray-400">Dieser Dateityp kann nicht direkt angezeigt werden.</p>
+                                <p className="text-gray-400">Dieser Dateityп может не поддерживаться для прямого просмотра.</p>
                             </div>
                             <div className="flex flex-col sm:flex-row gap-4 w-full">
                                 <button 
@@ -197,8 +233,17 @@ const MediaViewer = ({ isOpen, onClose, items = [], initialIndex = 0 }) => {
                     onClick={(e) => e.stopPropagation()}
                 >
                     {items.map((item, idx) => {
-                        const isThumbImage = item.content_type?.startsWith('image/') || item.file_name?.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i);
-                        const isThumbVideo = item.content_type?.startsWith('video/') || item.file_name?.match(/\.(mp4|webm|ogg|mov)$/i);
+                        const tName = item.name || item.file_name || '';
+                        const tType = item.mime_type || item.content_type || '';
+                        const tUrl = item.file_url || item.url || '';
+
+                        const isThumbImage = tType.startsWith('image/') || 
+                                           tName.match(/\.(jpg|jpeg|png|gif|webp|svg|avif)$/i) ||
+                                           tUrl.match(/\.(jpg|jpeg|png|gif|webp|svg|avif)(\?.*)?$/i);
+                        
+                        const isThumbVideo = tType.startsWith('video/') || 
+                                           tName.match(/\.(mp4|webm|ogg|mov)$/i) ||
+                                           tUrl.match(/\.(mp4|webm|ogg|mov)(\?.*)?$/i);
                         
                         return (
                             <button
@@ -209,7 +254,7 @@ const MediaViewer = ({ isOpen, onClose, items = [], initialIndex = 0 }) => {
                                 {isThumbImage ? (
                                     <img 
                                         crossOrigin="anonymous"
-                                        src={`${baseUrl}${item.file_url}`} 
+                                        src={getImageUrl(item.file_url)} 
                                         alt="" 
                                         className="w-full h-full object-cover" 
                                     />

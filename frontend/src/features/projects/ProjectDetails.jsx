@@ -31,6 +31,8 @@ const ProjectDetails = () => {
     const [imagesToDelete, setImagesToDelete] = useState([]);
     const [newTaskDescription, setNewTaskDescription] = useState('');
     const [selectedFiles, setSelectedFiles] = useState([]);
+    const [isUpdatingMainImage, setIsUpdatingMainImage] = useState(false);
+    const mainImageInputRef = React.useRef(null);
 
     useEffect(() => {
         const fetchProject = async () => {
@@ -187,6 +189,51 @@ const ProjectDetails = () => {
         }
     };
 
+    const handleMainImageChange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        setIsUpdatingMainImage(true);
+        try {
+            const formData = new FormData();
+            formData.append('mainImage', file);
+
+            const res = await api.patch(`/projects/${id}`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+
+            if (res.data?.status === 'success') {
+                const updatedProject = res.data.data.project;
+                setProject(updatedProject);
+            }
+        } catch (error) {
+            console.error('Error updating project avatar:', error);
+            alert('Fehler beim Aktualisieren des Projektbildes.');
+        } finally {
+            setIsUpdatingMainImage(false);
+            // Clear input
+            if (mainImageInputRef.current) mainImageInputRef.current.value = '';
+        }
+    };
+
+    const handleConfirmOffer = async () => {
+        if (!window.confirm('Möchten Sie dieses Angebot подтвердить и проект активировать?')) return;
+        try {
+            const res = await api.post(`/offers/confirm/${id}`);
+            if (res.data?.status === 'success') {
+                alert('Project успешно активирован!');
+                // Re-fetch project
+                const updatedRes = await api.get(`/projects/${id}`);
+                if (updatedRes.data?.status === 'success') {
+                    setProject(updatedRes.data.data.project);
+                }
+            }
+        } catch (error) {
+            console.error('Error confirming offer:', error);
+            alert('Fehler beim Aktivieren des Projekts.');
+        }
+    };
+
     if (loading) {
         return <div className="text-gray-400 text-center py-20 flex-1">Lade Projektdetails...</div>;
     }
@@ -244,6 +291,16 @@ const ProjectDetails = () => {
                             <span className={`text-xs px-2.5 py-1 rounded-lg border font-medium ${getStatusStyles(project.status)}`}>
                                 {project.status}
                             </span>
+                            {project.source_inquiry && (
+                                <button
+                                    onClick={() => navigate('/anfragen', { state: { openInquiryId: project.source_inquiry.id } })}
+                                    className="text-[10px] px-2 py-1 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20 transition-all flex items-center gap-1.5 font-bold uppercase tracking-wider"
+                                    title="Original-Anfrage anzeigen"
+                                >
+                                    <i className="fa-solid fa-link text-[8px]"></i>
+                                    Anfrage #INQ-{String(project.source_inquiry.id).padStart(3, '0')}
+                                </button>
+                            )}
                         </div>
                         {project.client && (
                             <p className="text-sm text-gray-400 mt-1 flex items-center gap-2">
@@ -255,15 +312,47 @@ const ProjectDetails = () => {
                 </div>
                 
                 {canEditProject && (
-                    <button
-                        onClick={() => setIsEditModalOpen(true)}
-                        className="bg-white/5 hover:bg-white/10 text-white border border-white/10 px-4 py-2 rounded-xl transition-all flex items-center gap-2 text-sm font-medium"
-                    >
-                        <i className="fa-solid fa-pen-to-square"></i>
-                        Projekt bearbeiten
-                    </button>
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => navigate('/angebote/neu', { state: { clientId: project.client_id, projectTitle: project.title, parentProjectId: project.id, parentProjectNumber: project.project_number } })}
+                            className="bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 px-4 py-2 rounded-xl transition-all flex items-center gap-2 text-sm font-medium"
+                            title="Ergänzungsangebot für dieses Projekt erstellen"
+                        >
+                            <i className="fa-solid fa-file-invoice"></i>
+                            Angebot erstellen
+                        </button>
+                        <button
+                            onClick={() => setIsEditModalOpen(true)}
+                            className="bg-white/5 hover:bg-white/10 text-white border border-white/10 px-4 py-2 rounded-xl transition-all flex items-center gap-2 text-sm font-medium"
+                        >
+                            <i className="fa-solid fa-pen-to-square"></i>
+                            Projekt bearbeiten
+                        </button>
+                    </div>
                 )}
             </div>
+
+            {/* Offer Activation Banner */}
+            {project.status === 'angebot' && (
+                <div className="mb-8 glass-panel border-blue-500/30 bg-blue-500/5 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-6 animate-[fadeInUp_0.4s_ease-out]">
+                    <div className="flex items-center gap-5 text-center md:text-left">
+                        <div className="w-14 h-14 rounded-2xl bg-blue-500/10 flex items-center justify-center border border-blue-500/20 text-blue-400 text-2xl shadow-lg">
+                            <i className="fa-solid fa-file-signature"></i>
+                        </div>
+                        <div>
+                            <h3 className="text-xl font-bold text-white mb-1">Angebot aktiv</h3>
+                            <p className="text-gray-400 text-sm max-w-sm">Dies ist ein Entwurf. Bestätigen Sie das Angebot, um standardmäßige Projektordner zu erstellen и начать работу.</p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={handleConfirmOffer}
+                        className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3.5 rounded-xl transition-all font-bold shadow-xl shadow-blue-600/20 active:scale-95 flex items-center gap-3 whitespace-nowrap"
+                    >
+                        <i className="fa-solid fa-check-double"></i>
+                        Angebot annehmen
+                    </button>
+                </div>
+            )}
 
             {/* Tabs Navigation */}
             <div className="flex items-center gap-1 mb-8 border-b border-white/10 overflow-x-auto whitespace-nowrap scrollbar-hide -mx-4 px-4">
@@ -293,10 +382,19 @@ const ProjectDetails = () => {
             {/* Tab: Main Information */}
             {activeTab === 'info' && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-[fadeIn_0.3s_ease-out]">
+                    {/* Hidden Input for main image */}
+                    <input
+                        type="file"
+                        ref={mainImageInputRef}
+                        className="hidden"
+                        accept="image/*"
+                        onChange={handleMainImageChange}
+                    />
+
                     {/* Main Content Info */}
                     <div className="lg:col-span-2 space-y-6">
                         {/* Hero Banner / Progress */}
-                        <div className="glass-card rounded-2xl p-6 relative overflow-hidden min-h-[200px] flex flex-col justify-end">
+                        <div className="glass-card rounded-2xl p-6 relative overflow-hidden min-h-[200px] flex flex-col justify-end group">
                             {project.main_image ? (
                                 <img
                                     src={getImageUrl(project.main_image)}
@@ -306,6 +404,25 @@ const ProjectDetails = () => {
                             ) : (
                                 <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-purple-500/10 opacity-30"></div>
                             )}
+
+                            {/* Edit Avatar Button */}
+                            {canEditProject && (
+                                <div className="absolute top-4 left-4 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button
+                                        onClick={() => mainImageInputRef.current?.click()}
+                                        disabled={isUpdatingMainImage}
+                                        className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white flex items-center justify-center transition-all backdrop-blur-md shadow-lg"
+                                        title="Hintergrundbild ändern"
+                                    >
+                                        {isUpdatingMainImage ? (
+                                            <i className="fa-solid fa-circle-notch animate-spin"></i>
+                                        ) : (
+                                            <i className="fa-solid fa-camera"></i>
+                                        )}
+                                    </button>
+                                </div>
+                            )}
+
                             <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none"></div>
 
                             <div className="relative z-10">
@@ -399,17 +516,24 @@ const ProjectDetails = () => {
                                     </div>
                                 )}
 
-                                {/* Survey Answers Grid */}
+                                {/* Projekt-Klassifizierung & Antworten */}
                                 {project.answers && project.answers.length > 0 && (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {project.answers.map((ans) => (
-                                            <div key={ans.id} className="bg-white/5 p-4 rounded-xl border border-white/5 space-y-1">
-                                                <div className="text-xs text-gray-400">{ans.question?.question_text || 'Unbekannte Frage'}</div>
-                                                <div className="text-sm font-semibold text-white">
-                                                    {ans.custom_value ? ans.custom_value : (ans.answer?.answer_text || '-')}
+                                    <div className="space-y-4">
+                                        <h3 className="text-sm font-semibold text-blue-400 uppercase tracking-wider flex items-center gap-2">
+                                            <i className="fa-solid fa-list-check"></i> Projekt-Klassifizierung & Antworten
+                                        </h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {project.answers.map((ans) => (
+                                                <div key={ans.id} className="bg-white/5 p-4 rounded-xl border border-white/5 group hover:border-blue-500/30 transition-all">
+                                                    <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1 group-hover:text-blue-400/80 transition-colors">
+                                                        {ans.question?.question_text || 'Unbekannte Frage'}
+                                                    </div>
+                                                    <div className="text-sm font-semibold text-white group-hover:text-blue-50">
+                                                        {ans.custom_value ? ans.custom_value : (ans.answer?.answer_text || '-')}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        ))}
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
                             </div>

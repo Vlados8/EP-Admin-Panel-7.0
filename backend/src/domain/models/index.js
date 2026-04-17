@@ -27,6 +27,14 @@ const Email = require('./Email');
 const Attachment = require('./Attachment');
 const ProjectFolder = require('./ProjectFolder');
 const ProjectFile = require('./ProjectFile');
+const Conversation = require('./Conversation');
+const Participant = require('./Participant');
+const Message = require('./Message');
+const FileAsset = require('./FileAsset');
+const FileFolder = require('./FileFolder');
+const FileFavorite = require('./FileFavorite');
+const CallLog = require('./CallLog');
+const TimeLog = require('./TimeLog');
 
 // Associations
 
@@ -122,6 +130,7 @@ Inquiry.belongsTo(Client, { foreignKey: 'client_id', as: 'client' });
 Inquiry.belongsTo(Category, { foreignKey: 'category_id', as: 'category' });
 Inquiry.belongsTo(Subcategory, { foreignKey: 'subcategory_id', as: 'subcategory' });
 Inquiry.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+Project.hasOne(Inquiry, { foreignKey: 'project_id', as: 'source_inquiry' });
 
 Inquiry.hasMany(InquiryAnswer, { foreignKey: 'inquiry_id', as: 'answers' });
 InquiryAnswer.belongsTo(Inquiry, { foreignKey: 'inquiry_id', as: 'inquiry' });
@@ -134,7 +143,7 @@ SupportTicket.belongsTo(Client, { foreignKey: 'client_id', as: 'client' });
 SupportTicket.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
 SupportTicket.belongsTo(User, { foreignKey: 'assigned_to_id', as: 'assignee' });
 
-SupportTicket.hasMany(SupportResponse, { foreignKey: 'ticket_id', as: 'responses' });
+SupportTicket.hasMany(SupportResponse, { foreignKey: 'ticket_id', as: 'responses', onDelete: 'CASCADE' });
 SupportResponse.belongsTo(SupportTicket, { foreignKey: 'ticket_id', as: 'ticket' });
 SupportResponse.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
@@ -172,6 +181,67 @@ ProjectFile.belongsTo(User, { foreignKey: 'created_by_id', as: 'creator' });
 ProjectFile.belongsTo(ProjectFolder, { foreignKey: 'folder_id', as: 'folder' });
 ProjectFolder.hasMany(ProjectFile, { foreignKey: 'folder_id', as: 'files', onDelete: 'CASCADE' });
 
+// 11. Chat & Messaging
+Company.hasMany(Conversation, { foreignKey: 'company_id', as: 'conversations' });
+Conversation.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+
+Conversation.hasMany(Participant, { foreignKey: 'conversation_id', as: 'participants', onDelete: 'CASCADE' });
+Participant.belongsTo(Conversation, { foreignKey: 'conversation_id', as: 'conversation' });
+
+User.hasMany(Participant, { foreignKey: 'user_id', as: 'chats' });
+Participant.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
+Conversation.hasMany(Message, { foreignKey: 'conversation_id', as: 'messages', onDelete: 'CASCADE' });
+Message.belongsTo(Conversation, { foreignKey: 'conversation_id', as: 'conversation' });
+
+User.hasMany(Message, { foreignKey: 'sender_id', as: 'sent_messages' });
+Message.belongsTo(User, { foreignKey: 'sender_id', as: 'sender' });
+
+// Message Self-Association for Replies
+Message.belongsTo(Message, { foreignKey: 'reply_to_id', as: 'repliedTo' });
+Message.hasMany(Message, { foreignKey: 'reply_to_id', as: 'replies', onDelete: 'SET NULL' });
+ 
+// 12. File Assets (General File Manager)
+Company.hasMany(FileAsset, { foreignKey: 'company_id', as: 'file_assets' });
+FileAsset.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+ 
+User.hasMany(FileAsset, { foreignKey: 'user_id', as: 'file_assets' });
+FileAsset.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
+// 12a. File Folders
+Company.hasMany(FileFolder, { foreignKey: 'company_id', as: 'file_folders' });
+FileFolder.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+
+User.hasMany(FileFolder, { foreignKey: 'user_id', as: 'file_folders' });
+FileFolder.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
+FileFolder.hasMany(FileFolder, { foreignKey: 'parent_id', as: 'children' });
+FileFolder.belongsTo(FileFolder, { foreignKey: 'parent_id', as: 'parent' });
+
+FileFolder.hasMany(FileAsset, { foreignKey: 'folder_id', as: 'files' });
+FileAsset.belongsTo(FileFolder, { foreignKey: 'folder_id', as: 'folder' });
+
+// 12b. File Favorites
+User.hasMany(FileFavorite, { foreignKey: 'user_id', as: 'favorites' });
+FileFavorite.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
+FileAsset.hasMany(FileFavorite, { foreignKey: 'file_id', as: 'favorited_by' });
+FileFavorite.belongsTo(FileAsset, { foreignKey: 'file_id', as: 'file' });
+
+FileFolder.hasMany(FileFavorite, { foreignKey: 'folder_id', as: 'favorited_by' });
+FileFavorite.belongsTo(FileFolder, { foreignKey: 'folder_id', as: 'folder' });
+
+// 13. Telephony
+User.hasMany(CallLog, { foreignKey: 'user_id', as: 'call_logs' });
+CallLog.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
+// 14. Time Tracking
+User.hasMany(TimeLog, { foreignKey: 'worker_id', as: 'time_logs' });
+TimeLog.belongsTo(User, { foreignKey: 'worker_id', as: 'worker' });
+
+Project.hasMany(TimeLog, { foreignKey: 'project_id', as: 'time_logs' });
+TimeLog.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+
 module.exports = {
     sequelize,
     Company,
@@ -201,5 +271,13 @@ module.exports = {
     Email,
     Attachment,
     ProjectFolder,
-    ProjectFile
+    ProjectFile,
+    Conversation,
+    Participant,
+    Message,
+    FileAsset,
+    FileFolder,
+    FileFavorite,
+    CallLog,
+    TimeLog
 };

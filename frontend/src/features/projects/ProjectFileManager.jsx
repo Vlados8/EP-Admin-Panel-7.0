@@ -3,6 +3,7 @@ import { useSelector } from 'react-redux';
 import api from '../../services/api';
 import MediaViewer from '../../components/common/MediaViewer';
 import FolderPermissionsModal from './components/FolderPermissionsModal';
+import { getImageUrl } from '../../utils/config';
 
 const ProjectFileManager = ({ project }) => {
     const projectId = project.id;
@@ -123,14 +124,15 @@ const ProjectFileManager = ({ project }) => {
         }
     };
 
-    const handleDelete = async (itemName, isDirectory) => {
+    const handleDelete = async (itemName, isDirectory, physicalName) => {
         const confirmMsg = isDirectory
             ? `Möchten Sie den Ordner "${itemName}" und alle darin enthaltenen Dateien wirklich löschen?`
-            : `Möchten Sie die Datei "${itemName}" wirklich löschen?`;
+            : `Möchten Sie die Datei "${itemName}" действительно löschen?`;
 
         if (!window.confirm(confirmMsg)) return;
 
-        const itemPath = currentPath ? `${currentPath}/${itemName}` : itemName;
+        const effectiveName = physicalName || itemName;
+        const itemPath = currentPath ? `${currentPath}/${effectiveName}` : effectiveName;
 
         try {
             const res = await api.delete(`/projects/${projectId}/files`, {
@@ -145,7 +147,8 @@ const ProjectFileManager = ({ project }) => {
         }
     };
 
-    const navigateTo = (folderName) => {
+    const navigateTo = (item) => {
+        const folderName = item.physicalName || item.name;
         setCurrentPath(prev => prev ? `${prev}/${folderName}` : folderName);
     };
 
@@ -170,7 +173,11 @@ const ProjectFileManager = ({ project }) => {
 
     const isStagesDir = currentPath.startsWith('stages');
 
-    const getDisplayName = (name, path) => {
+    const getDisplayName = (item, path) => {
+        // If the backend provided a name (displayName), use it.
+        if (item.name) return item.name;
+        
+        const name = item.physicalName || item.name;
         if (path === '' && name === 'stages') return 'Etappen (Bauschritte)';
         if (path === 'stages') {
             const stageIndex = project.stages?.findIndex(s => String(s.id) === name);
@@ -229,6 +236,7 @@ const ProjectFileManager = ({ project }) => {
                         const isLast = index === arr.length - 1;
                         let displayPart = part;
                         if (index === 0 && part === 'stages') displayPart = 'Etappen';
+                        if (index === 0 && part === 'gallery') displayPart = 'Galerie';
                         if (index === 1 && arr[0] === 'stages') {
                             const stageIndex = project.stages?.findIndex(s => String(s.id) === part);
                             if (stageIndex !== -1) displayPart = `Etappe ${stageIndex + 1}`;
@@ -308,8 +316,8 @@ const ProjectFileManager = ({ project }) => {
                         )}
 
                         {items.map((item, idx) => {
-                            const displayName = getDisplayName(item.name, currentPath);
-                            const isSpecialFolder = currentPath === '' && item.name === 'stages';
+                            const displayName = getDisplayName(item, currentPath);
+                            const isSpecialFolder = currentPath === '' && (item.physicalName === 'stages' || item.name === 'stages');
                             
                             // RBAC check:
                             let canDelete = false;
@@ -325,7 +333,7 @@ const ProjectFileManager = ({ project }) => {
                                     {/* Delete Button - Appears on Hover */}
                                     {canDelete && canManageFiles && (
                                         <button
-                                            onClick={(e) => { e.stopPropagation(); handleDelete(item.name, item.isDirectory); }}
+                                            onClick={(e) => { e.stopPropagation(); handleDelete(item.name, item.isDirectory, item.physicalName); }}
                                             className="absolute top-2 right-2 w-6 h-6 rounded-md bg-red-500/80 text-white flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500 z-10 shadow-lg"
                                             title="Löschen"
                                         >
@@ -346,7 +354,7 @@ const ProjectFileManager = ({ project }) => {
 
                                     {item.isDirectory ? (
                                         <div
-                                            onClick={() => navigateTo(item.name)}
+                                            onClick={() => navigateTo(item)}
                                             className="flex-1 w-full flex flex-col items-center justify-center cursor-pointer"
                                         >
                                             <i className="fa-solid fa-folder text-5xl text-blue-400 mb-3 drop-shadow-md"></i>
@@ -362,14 +370,14 @@ const ProjectFileManager = ({ project }) => {
                                                     onClick={() => openGallery(items, idx)}
                                                     className="w-20 h-20 mb-3 rounded-lg overflow-hidden border border-white/10 shadow-inner group-hover:border-blue-500/50 transition-colors cursor-pointer"
                                                 >
-                                                    <img crossOrigin="anonymous" src={`${api.defaults.baseURL.replace('/api/v1', '')}${item.url}`} alt={item.name} className="w-full h-full object-cover" loading="lazy" />
+                                                    <img crossOrigin="anonymous" src={getImageUrl(item.url)} alt={item.name} className="w-full h-full object-cover" loading="lazy" />
                                                 </div>
                                             ) : (
                                                 <i
                                                     onClick={() => {
                                                         const isVid = item.name.match(/\.(mp4|webm|mov)$/i);
                                                         if (isVid) openGallery(items, idx);
-                                                        else window.open(`${api.defaults.baseURL.replace('/api/v1', '')}${item.url}`, '_blank');
+                                                        else window.open(getImageUrl(item.url), '_blank');
                                                     }}
                                                     className="fa-solid fa-file-lines text-5xl text-gray-400 mb-3 cursor-pointer hover:text-blue-400 transition-colors"
                                                 ></i>

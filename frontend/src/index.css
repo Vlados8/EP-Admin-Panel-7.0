@@ -4,10 +4,17 @@
 
 @layer base {
   body {
-    background-color: #0a0a0c;
-    background-image: radial-gradient(circle at 50% -20%, #1e1e26 0%, #0a0a0c 80%);
+    background-color: #030305;
+    background-size: cover;
+    background-position: center;
     background-attachment: fixed;
+    background-repeat: no-repeat;
     @apply text-slate-50 font-sans;
+  }
+
+  /* Fix for white dropdown text on white background */
+  select option {
+    @apply text-gray-900 bg-white;
   }
 }
 
@@ -77,10 +84,27 @@
     }
   }
 
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
   @keyframes drawPath {
     to {
       stroke-dashoffset: 0;
     }
+  }
+
+  @keyframes loading {
+    0% { transform: translateX(-100%); }
+    50% { transform: translateX(0); }
+    100% { transform: translateX(100%); }
   }
 
   .animate-draw {

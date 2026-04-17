@@ -63,7 +63,6 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
             setPhotos([]);
             if (initialData) {
                 // Prefill from Inquiry
-                setIsNewClient(true);
                 setNewClientData({
                     name: initialData.contact_name || '', type: 'company', contact_person: initialData.contact_name || '',
                     email: initialData.contact_email || '', phone: initialData.contact_phone || '',
@@ -81,6 +80,15 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
                         presetAnswers[ans.question_id] = { value: ans.answer_value, answerId: ans.answer_id };
                     });
                     setDynamicAnswers(presetAnswers);
+                }
+
+                // If inquiry already has a client_id, use it
+                if (initialData.client_id) {
+                    setSelectedClientId(initialData.client_id);
+                    setIsNewClient(false);
+                } else {
+                    // Otherwise default to new client until we check the list
+                    setIsNewClient(true);
                 }
             }
         }
@@ -110,10 +118,28 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
                 api.get('/users'),
                 api.get('/subcontractors')
             ]);
-            setClients(clientRes.data.data.clients || []);
+            setInquiries(inqRes.data.data.inquiries || []);
             setCategories(catRes.data.data.categories || []);
             setUsers(userRes.data.data.users || []);
             setSubcontractors(subRes.data.data.subcontractors || []);
+
+            // Check for existing client if prefilling from inquiry
+            const fetchedClients = clientRes.data.data.clients || [];
+            setClients(fetchedClients);
+
+            if (initialData && !initialData.client_id) {
+                const match = fetchedClients.find(c => {
+                    const emailMatch = c.email && initialData.contact_email && c.email.toLowerCase().trim() === initialData.contact_email.toLowerCase().trim();
+                    const nameMatch = c.name && initialData.contact_name && c.name.toLowerCase().trim() === initialData.contact_name.toLowerCase().trim();
+                    const companyMatch = c.company_name && initialData.contact_name && c.company_name.toLowerCase().trim() === initialData.contact_name.toLowerCase().trim();
+                    return emailMatch || nameMatch || companyMatch;
+                });
+
+                if (match) {
+                    setSelectedClientId(match.id);
+                    setIsNewClient(false);
+                }
+            }
         } catch (error) {
             console.error('Error fetching wizard data:', error);
         } finally {

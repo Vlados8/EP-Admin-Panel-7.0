@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
-const { ProjectFolder, Project, Client } = require('../../domain/models');
+const { ProjectFolder, Project, Client, ProjectFile } = require('../../domain/models');
+const { fixEncoding } = require('../../utils/fileUtils');
 
 const UPLOADS_DIR = path.join(__dirname, '../../../../uploads/projects');
 
@@ -22,60 +23,80 @@ exports.getSharedFolder = async (req, res) => {
         });
 
         if (!folder) {
-            return res.status(404).json({ error: 'Shared folder not found or access disabled' });
+            return res.status(404).json({ error: 'Freigegebener Ordner nicht gefunden oder Zugriff deaktiviert' });
         }
 
+        // --- 1. DETERMINE VIRTUAL PATH ---
+        // fullVirtualPath is the "path" column value for sub-items
+        const fullVirtualPath = [folder.path, folder.name, subPath].filter(Boolean).join('/').replace(/\/$/, '');
+        
+        // --- 2. GET DB RECORDS ---
+        const dbFolders = await ProjectFolder.findAll({ 
+            where: { project_id: folder.project_id, path: fullVirtualPath } 
+        });
+        const dbFiles = await ProjectFile.findAll({ 
+            where: { project_id: folder.project_id, path: fullVirtualPath } 
+        });
+
+        // --- 3. ASSEMBLE ITEMS ---
+        const itemMap = new Map();
+
+        // Add DB folders
+        dbFolders.forEach(r => {
+            itemMap.set(r.name, {
+                id: r.id,
+                name: fixEncoding(r.name),
+                isDirectory: true,
+                size: 0,
+                createdAt: r.createdAt,
+                updatedAt: r.updatedAt,
+                url: null,
+                source: 'db'
+            });
+        });
+
+        // Add DB files
+        dbFiles.forEach(r => {
+            itemMap.set(r.name, {
+                id: r.id,
+                name: fixEncoding(r.name),
+                isDirectory: false,
+                size: r.size || 0,
+                createdAt: r.createdAt,
+                updatedAt: r.updatedAt,
+                url: r.file_url || null,
+                source: 'db'
+            });
+        });
+
+        // --- 4. OPTIONAL LEGACY FS FALLBACK ---
+        // Only check FS if we have some legacy project files
         const projectDir = path.join(UPLOADS_DIR, String(folder.project_id));
         const rootSharedPath = path.resolve(projectDir, folder.path || '', folder.name);
-        
-        // Resolve subPath and prevent directory traversal
         const targetPath = path.resolve(rootSharedPath, subPath);
 
-        if (!targetPath.startsWith(rootSharedPath)) {
-            return res.status(403).json({ error: 'Access denied: Invalid path' });
+        if (fs.existsSync(targetPath) && targetPath.startsWith(rootSharedPath)) {
+            const physicalItems = fs.readdirSync(targetPath, { withFileTypes: true });
+            physicalItems.forEach(item => {
+                if (!itemMap.has(item.name)) {
+                    const itemFullPath = path.join(targetPath, item.name);
+                    const stats = fs.statSync(itemFullPath);
+                    const relativePath = path.relative(UPLOADS_DIR, itemFullPath).replace(/\\/g, '/');
+
+                    itemMap.set(item.name, {
+                        name: fixEncoding(item.name),
+                        isDirectory: item.isDirectory(),
+                        size: stats.size,
+                        createdAt: stats.birthtime,
+                        updatedAt: stats.mtime,
+                        url: item.isDirectory() ? null : `/uploads/projects/${relativePath}`,
+                        source: 'fs'
+                    });
+                }
+            });
         }
 
-        if (!fs.existsSync(targetPath)) {
-            return res.status(404).json({ error: 'Physical folder not found' });
-        }
-
-        const items = fs.readdirSync(targetPath, { withFileTypes: true });
-
-        // Helper to fix garbled filenames (UTF-8 bytes misinterpreted as Latin-1)
-        const fixEncoding = (str) => {
-            if (!str) return str;
-            try {
-                // Pre-normalize common misinterpretations/normalization: 
-                // Ð/Ñ (Latin-1 D0/D1) often become Đ/đ (U+0110/U+0111)
-                const normalized = str.replace(/\u0110/g, '\u00D0').replace(/\u0111/g, '\u00D1');
-                const buf = Buffer.from(normalized, 'latin1');
-                const utf8 = buf.toString('utf8');
-                
-                // Heuristic: If it contains Cyrillic characters now and didn't before, it's fixed.
-                // Also check if it's generally valid UTF-8 without replacement chars.
-                const hasCyrillic = /[\u0400-\u04FF]/.test(utf8);
-                const isProbablyCorrect = hasCyrillic || (utf8 !== normalized && !utf8.includes('\ufffd'));
-                
-                return isProbablyCorrect ? utf8 : str;
-            } catch {
-                return str;
-            }
-        };
-
-        const formattedItems = items.map(item => {
-            const itemPath = path.join(targetPath, item.name);
-            const stats = fs.statSync(itemPath);
-            const relativePath = path.relative(UPLOADS_DIR, itemPath).replace(/\\/g, '/');
-
-            return {
-                name: fixEncoding(item.name),
-                isDirectory: item.isDirectory(),
-                size: stats.size,
-                createdAt: stats.birthtime,
-                updatedAt: stats.mtime,
-                url: item.isDirectory() ? null : `/uploads/projects/${relativePath}`
-            };
-        });
+        const formattedItems = Array.from(itemMap.values());
 
         res.status(200).json({
             status: 'success',
@@ -94,50 +115,59 @@ exports.getSharedFolder = async (req, res) => {
         });
     } catch (error) {
         console.error('Error fetching shared folder:', error);
-        res.status(400).json({ error: 'Server error fetching shared folder' });
+        res.status(400).json({ error: 'Serverfehler beim Laden des freigegebenen Ordners' });
     }
 };
 
 exports.downloadSharedFile = async (req, res) => {
     try {
         const { token } = req.params;
-        const relativeFile = req.query.file; // This could now include subpaths like "docs/plan.pdf"
+        const relativeFile = req.query.file; 
 
         const folder = await ProjectFolder.findOne({
             where: { share_token: token, is_public: true }
         });
 
-        if (!folder) return res.status(404).json({ error: 'Not found' });
+        if (!folder) return res.status(404).json({ error: 'Nicht gefunden' });
 
+        const fileName = path.basename(relativeFile);
+        const folderSubPath = path.dirname(relativeFile) === '.' ? '' : path.dirname(relativeFile);
+        const fullVirtualPath = [folder.path, folder.name, folderSubPath].filter(f => f && f !== '.').join('/').replace(/\/$/, '');
+
+        // 1. Try DB Lookup for R2 URL
+        const fileRecord = await ProjectFile.findOne({
+            where: { project_id: folder.project_id, path: fullVirtualPath, name: fileName }
+        });
+
+        if (fileRecord && fileRecord.file_url && fileRecord.file_url.startsWith('http')) {
+            return res.redirect(fileRecord.file_url);
+        }
+
+        // 2. Legacy disk fallback
         const projectDir = path.join(UPLOADS_DIR, String(folder.project_id));
         const rootSharedPath = path.resolve(projectDir, folder.path || '', folder.name);
-        
         const targetPath = path.resolve(rootSharedPath, relativeFile);
 
-        if (!targetPath.startsWith(rootSharedPath)) {
-            return res.status(403).json({ error: 'Access denied' });
-        }
-
-        if (!fs.existsSync(targetPath)) {
-            // Smart fallback for garbled names
-            const dir = path.dirname(targetPath);
-            const base = path.basename(targetPath);
-            const garbledBase = Buffer.from(base, 'utf8').toString('latin1');
-            const garbledPath = path.join(dir, garbledBase);
-
-            if (fs.existsSync(garbledPath)) {
-                return res.download(garbledPath);
+        if (fs.existsSync(targetPath) && targetPath.startsWith(rootSharedPath)) {
+            const stats = fs.statSync(targetPath);
+            if (!stats.isDirectory()) {
+                return res.download(targetPath);
             }
-            return res.status(404).json({ error: 'File not found' });
         }
 
-        const stats = fs.statSync(targetPath);
-        if (stats.isDirectory()) {
-            return res.status(400).json({ error: 'Cannot download a directory' });
+        // 3. Garbled names fallback
+        const dir = path.dirname(targetPath);
+        const base = path.basename(targetPath);
+        const garbledBase = Buffer.from(base, 'utf8').toString('latin1');
+        const garbledPath = path.join(dir, garbledBase);
+
+        if (fs.existsSync(garbledPath) && garbledPath.startsWith(rootSharedPath)) {
+            return res.download(garbledPath);
         }
 
-        res.download(targetPath);
+        res.status(404).json({ error: 'Datei nicht gefunden' });
     } catch (error) {
-        res.status(400).json({ error: 'Download failed' });
+        console.error('Download error:', error);
+        res.status(400).json({ error: 'Download fehlgeschlagen' });
     }
 };

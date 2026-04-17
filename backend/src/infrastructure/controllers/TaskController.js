@@ -4,6 +4,7 @@ const { Op } = require('sequelize');
 const fs = require('fs');
 const path = require('path');
 const { hasPermission } = require('../../utils/permissions');
+const { uploadToR2, deleteFromR2 } = require('../utils/storage');
 
 // Get all tasks
 exports.getTasks = async (req, res, next) => {
@@ -70,16 +71,29 @@ exports.createTask = async (req, res, next) => {
             created_by_id
         });
 
-        // Handle uploaded images: uploads/tasks/
+        // Handle uploaded images: upload to R2
         if (req.files && req.files.length > 0) {
             for (const file of req.files) {
-                await Attachment.create({
-                    task_id: newTask.id,
-                    file_name: file.originalname,
-                    file_url: `/uploads/tasks/${file.filename}`,
-                    file_size: file.size,
-                    content_type: file.mimetype
-                });
+                try {
+                    const r2Key = `tasks/${file.filename}`;
+                    const fileUrl = await uploadToR2(file.path, r2Key, file.mimetype);
+                    
+                    await Attachment.create({
+                        task_id: newTask.id,
+                        file_name: file.originalname,
+                        file_url: fileUrl,
+                        file_size: file.size,
+                        content_type: file.mimetype
+                    });
+
+                    // Remove local file after successful R2 upload
+                    if (fs.existsSync(file.path)) {
+                        fs.unlinkSync(file.path);
+                    }
+                } catch (uploadErr) {
+                    console.error(`Failed to upload task attachment ${file.originalname} to R2:`, uploadErr);
+                    // We don't fail the whole request, but log the error
+                }
             }
         }
 
@@ -111,9 +125,9 @@ exports.updateTask = async (req, res, next) => {
         if (!hasPermission(req.user, 'MANAGE_USERS')) {
             const role = req.user.role?.name || req.user.role;
             if (role === 'Worker' && task.assigned_to_id !== req.user.id) {
-                 return next(new AppError('Keine Berechtigung zum Bearbeiten dieser Aufgabe', 403));
+                return next(new AppError('Keine Berechtigung zum Bearbeiten dieser Aufgabe', 403));
             } else if ((role === 'Gruppenleiter' || role === 'Projektleiter') && task.created_by_id !== req.user.id && task.assigned_to_id !== req.user.id) {
-                 return next(new AppError('Keine Berechtigung zum Bearbeiten dieser Aufgabe', 403));
+                return next(new AppError('Keine Berechtigung zum Bearbeiten dieser Aufgabe', 403));
             }
         }
 
@@ -132,13 +146,24 @@ exports.updateTask = async (req, res, next) => {
         // Handle New File Uploads in Update
         if (req.files && req.files.length > 0) {
             for (const file of req.files) {
-                await Attachment.create({
-                    task_id: task.id,
-                    file_name: file.originalname,
-                    file_url: `/uploads/tasks/${file.filename}`,
-                    file_size: file.size,
-                    content_type: file.mimetype
-                });
+                try {
+                    const r2Key = `tasks/${file.filename}`;
+                    const fileUrl = await uploadToR2(file.path, r2Key, file.mimetype);
+
+                    await Attachment.create({
+                        task_id: task.id,
+                        file_name: file.originalname,
+                        file_url: fileUrl,
+                        file_size: file.size,
+                        content_type: file.mimetype
+                    });
+
+                    if (fs.existsSync(file.path)) {
+                        fs.unlinkSync(file.path);
+                    }
+                } catch (uploadErr) {
+                    console.error(`Failed to upload attachment ${file.originalname} to R2:`, uploadErr);
+                }
             }
         }
 
@@ -173,20 +198,33 @@ exports.deleteTask = async (req, res, next) => {
         if (!hasPermission(req.user, 'MANAGE_USERS')) {
             const role = req.user.role?.name || req.user.role;
             if (role === 'Worker') {
-                 return next(new AppError('Keine Berechtigung zum Löschen von Aufgaben', 403));
+                return next(new AppError('Keine Berechtigung zum Löschen von Aufgaben', 403));
             } else if ((role === 'Gruppenleiter' || role === 'Projektleiter') && task.created_by_id !== req.user.id) {
-                 return next(new AppError('Nur der Ersteller kann diese Aufgabe löschen', 403));
+                return next(new AppError('Nur der Ersteller kann diese Aufgabe löschen', 403));
             }
         }
 
-        // Delete File Attachments from disk
+        // Delete File Attachments
         if (task.attachments && task.attachments.length > 0) {
-            task.attachments.forEach(att => {
-                const filePath = path.join(__dirname, '../../../../', att.file_url);
-                if (fs.existsSync(filePath)) {
-                    fs.unlinkSync(filePath);
+            for (const att of task.attachments) {
+                if (att.file_url.startsWith('http')) {
+                    // R2 File
+                    try {
+                        // Extract key from URL (e.g., https://pub-xxx.r2.dev/tasks/filename)
+                        const urlObj = new URL(att.file_url);
+                        const key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
+                        await deleteFromR2(key);
+                    } catch (delErr) {
+                        console.error('Error deleting from R2:', delErr);
+                    }
+                } else {
+                    // Local File
+                    const filePath = path.join(__dirname, '../../../../', att.file_url);
+                    if (fs.existsSync(filePath)) {
+                        fs.unlinkSync(filePath);
+                    }
                 }
-            });
+            }
         }
 
         await task.destroy();

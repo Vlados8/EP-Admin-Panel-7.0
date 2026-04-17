@@ -15,7 +15,7 @@ exports.deleteAttachment = async (req, res, next) => {
         // For now, allow deletion if user is authenticated (protected by route)
 
         const filePath = path.join(__dirname, '../../../../', attachment.file_url);
-        
+
         // Delete from disk
         if (fs.existsSync(filePath)) {
             fs.unlinkSync(filePath);

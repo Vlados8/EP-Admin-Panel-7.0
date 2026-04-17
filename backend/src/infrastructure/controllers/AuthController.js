@@ -1,9 +1,10 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { JWT_SECRET } = require('../../config/jwtConfig');
 const { User, Role, Company } = require('../../domain/models');
 
 const generateToken = (id, roleName) => {
-    return jwt.sign({ id, role: roleName }, process.env.JWT_SECRET, {
+    return jwt.sign({ id, role: roleName }, JWT_SECRET, {
         expiresIn: process.env.JWT_EXPIRES_IN || '90d',
     });
 };

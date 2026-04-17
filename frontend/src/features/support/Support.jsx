@@ -125,6 +125,26 @@ const Support = () => {
         }
     };
 
+    const handleDeleteTicket = async () => {
+        if (!ticketDetails) return;
+        if (!window.confirm(`Möchten Sie dieses Ticket (#SUP-${String(ticketDetails.id).padStart(3, '0')}) wirklich WIRKLICH löschen?\n\nAlle zugehörigen Antworten и история будут удалены навсегда.`)) {
+            return;
+        }
+
+        try {
+            await api.delete(`/support/${ticketDetails.id}`);
+            // Success
+            setTickets(prev => prev.filter(t => t.id !== ticketDetails.id));
+            setSelectedTicketId(null);
+            setTicketDetails(null);
+            setError(null);
+            setShowListOnMobile(true);
+        } catch (err) {
+            console.error('Error deleting ticket:', err);
+            setError(err.response?.data?.message || 'Fehler beim Löschen des Tickets.');
+        }
+    };
+
     const filteredTickets = tickets.filter(ticket => {
         if (!searchQuery) return true;
         const query = searchQuery.toLowerCase();
@@ -272,6 +292,15 @@ const Support = () => {
                                         </button>
                                         <h3 className="text-lg lg:text-xl font-bold truncate pr-2">{ticketDetails.subject}</h3>
                                         {getPriorityBadge(ticketDetails.priority)}
+                                        
+                                        {/* Action Button: Delete */}
+                                        <button 
+                                            onClick={handleDeleteTicket}
+                                            className="ml-auto text-gray-500 hover:text-red-500 transition-colors p-2"
+                                            title="Ticket löschen"
+                                        >
+                                            <i className="fa-solid fa-trash-can"></i>
+                                        </button>
                                     </div>
                                     <p className="text-sm text-gray-400 mb-1 lg:pl-8 flex items-center gap-2">
                                         <span>Ticket #SUP-{String(ticketDetails.id).padStart(3, '0')} • Gemeldet von: {(ticketDetails.client?.name || ticketDetails.client_name) ? (ticketDetails.client?.name || ticketDetails.client_name) : 'Unbekannt'}</span>

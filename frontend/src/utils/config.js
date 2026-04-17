@@ -1,12 +1,19 @@
 /**
  * Application configuration
  */
+const getApiUrl = () => {
+  return import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
+};
+
 export const API_BASE_URL = import.meta.env.PROD 
   ? '' // In production, we use relative paths as the backend serves the frontend
-  : 'http://localhost:3000'; // In development, the backend is running locally on port 3000
+  : getApiUrl().replace('/api/v1', ''); // Point to server root
 
 export const getImageUrl = (path) => {
   if (!path) return '';
   if (path.startsWith('http')) return path;
-  return `${API_BASE_URL}${path}`;
+  
+  // Ensure we don't have double slashes
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  return `${API_BASE_URL}${cleanPath}`;
 };

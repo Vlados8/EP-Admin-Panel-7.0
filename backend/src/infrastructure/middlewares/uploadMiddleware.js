@@ -3,6 +3,8 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 
+const { fixEncoding, getSafeStorageName } = require('../../utils/fileUtils');
+
 /**
  * Creates a Multer storage engine for a specific subfolder within 'uploads'
  * @param {string} folder - Subfolder name (e.g., 'notizen', 'tasks')
@@ -18,11 +20,10 @@ const createStorage = (folder) => {
             cb(null, uploadPath);
         },
         filename: (req, file, cb) => {
-            // Use UUID-like prefix + original extension for uniqueness as requested
-            const uniqueId = crypto.randomUUID();
-            const ext = path.extname(file.originalname);
-            const name = path.basename(file.originalname, ext).replace(/[^a-z0-9]/gi, '_').toLowerCase();
-            cb(null, `${uniqueId}_${name}${ext}`);
+            // Fix encoding of originalname in place so it can be used correctly in controllers
+            file.originalname = fixEncoding(file.originalname);
+            // Use unique ID for storage
+            cb(null, getSafeStorageName(file.originalname));
         }
     });
 };
