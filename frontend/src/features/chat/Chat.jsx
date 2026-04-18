@@ -1264,12 +1264,12 @@ const Chat = () => {
     const displayMessages = useMemo(() => groupMessages(messages), [messages]);
 
     const filteredConversations = conversations.filter(c =>
-        c.name.toLowerCase().includes(searchQuery.toLowerCase())
+        (c.name || '').toLowerCase().includes((searchQuery || '').toLowerCase())
     );
 
     const filteredUsers = allUsers.filter(u =>
-        u.name.toLowerCase().includes(modalSearchQuery.toLowerCase()) ||
-        (u.role?.name && u.role.name.toLowerCase().includes(modalSearchQuery.toLowerCase()))
+        (u.name || '').toLowerCase().includes((modalSearchQuery || '').toLowerCase()) ||
+        (u.role?.name && u.role.name.toLowerCase().includes((modalSearchQuery || '').toLowerCase()))
     );
 
     return (
