@@ -46,6 +46,7 @@ const FileManager = () => {
     const [folders, setFolders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
+    const [storageStats, setStorageStats] = useState({ used: 0, limit: 2.0 });
     
     // UI State
     const [isNewFolderModalOpen, setIsNewFolderModalOpen] = useState(false);
@@ -75,6 +76,10 @@ const FileManager = () => {
             });
             setFiles(res.data.data.files || []);
             setFolders(res.data.data.folders || []);
+            setStorageStats({
+                used: Number(res.data.data.storage_used_bytes || 0),
+                limit: Number(res.data.data.storage_limit_gb || 2.0)
+            });
         } catch (err) {
             console.error('Error fetching files:', err);
             toast.error('Fehler beim Laden der Inhalten');
@@ -237,9 +242,9 @@ const FileManager = () => {
     const filteredFolders = folders.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()));
     const filteredFiles = files.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    const storageUsedGb = (user?.storage_used_bytes || 0) / (1024 * 1024 * 1024);
-    const storageLimitGb = user?.storage_limit_gb || 2.0;
-    const storagePercent = Math.min(100, (storageUsedGb / storageLimitGb) * 100);
+    const storageUsedGb = storageStats.used / (1024 * 1024 * 1024);
+    const storageLimitGb = storageStats.limit;
+    const storagePercent = Math.min(100, (storageUsedGb / (storageLimitGb || 1)) * 100);
 
     const formatSize = (bytes) => {
         if (!bytes) return '0 B';

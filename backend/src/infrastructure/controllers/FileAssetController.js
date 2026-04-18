@@ -73,11 +73,15 @@ exports.listFiles = async (req, res, next) => {
             order: [['name', 'ASC']]
         });
 
+        const currentUserData = await User.findByPk(userId, { attributes: ['storage_used_bytes', 'storage_limit_gb'] });
+
         res.status(200).json({
             status: 'success',
             data: { 
                 files,
-                folders
+                folders,
+                storage_used_bytes: currentUserData?.storage_used_bytes || 0,
+                storage_limit_gb: currentUserData?.storage_limit_gb || 2.0
             }
         });
     } catch (err) {
