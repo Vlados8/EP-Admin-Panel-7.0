@@ -1485,7 +1485,11 @@ const Chat = () => {
                                                                     <i className="fa-solid fa-reply text-[10px]"></i>
                                                                 </button>
                                                                 <button
-                                                                    onClick={() => setActiveReactionMenu(activeReactionMenu === msg.id ? null : msg.id)}
+                                                                    onClick={(e) => {
+                                                                        e.preventDefault();
+                                                                        e.stopPropagation();
+                                                                        setActiveReactionMenu(activeReactionMenu === msg.id ? null : msg.id);
+                                                                    }}
                                                                     className={`opacity-0 group-hover/msg:opacity-100 p-2 text-white/30 hover:text-yellow-400 transition-colors ${isOwn ? 'order-first' : ''}`}
                                                                     title="Reagieren"
                                                                 >
@@ -2235,6 +2239,8 @@ const Chat = () => {
                         canvas.width = img.naturalWidth;
                         canvas.height = img.naturalHeight;
                         const ctx = canvas.getContext('2d');
+                        ctx.fillStyle = '#FFFFFF';
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
                         ctx.drawImage(img, 0, 0);
                     }}
                 />
