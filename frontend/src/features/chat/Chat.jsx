@@ -845,9 +845,16 @@ const Chat = () => {
                     setReplyingTo(null);
                     if (currentReplyToId) formData.append('replyToId', currentReplyToId);
 
-                    await api.post(`/chat/conversations/${selectedId}/upload`, formData, {
+                    const res = await api.post(`/chat/conversations/${selectedId}/upload`, formData, {
                         headers: { 'Content-Type': 'multipart/form-data' }
                     });
+                    if (res.data?.success && res.data?.data?.messages) {
+                        setMessages(prev => {
+                            const newIds = res.data.data.messages.map(m => m.id);
+                            const filtered = prev.filter(m => !newIds.includes(m.id));
+                            return [...filtered, ...res.data.data.messages];
+                        });
+                    }
                 } catch (err) {
                     console.error('Failed to upload voice message:', err);
                 }
@@ -1120,9 +1127,16 @@ const Chat = () => {
             if (currentReplyToId) formData.append('replyToId', currentReplyToId);
 
             try {
-                await api.post(`/chat/conversations/${selectedId}/upload`, formData, {
+                const res = await api.post(`/chat/conversations/${selectedId}/upload`, formData, {
                     headers: { 'Content-Type': 'multipart/form-data' }
                 });
+                if (res.data?.success && res.data?.data?.messages) {
+                    setMessages(prev => {
+                        const newIds = res.data.data.messages.map(m => m.id);
+                        const filtered = prev.filter(m => !newIds.includes(m.id));
+                        return [...filtered, ...res.data.data.messages];
+                    });
+                }
             } catch (err) {
                 console.error(`Failed to upload file: ${file.name}`, err);
                 alert(`Fehler beim Hochladen von: ${file.name}`);
@@ -1150,9 +1164,17 @@ const Chat = () => {
             formData.append('files', file);
             if (editorCaption) formData.append('caption', editorCaption);
 
-            await api.post(`/chat/conversations/${targetId}/upload`, formData, {
+            const res = await api.post(`/chat/conversations/${targetId}/upload`, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
+
+            if (res.data?.success && res.data?.data?.messages && targetId === selectedId) {
+                setMessages(prev => {
+                    const newIds = res.data.data.messages.map(m => m.id);
+                    const filtered = prev.filter(m => !newIds.includes(m.id));
+                    return [...filtered, ...res.data.data.messages];
+                });
+            }
 
             if (targetForwardId) {
                 setSelectedId(targetForwardId);
@@ -1543,7 +1565,11 @@ const Chat = () => {
                                                                 <i className="fa-solid fa-reply text-[10px]"></i>
                                                             </button>
                                                             <button
-                                                                onClick={() => setActiveReactionMenu(activeReactionMenu === msg.id ? null : msg.id)}
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    e.stopPropagation();
+                                                                    setActiveReactionMenu(activeReactionMenu === msg.id ? null : msg.id);
+                                                                }}
                                                                 className={`opacity-0 group-hover/msg:opacity-100 p-2 text-white/30 hover:text-yellow-400 transition-colors ${isOwn ? 'order-first' : ''}`}
                                                                 title="Reagieren"
                                                             >
@@ -1583,7 +1609,11 @@ const Chat = () => {
                                                             <i className="fa-solid fa-reply text-[10px]"></i>
                                                         </button>
                                                         <button
-                                                            onClick={() => setActiveReactionMenu(activeReactionMenu === msg.id ? null : msg.id)}
+                                                            onClick={(e) => {
+                                                                e.preventDefault();
+                                                                e.stopPropagation();
+                                                                setActiveReactionMenu(activeReactionMenu === msg.id ? null : msg.id);
+                                                            }}
                                                             className={`opacity-0 group-hover/msg:opacity-100 p-2 text-white/30 hover:text-yellow-400 transition-colors ${isOwn ? 'order-first' : ''}`}
                                                             title="Reagieren"
                                                         >
@@ -1617,6 +1647,7 @@ const Chat = () => {
                                                         </button>
                                                         <button
                                                             onClick={(e) => {
+                                                                e.preventDefault();
                                                                 e.stopPropagation();
                                                                 setActiveReactionMenu(activeReactionMenu === msg.id ? null : msg.id);
                                                             }}
