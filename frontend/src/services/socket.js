@@ -1,6 +1,9 @@
 import { io } from 'socket.io-client';
 
 const getSocketUrl = () => {
+    if (import.meta.env.PROD) {
+        return window.location.origin;
+    }
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
     // Remove /api/v1 or any trailing path to get the base origin
     return apiUrl.replace(/\/api\/v1\/?$/, '').replace(/\/$/, '');
