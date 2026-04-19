@@ -144,7 +144,8 @@ exports.createInquiry = async (req, res, next) => {
                 createdInquiry.contact_name,
                 createdInquiry.id,
                 createdInquiry.title,
-                'inquiry'
+                'inquiry',
+                createdInquiry.company_id
             );
 
             if (replyResult && replyResult.success) {

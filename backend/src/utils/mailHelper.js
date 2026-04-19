@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const FormData = require('form-data');
 const Mailgun = require('mailgun.js');
+const { Company } = require('../domain/models');
 
 // Initialize Mailgun
 const mailgun = new Mailgun(FormData);
@@ -17,8 +18,31 @@ if (process.env.MAILGUN_API_KEY) {
 /**
  * Clean monochrome HTML wrapper
  */
-const wrapInMonochromeTemplate = (content, subject, fromName = 'Empire Premium Bau', headerLogoUrl = '', avatarLogoUrl = '') => {
+const wrapInMonochromeTemplate = (content, subject, fromName = 'Empire Premium Team', settings = {}, frontendUrl = '') => {
     const year = new Date().getFullYear();
+    
+    // Asset URL Helper
+    const getAssetUrl = (path) => {
+        if (!path) return '';
+        if (path.startsWith('http')) return path;
+        const apiBase = process.env.BACKEND_URL || 'http://localhost:3001';
+        return `${apiBase}${path.startsWith('/') ? '' : '/'}${path}`;
+    };
+
+    // Firm Name Standardized
+    const firmName = settings.firmName || 'Empire Premium Bau GmbH';
+
+    // Header Logo (White)
+    const headerLogoSrc = settings.logoLargeWhite || settings.logoSmallWhite;
+    const headerLogoUrl = getAssetUrl(headerLogoSrc || settings.logoLarge || settings.logoSmall) || `${frontendUrl}/assets/Empire%20Premium%20white.png`;
+    
+    // Avatar Logo (Dark)
+    const avatarLogoSrc = settings.logoLarge || settings.logoSmall;
+    const avatarLogoUrl = getAssetUrl(avatarLogoSrc || settings.logoLargeWhite || settings.logoSmallWhite) || `${frontendUrl}/assets/Logo%20EP.png`;
+
+    const needsHeaderFilter = !headerLogoSrc && (settings.logoLarge || settings.logoSmall);
+    const needsAvatarFilter = !avatarLogoSrc && (settings.logoLargeWhite || settings.logoSmallWhite);
+
     return `
 <!DOCTYPE html>
 <html>
@@ -36,7 +60,7 @@ const wrapInMonochromeTemplate = (content, subject, fromName = 'Empire Premium B
         .header { padding: 45px 20px; text-align: center; background-color: #111111; }
         .content { padding: 60px 40px; color: #222222; line-height: 1.8; font-size: 16px; background-color: #ffffff; background-image: linear-gradient(#ffffff, #ffffff); }
         .footer { padding: 60px 20px; background-color: #111111; text-align: center; color: #888888; font-size: 12px; }
-        .header-logo { height: 60px; width: auto; }
+        .header-logo { height: 50px; width: auto; max-width: 200px; }
         .avatar-logo { width: 40px; height: 40px; border-radius: 50%; border: 1px solid #eeeeee; vertical-align: middle; margin-right: 12px; }
         .subject-tag { color: #999999; font-size: 10px; text-transform: uppercase; letter-spacing: 3px; margin-bottom: 25px; display: block; font-weight: bold; }
         .signature { margin-top: 40px; padding-top: 30px; border-top: 1px solid #f0f0f0; display: flex; align-items: center; }
@@ -61,7 +85,7 @@ const wrapInMonochromeTemplate = (content, subject, fromName = 'Empire Premium B
     <div class="wrapper" style="background-color: #f5f5f5; background-image: linear-gradient(#f5f5f5, #f5f5f5);">
         <div class="main" style="background-color: #ffffff; background-image: linear-gradient(#ffffff, #ffffff);">
             <div class="header">
-                <img src="${headerLogoUrl}" alt="Empire Premium Logo" class="header-logo">
+                 ${headerLogoUrl ? `<img src="${headerLogoUrl}" alt="${firmName}" class="header-logo" style="${needsHeaderFilter ? 'filter: brightness(0) invert(1);' : ''}">` : `<div style="color: #fff; font-size: 24px; font-weight: bold;">${firmName}</div>`}
             </div>
             <div class="content" style="background-color: #ffffff; background-image: linear-gradient(#ffffff, #ffffff);">
                 <span class="subject-tag">Thema: ${subject}</span>
@@ -69,36 +93,36 @@ const wrapInMonochromeTemplate = (content, subject, fromName = 'Empire Premium B
                     ${content}
                 </div>
                 <div class="signature">
-                    <img src="${avatarLogoUrl}" alt="EP" class="avatar-logo">
+                    ${avatarLogoUrl ? `<img src="${avatarLogoUrl}" alt="EP" class="avatar-logo" style="${needsAvatarFilter ? 'filter: brightness(0) invert(1);' : ''}">` : ''}
                     <div style="display: inline-block; vertical-align: middle;">
                         <p style="margin: 0; font-weight: bold; font-size: 14px; color: #111111;">${fromName}</p>
-                        <p style="margin: 0; font-size: 12px; color: #999999;">Empire Premium Bau</p>
+                        <p style="margin: 0; font-size: 12px; color: #999999;">${firmName}</p>
                     </div>
                 </div>
             </div>
             <div class="footer">
-                <a href="https://www.empire-premium-bau.de" style="color: #ffffff; text-decoration: none; font-size: 14px; letter-spacing: 3px; font-weight: bold;">EMPIRE PREMIUM</a>
+                <a href="${settings.website || '#'}" style="color: #ffffff; text-decoration: none; font-size: 14px; letter-spacing: 3px; font-weight: bold; text-transform: uppercase;">${firmName}</a>
                 <div style="height: 1px; background-color: #222222; width: 40px; margin: 25px auto;"></div>
                 
                 <div class="footer-info" style="font-size: 9px; line-height: 2.4; color: #777777; margin-bottom: 25px; text-transform: uppercase; letter-spacing: 1.5px;">
-                    <div style="color: #ffffff; font-weight: bold; margin-bottom: 8px;">Empire Premium Bau GmbH</div>
-                    <div>Hastedter Heerstraße 63, 28207 Bremen</div>
+                    <div style="color: #ffffff; font-weight: bold; margin-bottom: 8px;">${firmName}</div>
+                    <div>${settings.address || ''} ${settings.zipCity || ''}</div>
                     <div style="color: #555555; margin: 10px 0;">&bull; &bull; &bull;</div>
-                    <div>Amtsgericht Bremen &bull; HRB 40235</div>
-                    <div>Ust-ID: DE36937652</div>
+                    <div>${settings.hrb ? `HRB: ${settings.hrb}` : (settings.court ? `Amtsgericht: ${settings.court}` : '')}</div>
+                    ${settings.vatId ? `<div>Ust-ID: ${settings.vatId}</div>` : ''}
                     <div style="height: 15px;"></div>
                     <div>
-                        <a href="mailto:info@empire-premium-bau.de" style="color: #888888; text-decoration: none;">info@empire-premium-bau.de</a>
+                        <a href="mailto:${settings.email || ''}" style="color: #888888; text-decoration: none;">${settings.email || ''}</a>
                     </div>
-                    <div style="color: #888888;">+49 176 61951823</div>
+                    <div style="color: #888888;">${settings.phone || ''}</div>
                 </div>
 
                 <div class="social-links">
-                    <a href="https://www.instagram.com/empire_premium_bau" class="social-link">Instagram</a>
-                    <a href="https://www.tiktok.com/@empire.premium.bau" class="social-link">TikTok</a>
+                    ${settings.instagram ? `<a href="${settings.instagram}" class="social-link">Instagram</a>` : ''}
+                    ${settings.tiktok ? `<a href="${settings.tiktok}" class="social-link">TikTok</a>` : ''}
                 </div>
                 <div class="copyright">
-                    &copy; ${year} Empire Premium Bau. Alle Rechte vorbehalten.
+                    &copy; ${year} ${firmName}. Alle Rechte vorbehalten.
                 </div>
             </div>
         </div>
@@ -111,21 +135,29 @@ const wrapInMonochromeTemplate = (content, subject, fromName = 'Empire Premium B
 /**
  * Sends an automated confirmation email to a client when a ticket or inquiry is created.
  */
-const sendAutoReply = async (clientEmail, clientName, itemId, subject, type = 'support') => {
+const sendAutoReply = async (clientEmail, clientName, itemId, subject, type = 'support', companyId = null) => {
     if (!mg || !process.env.MAILGUN_DOMAIN) {
         console.warn('[Mailgun] Auto-reply not sent. Mailgun not configured.');
         return null;
     }
 
+    // --- Dynamic Branding ---
+    let settings = {};
+    try {
+        const company = companyId ? await Company.findByPk(companyId) : await Company.findOne();
+        settings = company?.settings || {};
+    } catch (dbErr) {
+        console.error('[Mailgun] Error fetching company settings for auto-reply:', dbErr);
+    }
+
+    const firmName = settings.firmName || 'Empire Premium Bau GmbH';
     const domain = process.env.MAILGUN_DOMAIN;
     const fromEmail = `no-reply@${domain}`;
-    const fromName = 'Empire Premium Team';
+    const fromName = `${firmName} Team`;
     
-    // Use relative path for production if frontend is served by backend, 
-    // but Emails need absolute URLs.
     const frontendUrl = process.env.FRONTEND_URL || 'https://www.empire-premium-bau.de';
-    const headerLogoUrl = `${frontendUrl}/assets/Empire%20Premium%20white.png`;
-    const avatarLogoUrl = `${frontendUrl}/assets/Logo%20EP.png`;
+    const headerLogoUrl = settings.logoLargeWhite || settings.logoSmallWhite || `${frontendUrl}/assets/Empire%20Premium%20white.png`;
+    const avatarLogoUrl = settings.logoLarge || settings.logoSmall || `${frontendUrl}/assets/Logo%20EP.png`;
 
     const greeting = clientName && clientName.trim() ? `Sehr geehrte(r) ${clientName},` : 'Sehr geehrte Damen und Herren,';
     const paddedItemId = String(itemId).padStart(3, '0');
@@ -150,13 +182,13 @@ const sendAutoReply = async (clientEmail, clientName, itemId, subject, type = 's
             <p>Vielen Dank für Ihre Anfrage bezüglich "${subject}". Wir haben Ihre Daten erfolgreich erhalten (Anfragenummer: <strong>#INQ-${paddedItemId}</strong>).</p>
             <p>Unser Team wird Ihre Anfrage umgehend prüfen und sich in Kürze mit Ihnen in Verbindung setzen.</p>
             <p>Mit freundlichen Grüßen,</p>
-            <p>Empire Premium Bau</p>
+            <p>${firmName}</p>
         `;
         emailSubject = `Ihre Anfrage: ${subject}`;
         templateSubject = 'Ihre Anfrage';
     }
 
-    const finalHtml = wrapInMonochromeTemplate(rawContent, templateSubject, fromName, headerLogoUrl, avatarLogoUrl);
+    const finalHtml = wrapInMonochromeTemplate(rawContent, templateSubject, fromName, settings, frontendUrl);
 
     const messageData = {
         from: `"${fromName}" <${fromEmail}>`,

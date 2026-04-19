@@ -497,7 +497,7 @@ exports.sendEmail = async (req, res, next) => {
         const frontendUrl = process.env.FRONTEND_URL || 'https://www.empire-premium-bau.de';
 
         const rawContent = html || (text ? text.replace(/\n/g, '<br>') : '');
-        const finalHtml = wrapInMonochromeTemplate(rawContent, subject, senderName || settings.firmName || 'Empire Premium Bau', settings, frontendUrl);
+        const finalHtml = wrapInMonochromeTemplate(rawContent, subject, senderName || settings.firmName || 'Empire Premium Bau GmbH', settings, frontendUrl);
 
         const inlineAttachments = [];
 
@@ -542,7 +542,7 @@ exports.sendEmail = async (req, res, next) => {
         const savedEmail = await Email.create({
             mailgun_id: result.id,
             sender: messageData.from,
-            sender_name: senderName || 'Empire Premium Bau',
+            sender_name: senderName || 'Empire Premium Bau GmbH',
             sender_email: from,
             recipient: to,
             recipient_name: recipientName,

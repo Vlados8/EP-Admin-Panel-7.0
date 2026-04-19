@@ -107,7 +107,9 @@ exports.createTicket = async (req, res, next) => {
                 newTicket.client_email,
                 newTicket.client_name,
                 newTicket.id,
-                newTicket.subject
+                newTicket.subject,
+                'support',
+                newTicket.company_id
             );
 
             if (replyResult && replyResult.success) {
