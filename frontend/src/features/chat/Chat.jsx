@@ -568,8 +568,8 @@ const Chat = () => {
                 });
                 markAsRead(conversationId);
             }
--
--            // Update the conversation list (last message & order)
+
+            // Update the conversation list (last message & order)
             setConversations(prev => {
                 const index = prev.findIndex(c => c.id === conversationId);
                 if (index === -1) {
