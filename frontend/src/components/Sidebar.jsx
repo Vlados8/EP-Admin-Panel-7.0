@@ -153,6 +153,10 @@ const Sidebar = ({ isOpen, onClose, currentPath }) => {
         { path: '/settings/zeiterfassung', icon: 'fa-gears', label: 'Einstellungen', show: true }
     ].filter(item => item.show);
 
+    const reonicItems = [
+        { path: '/angebote/reonic', icon: 'fa-plug', label: 'Reonic API', show: true }
+    ].filter(item => item.show);
+
     let emailMenuItems = [];
     if (canViewEmails) {
         if (canManageEmails) {
@@ -243,6 +247,15 @@ const Sidebar = ({ isOpen, onClose, currentPath }) => {
                     <NavGroup
                         label="Zeiterfassung"
                         items={timeTrackingItems}
+                        currentPath={currentPath}
+                    />
+                )}
+
+                {/* Reonic */}
+                {reonicItems.length > 0 && (
+                    <NavGroup
+                        label="Reonic"
+                        items={reonicItems}
                         currentPath={currentPath}
                     />
                 )}

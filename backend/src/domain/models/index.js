@@ -35,6 +35,7 @@ const FileFolder = require('./FileFolder');
 const FileFavorite = require('./FileFavorite');
 const CallLog = require('./CallLog');
 const TimeLog = require('./TimeLog');
+const ReonicLead = require('./ReonicLead');
 
 // Associations
 
@@ -242,6 +243,10 @@ TimeLog.belongsTo(User, { foreignKey: 'worker_id', as: 'worker' });
 Project.hasMany(TimeLog, { foreignKey: 'project_id', as: 'time_logs' });
 TimeLog.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
 
+// 15. Reonic Leads
+Company.hasMany(ReonicLead, { foreignKey: 'company_id', as: 'reonic_leads' });
+ReonicLead.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+
 module.exports = {
     sequelize,
     Company,
@@ -279,5 +284,6 @@ module.exports = {
     FileFolder,
     FileFavorite,
     CallLog,
-    TimeLog
+    TimeLog,
+    ReonicLead
 };

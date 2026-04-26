@@ -126,6 +126,7 @@ try {
     const phoneRoutes = require('./infrastructure/routes/phoneRoutes');
     const fileRoutes = require('./infrastructure/routes/fileRoutes');
     const timeTrackingRoutes = require('./infrastructure/routes/timeTrackingRoutes');
+    const reonicRoutes = require('./infrastructure/routes/reonicRoutes');
 
     // --- PUBLIC WEBHOOKS ---
     // CRM Integrations (e.g. MyGo) - Uses simple multer for attachments
@@ -162,6 +163,7 @@ try {
     app.use('/api/v1/phone', phoneRoutes);
     app.use('/api/v1/files', fileRoutes);
     app.use('/api/v1/time-tracking', timeTrackingRoutes);
+    app.use('/api/v1/reonic', reonicRoutes);
 
     // The problematic route
     const apiKeyRoutes = require(apiKeyRoutesPath);
@@ -630,6 +632,14 @@ if (require.main === module) {
                         console.log('Creating time_logs table...');
                         const TimeLog = require('./domain/models/TimeLog');
                         await TimeLog.sync({ alter: true });
+                    }
+
+                    console.log('Verifying reonic_leads table...');
+                    const [reonicLeadTables] = await sequelize.query("SHOW TABLES LIKE 'reonic_leads'");
+                    if (reonicLeadTables.length === 0) {
+                        console.log('Creating reonic_leads table...');
+                        const ReonicLead = require('./domain/models/ReonicLead');
+                        await ReonicLead.sync({ alter: true });
                     }
 
                     console.log('Schema verification complete.');

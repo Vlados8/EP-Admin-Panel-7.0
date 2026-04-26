@@ -24,6 +24,7 @@ import SharedFolderView from './features/shared/SharedFolderView';
 import Chat from './features/chat/Chat';
 import Offers from './features/offers/Offers';
 import OfferCreate from './features/offers/OfferCreate';
+import Reonic from './features/offers/Reonic';
 import FileManager from './features/files/FileManager';
 import TimeTerminal from './features/timetracking/TimeTerminal';
 import TimeLogs from './features/timetracking/TimeLogs';
@@ -86,6 +87,7 @@ function App() {
                     <Route path="chat" element={<Chat />} />
                     <Route path="angebote" element={<Offers />} />
                     <Route path="angebote/neu" element={<OfferCreate />} />
+                    <Route path="angebote/reonic" element={<Reonic />} />
                     <Route path="dateien" element={<FileManager />} />
                     <Route path="telefon" element={<PhonePage />} />
                     <Route path="telefon/verlauf" element={<CallHistoryPage />} />
