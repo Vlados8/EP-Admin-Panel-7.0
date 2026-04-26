@@ -1448,7 +1448,6 @@ const Chat = () => {
                                                 {allSelectedAreOwn && (
                                                     <button
                                                         onClick={handleBulkDelete}
-                                                        className="bg-red-600/20 hover:bg-red-600 text-red-500 hover:text-white px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all border border-red-500/20"
                                                         className="bg-red-600/20 hover:bg-red-600 text-red-500 hover:text-white px-2 md:px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all border border-red-500/20"
                                                     >
                                                         Löschen
