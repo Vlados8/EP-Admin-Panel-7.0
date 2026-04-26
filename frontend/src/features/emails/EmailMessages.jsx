@@ -249,7 +249,7 @@ const EmailMessages = () => {
 
     const renderRead = () => (
         <div className="glass-card rounded-2xl border border-white/10 bg-white/5 overflow-hidden animate-[fadeIn_0.3s_ease-out]">
-            <div className="p-6 border-b border-white/10 bg-white/5 flex items-center justify-between">
+            <div className="p-4 md:p-6 border-b border-white/10 bg-white/5 flex items-center justify-between">
                 <button onClick={() => { setView(previousView); setSelectedMessage(null); }} className="text-gray-400 hover:text-white transition-colors flex items-center gap-2">
                     <i className="fa-solid fa-arrow-left"></i> Zurück
                 </button>
@@ -258,43 +258,43 @@ const EmailMessages = () => {
                     <button onClick={() => handleReply(selectedMessage)} className="p-2 rounded-lg bg-white/5 border border-white/10 text-gray-400 hover:text-blue-400 transition-colors" title="Antworten"><i className="fa-solid fa-reply"></i></button>
                 </div>
             </div>
-            <div className="p-8">
-                <div className="flex items-center gap-4 mb-8">
-                    <div className="w-12 h-12 rounded-full bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-400 text-xl font-bold">
+            <div className="p-3 sm:p-5 md:p-8">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6 md:mb-8">
+                    <div className="w-10 h-10 md:w-12 md:h-12 shrink-0 rounded-full bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-400 text-lg md:text-xl font-bold">
                         {selectedMessage.sender[0].toUpperCase()}
                     </div>
-                    <div>
-                        <h3 className="text-xl font-bold text-white mb-1">{selectedMessage.subject}</h3>
-                        <p className="text-sm text-gray-400">
-                            Von: <span 
+                    <div className="min-w-0 flex-1 w-full">
+                        <h3 className="text-lg md:text-xl font-bold text-white mb-1 break-words">{selectedMessage.subject}</h3>
+                        <p className="text-xs md:text-sm text-gray-400 flex flex-wrap gap-x-2 gap-y-1">
+                            <span>Von: <span 
                                     onClick={() => {
                                         setSelectedClientId(selectedMessage.client_id);
                                         setSelectedClientEmail(selectedMessage.sender_email || selectedMessage.sender);
                                     }}
-                                    className="text-blue-400 cursor-pointer hover:underline"
+                                    className="text-blue-400 cursor-pointer hover:underline break-all"
                                  >
                                     {selectedMessage.sender_name || selectedMessage.sender_email || selectedMessage.sender}
-                                 </span> 
+                                 </span></span>
                             {selectedMessage.recipient && (
-                                <span> • An: <span 
+                                <span>• An: <span 
                                     onClick={() => {
                                         setSelectedClientId(selectedMessage.client_id);
                                         setSelectedClientEmail(selectedMessage.recipient_email || selectedMessage.recipient);
                                     }}
-                                    className="text-blue-400 cursor-pointer hover:underline"
+                                    className="text-blue-400 cursor-pointer hover:underline break-all"
                                 >
                                     {selectedMessage.recipient_name || selectedMessage.recipient_email || selectedMessage.recipient}
                                 </span></span>
                             )}
-                            • {new Date(selectedMessage.received_at).toLocaleString()}
+                            <span className="shrink-0 block mt-1 w-full sm:w-auto sm:mt-0 sm:inline">• {new Date(selectedMessage.received_at).toLocaleString()}</span>
                         </p>
                     </div>
                 </div>
                 {selectedMessage.body_html ? (
-                    <div className="w-full mt-8 mb-8 rounded-xl overflow-auto bg-white p-6 border border-gray-200">
+                    <div className="w-full mt-4 md:mt-8 mb-6 md:mb-8 rounded-xl overflow-x-auto overflow-y-hidden bg-white p-2 sm:p-4 md:p-6 border border-gray-200">
                         <div 
                             key={selectedMessage.id}
-                            className="email-html-content text-black"
+                            className="email-html-content text-black max-w-full"
                             style={{ 
                                 color: '#000', 
                                 backgroundColor: '#fff',
@@ -484,7 +484,7 @@ const EmailMessages = () => {
     };
 
     return (
-        <div className="animate-[fadeIn_0.4s_ease-out_forwards] p-6 max-w-6xl mx-auto">
+        <div className="animate-[fadeIn_0.4s_ease-out_forwards] p-2 sm:p-4 md:p-6 max-w-6xl mx-auto">
             {renderHeader()}
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -544,6 +544,10 @@ const EmailMessages = () => {
                 .glass-card { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(10px); }
                 .glass-input { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); outline: none; transition: all 0.3s ease; }
                 .glass-input:focus { border-color: rgba(59, 130, 246, 0.5); background: rgba(255, 255, 255, 0.08); box-shadow: 0 0 15px rgba(59, 130, 246, 0.1); }
+                
+                /* Standardize email links to look like Gmail */
+                .email-html-content a { color: #2563eb !important; text-decoration: underline !important; cursor: pointer !important; }
+                .email-html-content a:hover { color: #1d4ed8 !important; text-decoration: none !important; }
             `}} />
             {/* Media Gallery Viewer */}
             <MediaViewer 

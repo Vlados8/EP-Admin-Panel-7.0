@@ -203,6 +203,7 @@ const Chat = () => {
     const [recordingStartX, setRecordingStartX] = useState(0);
     const [recordingOffset, setRecordingOffset] = useState(0);
     const [isRecordingCancelled, setIsRecordingCancelled] = useState(false);
+    const [isDeletingAnimation, setIsDeletingAnimation] = useState(false);
     const isRecordingCancelledRef = useRef(false);
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
@@ -817,10 +818,19 @@ const Chat = () => {
             setRecordingStartX(startX);
             setRecordingOffset(0);
             setIsRecordingCancelled(false);
+            setIsDeletingAnimation(false);
             isRecordingCancelledRef.current = false;
 
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const recorder = new MediaRecorder(stream);
+            
+            // Check for mimeType support (iOS Safari often doesn't support audio/webm)
+            let mimeType = 'audio/webm';
+            if (!MediaRecorder.isTypeSupported('audio/webm')) {
+                mimeType = MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : ''; 
+            }
+
+            const options = mimeType ? { mimeType } : undefined;
+            const recorder = new MediaRecorder(stream, options);
             mediaRecorderRef.current = recorder;
             audioChunksRef.current = [];
 
@@ -834,8 +844,10 @@ const Chat = () => {
                     return;
                 }
 
-                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-                const file = new File([audioBlob], 'voice-message.webm', { type: 'audio/webm' });
+                const blobType = mimeType || 'audio/webm';
+                const audioBlob = new Blob(audioChunksRef.current, { type: blobType });
+                const extension = blobType.includes('mp4') ? 'mp4' : 'webm';
+                const file = new File([audioBlob], `voice-message.${extension}`, { type: blobType });
 
                 const formData = new FormData();
                 formData.append('files', file);
@@ -874,24 +886,6 @@ const Chat = () => {
         }
     };
 
-    const handleRecordingMove = (e) => {
-        if (!isRecording) return;
-        const currentX = e.clientX || (e.touches && e.touches[0].clientX) || 0;
-        const diff = currentX - recordingStartX;
-
-        // Only track leftward movement
-        if (diff < 0) {
-            const offset = Math.abs(diff);
-            setRecordingOffset(offset);
-
-            const cancelled = offset > 100;
-            if (cancelled !== isRecordingCancelledRef.current) {
-                setIsRecordingCancelled(cancelled);
-                isRecordingCancelledRef.current = cancelled;
-            }
-        }
-    };
-
     const stopRecording = (cancelSilently = false) => {
         if (mediaRecorderRef.current && isRecording) {
             if (cancelSilently) {
@@ -902,13 +896,64 @@ const Chat = () => {
             const shouldCancel = isRecordingCancelledRef.current;
             if (shouldCancel) {
                 audioChunksRef.current = [];
+                setIsDeletingAnimation(true);
+                setTimeout(() => {
+                    finalizeStopRecording();
+                }, 400); // Wait for animation to finish
+                return;
             }
-            mediaRecorderRef.current.stop();
-            setIsRecording(false);
-            // We set these back after a short delay or in next tick, but technically the ref will handle it
-            clearInterval(recordingIntervalRef.current);
+            
+            finalizeStopRecording();
         }
     };
+
+    const finalizeStopRecording = () => {
+        if (mediaRecorderRef.current) {
+            mediaRecorderRef.current.stop();
+        }
+        setIsRecording(false);
+        setIsDeletingAnimation(false);
+        setRecordingOffset(0);
+        clearInterval(recordingIntervalRef.current);
+    };
+
+    // Global event listeners for recording drag & cancel
+    useEffect(() => {
+        if (!isRecording) return;
+
+        const handleGlobalMove = (e) => {
+            const currentX = e.clientX || (e.touches && e.touches[0].clientX) || 0;
+            const diff = currentX - recordingStartX;
+
+            // Only track leftward movement
+            if (diff < 0) {
+                const offset = Math.abs(diff);
+                setRecordingOffset(offset);
+
+                const cancelled = offset > 100;
+                if (cancelled !== isRecordingCancelledRef.current) {
+                    setIsRecordingCancelled(cancelled);
+                    isRecordingCancelledRef.current = cancelled;
+                }
+            }
+        };
+
+        const handleGlobalUp = () => {
+            stopRecording();
+        };
+
+        document.addEventListener('mousemove', handleGlobalMove);
+        document.addEventListener('mouseup', handleGlobalUp);
+        document.addEventListener('touchmove', handleGlobalMove, { passive: true });
+        document.addEventListener('touchend', handleGlobalUp);
+
+        return () => {
+            document.removeEventListener('mousemove', handleGlobalMove);
+            document.removeEventListener('mouseup', handleGlobalUp);
+            document.removeEventListener('touchmove', handleGlobalMove);
+            document.removeEventListener('touchend', handleGlobalUp);
+        };
+    }, [isRecording, recordingStartX]);
 
     const formatRecordingTime = (seconds) => {
         const mins = Math.floor(seconds / 60);
@@ -1297,7 +1342,7 @@ const Chat = () => {
     return (
         <div className="h-[calc(100vh-120px)] flex bg-[#1a1c23]/40 backdrop-blur-xl rounded-3xl border border-white/10 overflow-hidden shadow-2xl animate-[fadeIn_0.4s_ease-out]">
             {/* Conversations Sidebar */}
-            <div className="w-full md:w-80 lg:w-96 border-r border-white/10 flex flex-col bg-white/5 relative">
+            <div className={`w-full md:w-80 lg:w-96 border-r border-white/10 flex-col bg-white/5 relative ${selectedId ? 'hidden md:flex' : 'flex'}`}>
                 <div className="p-6 border-b border-white/10">
                     <h2 className="text-xl font-bold text-white mb-4">Nachrichten</h2>
                     <div className="relative">
@@ -1360,30 +1405,33 @@ const Chat = () => {
             </div>
 
             {/* Main Chat Area */}
-            <div className="flex-1 flex flex-col relative overflow-hidden bg-gradient-to-br from-white/5 to-transparent">
+            <div className={`flex-1 min-w-0 flex-col relative overflow-hidden bg-gradient-to-br from-white/5 to-transparent ${selectedId ? 'flex' : 'hidden md:flex'}`}>
                 {activeConversation ? (
                     <>
-                        <div className="p-4 bg-white/5 backdrop-blur-md border-b border-white/10 flex items-center justify-between z-10">
-                            <div className="flex items-center gap-4">
-                                <button className="md:hidden text-gray-400 hover:text-white mr-2">
+                        <div className="p-4 bg-white/5 backdrop-blur-md border-b border-white/10 flex items-center justify-between z-10 gap-2">
+                            <div className="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
+                                <button 
+                                    className="md:hidden w-10 h-10 shrink-0 rounded-xl bg-white/5 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-all border border-white/10"
+                                    onClick={() => setSelectedId(null)}
+                                >
                                     <i className="fa-solid fa-chevron-left"></i>
                                 </button>
-                                <img src={activeConversation.avatar} alt={activeConversation.name} className="w-10 h-10 rounded-xl border border-white/10 object-cover" />
-                                <div className="flex flex-col">
-                                    <h3 className="text-sm font-bold text-white">{activeConversation.name}</h3>
+                                <img src={activeConversation.avatar} alt={activeConversation.name} className="w-10 h-10 shrink-0 rounded-xl border border-white/10 object-cover" />
+                                <div className="flex flex-col flex-1 min-w-0">
+                                    <h3 className="text-sm font-bold text-white truncate">{activeConversation.name}</h3>
                                     {typingUsers[selectedId] && typingUsers[selectedId].length > 0 ? (
-                                        <p className="text-[10px] text-blue-400 animate-pulse font-medium">
+                                        <p className="text-[10px] text-blue-400 animate-pulse font-medium truncate">
                                             Schreibt...
                                         </p>
                                     ) : (
-                                        <p className="text-[10px] text-gray-500 font-medium">
+                                        <p className="text-[10px] text-gray-500 font-medium truncate">
                                             {formatLastSeen(activeConversation.lastSeenAt, activeConversation.online)}
                                         </p>
                                     )}
                                 </div>
                             </div>
 
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1 md:gap-2 shrink-0">
                                 {isSelectionMode ? (
                                     <>
                                         <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mr-2">
@@ -1401,6 +1449,7 @@ const Chat = () => {
                                                     <button
                                                         onClick={handleBulkDelete}
                                                         className="bg-red-600/20 hover:bg-red-600 text-red-500 hover:text-white px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all border border-red-500/20"
+                                                        className="bg-red-600/20 hover:bg-red-600 text-red-500 hover:text-white px-2 md:px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all border border-red-500/20"
                                                     >
                                                         Löschen
                                                     </button>
@@ -1412,7 +1461,7 @@ const Chat = () => {
                                                 setIsSelectionMode(false);
                                                 setSelectedMessageIds([]);
                                             }}
-                                            className="bg-white/5 hover:bg-white/10 text-white px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all border border-white/10"
+                                            className="px-2 md:px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider bg-white/10 text-white hover:bg-white/20 transition-all border border-white/20"
                                         >
                                             Abbrechen
                                         </button>
@@ -1421,21 +1470,21 @@ const Chat = () => {
                                     <div className="flex items-center gap-2">
                                         <button
                                             onClick={() => initiateCall('audio')}
-                                            className="w-10 h-10 rounded-xl bg-green-600/20 text-green-500 hover:bg-green-600 hover:text-white transition-all flex items-center justify-center border border-green-500/20 shadow-lg shadow-green-500/10"
+                                            className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-green-600/20 text-green-500 hover:bg-green-600 hover:text-white transition-all flex items-center justify-center border border-green-500/20 shadow-lg shadow-green-500/10"
                                             title="Audio Anruf"
                                         >
-                                            <i className="fa-solid fa-phone"></i>
+                                            <i className="fa-solid fa-phone text-xs md:text-sm"></i>
                                         </button>
                                         <button
                                             onClick={() => initiateCall('video')}
-                                            className="w-10 h-10 rounded-xl bg-blue-600/20 text-blue-500 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center border border-blue-500/20 shadow-lg shadow-blue-500/10"
+                                            className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-blue-600/20 text-blue-500 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center border border-blue-500/20 shadow-lg shadow-blue-500/10"
                                             title="Video Anruf"
                                         >
-                                            <i className="fa-solid fa-video"></i>
+                                            <i className="fa-solid fa-video text-xs md:text-sm"></i>
                                         </button>
                                         <button
                                             onClick={() => setIsSelectionMode(true)}
-                                            className="bg-white/5 hover:bg-white/10 text-white px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all border border-white/10"
+                                            className="bg-white/5 hover:bg-white/10 text-white px-2 md:px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all border border-white/10"
                                         >
                                             Wählen
                                         </button>
@@ -1774,84 +1823,86 @@ const Chat = () => {
                                 </div>
                             )}
 
-                            <div className="flex items-center gap-4">
-                                <div className="relative" ref={attachmentMenuRef}>
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
-                                        className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all ${showAttachmentMenu ? 'bg-blue-600 text-white rotate-45' : 'bg-gray-800 text-gray-400 hover:text-white'
-                                            }`}
-                                    >
-                                        <i className="fa-solid fa-plus text-lg"></i>
-                                    </button>
+                            <div className="flex items-center gap-2 md:gap-4 relative">
+                                {!isRecording && (
+                                    <div className="relative shrink-0" ref={attachmentMenuRef}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
+                                            className={`w-10 h-10 md:w-11 md:h-11 rounded-2xl flex items-center justify-center transition-all ${showAttachmentMenu ? 'bg-blue-600 text-white rotate-45' : 'bg-gray-800 text-gray-400 hover:text-white'
+                                                }`}
+                                        >
+                                            <i className="fa-solid fa-plus text-base md:text-lg"></i>
+                                        </button>
 
-                                    {showAttachmentMenu && (
-                                        <div className="absolute bottom-16 left-0 w-56 bg-[#1a1c23]/95 backdrop-blur-2xl border border-white/10 rounded-2xl p-2 shadow-2xl animate-[slideUp_0.2s_ease-out] z-[60]">
-                                            <button
-                                                onClick={() => imageInputRef.current?.click()}
-                                                className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 text-gray-300 hover:text-white transition-all text-sm"
-                                            >
-                                                <div className="w-8 h-8 rounded-lg bg-pink-500/20 flex items-center justify-center text-pink-500">
-                                                    <i className="fa-solid fa-image"></i>
-                                                </div>
-                                                Galerie
-                                            </button>
-                                            <button
-                                                onClick={() => cameraInputRef.current?.click()}
-                                                className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 text-gray-300 hover:text-white transition-all text-sm"
-                                            >
-                                                <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-500">
-                                                    <i className="fa-solid fa-camera"></i>
-                                                </div>
-                                                Kamera
-                                            </button>
-                                            <button
-                                                onClick={() => fileInputRef.current?.click()}
-                                                className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 text-gray-300 hover:text-white transition-all text-sm"
-                                            >
-                                                <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-500">
-                                                    <i className="fa-solid fa-file-pdf"></i>
-                                                </div>
-                                                Dokument
-                                            </button>
-                                        </div>
-                                    )}
+                                        {showAttachmentMenu && (
+                                            <div className="absolute bottom-16 left-0 w-56 bg-[#1a1c23]/95 backdrop-blur-2xl border border-white/10 rounded-2xl p-2 shadow-2xl animate-[slideUp_0.2s_ease-out] z-[60]">
+                                                <button
+                                                    onClick={() => imageInputRef.current?.click()}
+                                                    className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 text-gray-300 hover:text-white transition-all text-sm"
+                                                >
+                                                    <div className="w-8 h-8 rounded-lg bg-pink-500/20 flex items-center justify-center text-pink-500">
+                                                        <i className="fa-solid fa-image"></i>
+                                                    </div>
+                                                    Galerie
+                                                </button>
+                                                <button
+                                                    onClick={() => cameraInputRef.current?.click()}
+                                                    className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 text-gray-300 hover:text-white transition-all text-sm"
+                                                >
+                                                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-500">
+                                                        <i className="fa-solid fa-camera"></i>
+                                                    </div>
+                                                    Kamera
+                                                </button>
+                                                <button
+                                                    onClick={() => fileInputRef.current?.click()}
+                                                    className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 text-gray-300 hover:text-white transition-all text-sm"
+                                                >
+                                                    <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-500">
+                                                        <i className="fa-solid fa-file-pdf"></i>
+                                                    </div>
+                                                    Dokument
+                                                </button>
+                                            </div>
+                                        )}
 
-                                    {/* Hidden Inputs */}
-                                    <input
-                                        type="file"
-                                        ref={fileInputRef}
-                                        multiple
-                                        className="hidden"
-                                        onChange={(e) => handleFileUpload(e, 'file')}
-                                    />
-                                    <input
-                                        type="file"
-                                        ref={imageInputRef}
-                                        accept="image/*,video/*"
-                                        multiple
-                                        className="hidden"
-                                        onChange={(e) => handleFileUpload(e, 'image')}
-                                    />
-                                    <input
-                                        type="file"
-                                        ref={cameraInputRef}
-                                        accept="image/*"
-                                        capture="environment"
-                                        className="hidden"
-                                        onChange={(e) => handleFileUpload(e, 'image')}
-                                    />
-                                </div>
+                                        {/* Hidden Inputs */}
+                                        <input
+                                            type="file"
+                                            ref={fileInputRef}
+                                            multiple
+                                            className="hidden"
+                                            onChange={(e) => handleFileUpload(e, 'file')}
+                                        />
+                                        <input
+                                            type="file"
+                                            ref={imageInputRef}
+                                            accept="image/*,video/*"
+                                            multiple
+                                            className="hidden"
+                                            onChange={(e) => handleFileUpload(e, 'image')}
+                                        />
+                                        <input
+                                            type="file"
+                                            ref={cameraInputRef}
+                                            accept="image/*"
+                                            capture="environment"
+                                            className="hidden"
+                                            onChange={(e) => handleFileUpload(e, 'image')}
+                                        />
+                                    </div>
+                                )}
 
-                                <form onSubmit={handleSendMessage} className="flex-1 flex items-center gap-4 relative">
-                                    <div className="relative">
+                                <form onSubmit={handleSendMessage} className="flex-1 flex items-center gap-2 md:gap-4 relative">
+                                    <div className={`relative shrink-0 transition-opacity ${isRecording ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                                         <button
                                             type="button"
                                             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                                            className="w-12 h-12 rounded-2xl bg-white/5 text-yellow-400 flex items-center justify-center hover:bg-white/10 active:scale-95 transition-all border border-white/5"
+                                            className="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-white/5 text-yellow-400 flex items-center justify-center hover:bg-white/10 active:scale-95 transition-all border border-white/5"
                                             title="Emoji"
                                         >
-                                            <i className="fa-regular fa-face-smile text-lg"></i>
+                                            <i className="fa-regular fa-face-smile text-base md:text-lg"></i>
                                         </button>
                                         
                                         {showEmojiPicker && (
@@ -1867,70 +1918,76 @@ const Chat = () => {
                                     <input
                                         type="text"
                                         value={newMessage}
+                                        disabled={isRecording}
                                         onChange={handleInputChange}
                                         onKeyPress={(e) => e.key === 'Enter' && handleSendMessage(e)}
                                         placeholder="Nachricht schreiben..."
-                                        className="flex-1 bg-black/30 border border-white/10 rounded-2xl py-3 px-6 text-sm text-white focus:outline-none focus:border-blue-500/50 transition-all font-light"
+                                        className="flex-1 min-w-0 bg-black/30 border border-white/10 rounded-2xl py-2 md:py-3 px-4 md:px-6 text-sm text-white focus:outline-none focus:border-blue-500/50 transition-all font-light"
                                     />
-                                    <button
-                                        onClick={() => handleSendMessage()}
-                                        disabled={!newMessage.trim() && !isUploading}
-                                        className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center hover:bg-blue-500 active:scale-95 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:scale-100"
-                                    >
-                                        <i className="fa-solid fa-paper-plane text-lg"></i>
-                                    </button>
-
-                                    {/* Voice Toggle Button */}
-                                    {!newMessage.trim() && (
+                                    {newMessage.trim() && (
                                         <button
-                                            onMouseDown={startRecording}
-                                            onMouseUp={() => stopRecording()}
-                                            onMouseMove={handleRecordingMove}
-                                            onTouchStart={startRecording}
-                                            onTouchEnd={() => stopRecording()}
-                                            onTouchMove={handleRecordingMove}
-                                            className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all shadow-lg active:scale-90 ${isRecording
-                                                    ? 'bg-red-600 text-white animate-pulse'
-                                                    : 'bg-white/10 text-white hover:bg-white/20'
-                                                }`}
-                                            title="Halten zum Aufnehmen, Wischen zum Abbrechen"
+                                            onClick={() => handleSendMessage()}
+                                            disabled={!newMessage.trim() && !isUploading}
+                                            className="w-10 h-10 md:w-12 md:h-12 shrink-0 rounded-2xl bg-blue-600 text-white flex items-center justify-center hover:bg-blue-500 active:scale-95 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:scale-100"
                                         >
-                                            <i className={`fa-solid ${isRecording ? 'fa-microphone-lines' : 'fa-microphone'} text-lg`}></i>
+                                            <i className="fa-solid fa-paper-plane text-base md:text-lg"></i>
                                         </button>
                                     )}
                                 </form>
-                            </div>
 
-                            {/* Recording Overlay Info */}
-                            {isRecording && (
-                                <div
-                                    className={`absolute top-[-70px] left-1/2 bg-red-600/90 backdrop-blur-xl px-10 py-3 rounded-full flex items-center gap-6 text-white shadow-2xl border border-white/20 transition-all duration-75 z-50 ${isRecordingCancelled ? 'scale-110 bg-red-500 shadow-red-500/50' : ''
-                                        }`}
-                                    style={{
-                                        transform: `translateX(calc(-50% - ${recordingOffset}px))`,
-                                        opacity: isRecordingCancelled ? 0.3 : 1
-                                    }}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-2.5 h-2.5 rounded-full ${isRecordingCancelled ? 'bg-gray-400' : 'bg-white animate-ping'}`} />
-                                        <span className="font-mono text-lg font-bold tracking-widest">{formatRecordingTime(recordingTime)}</span>
+                                {/* WhatsApp Style Recording Overlay overlaying the input area */}
+                                {isRecording && (
+                                    <div 
+                                        className="absolute inset-y-0 left-0 right-[48px] md:right-[64px] flex items-center justify-between bg-[#1a1c23]/95 backdrop-blur-md border border-red-500/30 rounded-2xl px-4 md:px-6 z-30 overflow-hidden shadow-xl"
+                                        style={{
+                                            opacity: isRecordingCancelled ? 0.7 : 1
+                                        }}
+                                    >
+                                        <div className={`flex items-center gap-2 md:gap-3 shrink-0 z-10 transition-opacity duration-300 ${isDeletingAnimation ? 'opacity-0' : 'opacity-100'}`}>
+                                            <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
+                                            <span className="font-mono text-xs md:text-sm font-bold tracking-widest text-white">{formatRecordingTime(recordingTime)}</span>
+                                        </div>
+                                        
+                                        <div 
+                                            className={`flex items-center gap-2 md:gap-3 text-gray-400 font-medium text-[10px] md:text-sm flex-1 justify-end z-10 transition-opacity duration-300 ${isDeletingAnimation ? 'opacity-0' : 'opacity-100'} overflow-hidden`}
+                                            style={{
+                                                transform: `translateX(calc(-${recordingOffset}px * 0.8))`
+                                            }}
+                                        >
+                                            <i className="fa-solid fa-chevron-left animate-pulse shrink-0"></i>
+                                            <span className="truncate">Wischen zum Abbrechen</span>
+                                        </div>
+
+                                        {/* Trash Can Animation */}
+                                        <div className={`absolute left-4 md:left-6 transition-all duration-300 flex items-center justify-center text-red-500 z-0 ${recordingOffset > 30 || isDeletingAnimation ? 'opacity-100 scale-100' : 'opacity-0 scale-50'}`}>
+                                            <i className={`fa-solid ${isDeletingAnimation ? 'fa-trash-can fa-bounce' : isRecordingCancelled ? 'fa-trash-can-arrow-up' : 'fa-trash-can'} text-lg md:text-xl`}></i>
+                                        </div>
                                     </div>
+                                )}
 
-                                    <div className={`flex items-center gap-2 text-xs font-medium transition-opacity ${recordingOffset > 20 ? 'opacity-100' : 'opacity-40'}`}>
-                                        <i className="fa-solid fa-chevron-left animate-pulse"></i>
-                                        <span>{isRecordingCancelled ? 'Loslassen zum Löschen' : 'Wischen zum Abbrechen'}</span>
-                                    </div>
-
+                                {/* Voice Toggle Button (Always visible on the right if no text) */}
+                                {!newMessage.trim() && (
                                     <button
                                         type="button"
-                                        onMouseUp={(e) => { e.stopPropagation(); stopRecording(true); }}
-                                        onTouchEnd={(e) => { e.stopPropagation(); stopRecording(true); }}
-                                        className="ml-2 p-2 hover:bg-white/20 rounded-full transition-colors bg-white/5"
+                                        onMouseDown={(e) => { e.preventDefault(); startRecording(e); }}
+                                        onTouchStart={(e) => { startRecording(e); }}
+                                        className={`w-10 h-10 md:w-12 md:h-12 shrink-0 rounded-2xl flex items-center justify-center active:scale-90 relative z-20 touch-none ${isRecording
+                                                ? 'bg-red-600 text-white shadow-lg shadow-red-600/30'
+                                                : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/20 transition-all'
+                                            } ${isDeletingAnimation ? 'transition-all duration-300 ease-in-out opacity-0' : ''}`}
+                                        style={
+                                            isDeletingAnimation 
+                                                ? { transform: `translateX(-${recordingOffset + 30}px) scale(0.5) rotate(-90deg)` }
+                                                : isRecording 
+                                                    ? { transform: `translateX(-${recordingOffset}px) scale(${isRecordingCancelled ? 1.2 : 1.1})` } 
+                                                    : {}
+                                        }
+                                        title="Halten zum Aufnehmen, Wischen zum Abbrechen"
                                     >
-                                        <i className="fa-solid fa-trash-can text-sm"></i>
+                                        <i className={`fa-solid ${isRecording ? 'fa-microphone-lines' : 'fa-microphone'} text-base md:text-lg`}></i>
                                     </button>
-                                </div>
-                            )}
+                                )}
+                            </div>
 
                             {isUploading && (
                                 <div className="absolute top-0 left-0 w-full h-1 bg-blue-500/20">
