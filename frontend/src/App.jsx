@@ -16,6 +16,7 @@ import ProjectDetails from './features/projects/ProjectDetails';
 import ApiKeys from './pages/Settings/ApiKeys';
 import ApiIntegration from './pages/Settings/ApiIntegration';
 import CompanySettings from './features/system/CompanySettings';
+import DatabaseSettings from './features/system/DatabaseSettings';
 import Emails from './features/emails/Emails';
 import StorageManagement from './features/system/StorageManagement';
 import EmailMessages from './features/emails/EmailMessages';
@@ -102,6 +103,7 @@ function App() {
                         <Route path="api-keys" element={<ApiKeys />} />
                         <Route path="api-integration" element={<ApiIntegration />} />
                         <Route path="company" element={<CompanySettings />} />
+                        <Route path="database" element={<DatabaseSettings />} />
                         <Route path="zeiterfassung" element={<TimeSettings />} />
                     </Route>
                     <Route path="zeiterfassung">

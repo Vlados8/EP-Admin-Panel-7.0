@@ -127,6 +127,7 @@ try {
     const fileRoutes = require('./infrastructure/routes/fileRoutes');
     const timeTrackingRoutes = require('./infrastructure/routes/timeTrackingRoutes');
     const reonicRoutes = require('./infrastructure/routes/reonicRoutes');
+    const systemRoutes = require('./infrastructure/routes/systemRoutes');
 
     // --- PUBLIC WEBHOOKS ---
     // CRM Integrations (e.g. MyGo) - Uses simple multer for attachments
@@ -164,6 +165,7 @@ try {
     app.use('/api/v1/files', fileRoutes);
     app.use('/api/v1/time-tracking', timeTrackingRoutes);
     app.use('/api/v1/reonic', reonicRoutes);
+    app.use('/api/v1/system', systemRoutes);
 
     // The problematic route
     const apiKeyRoutes = require(apiKeyRoutesPath);
