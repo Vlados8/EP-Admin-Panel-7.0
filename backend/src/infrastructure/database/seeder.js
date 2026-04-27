@@ -10,12 +10,23 @@ async function seedDatabase() {
         console.log('--- Initial Seeding Started ---');
 
         // 1. Create Default Company
-        const [company] = await Company.findOrCreate({
-            where: { name: 'EP Construction' },
-            defaults: {
-                billing_plan: 'pro'
+        let company = await Company.findOne({ where: { name: 'EP Construction' }, paranoid: false });
+        if (!company) {
+            try {
+                company = await Company.create({ name: 'EP Construction', billing_plan: 'pro' });
+            } catch (err) {
+                if (err.name === 'SequelizeUniqueConstraintError') {
+                    company = await Company.findOne({ where: { name: 'EP Construction' }, paranoid: false });
+                } else {
+                    throw err;
+                }
             }
-        });
+        }
+        if (company && (company.deletedAt || company.deleted_at)) {
+            if (typeof company.restore === 'function') {
+                await company.restore();
+            }
+        }
         console.log('Company check/create: EP Construction');
 
         // 2. Create Roles
