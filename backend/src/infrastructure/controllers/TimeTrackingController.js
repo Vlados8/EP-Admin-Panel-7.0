@@ -245,7 +245,7 @@ class TimeTrackingController {
             logger.info(`[Report] Logs fetched: ${logs.length}`);
 
             // Robust template path finding from controller directory
-            const templatePath = path.join(__dirname, '..', '..', '..', '..', 'LuG_Baulohn_Kalender (1).xlsx');
+            const templatePath = path.join(__dirname, '..', '..', '..', '..', 'Stundenzettel_Kalender.xlsx');
             logger.info(`[Report] Using template at: ${templatePath}`);
 
             const workbook = new ExcelJS.Workbook();
