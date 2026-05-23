@@ -71,6 +71,43 @@ const getISODate = (date: Date = new Date()) => {
   return date.toISOString().split('T')[0];
 };
 
+const monthNames = [
+  'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+  'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'
+];
+const dayNamesShort = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+const dayNamesLong = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+
+const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
+const getFirstDayOfMonth = (year: number, month: number) => {
+  const day = new Date(year, month, 1).getDay();
+  return day === 0 ? 6 : day - 1; // Monday is 0, Sunday is 6
+};
+const getWeekDays = (d: Date) => {
+  const date = new Date(d);
+  const day = date.getDay();
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
+  const monday = new Date(date.setDate(diff));
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const nextDay = new Date(monday);
+    nextDay.setDate(monday.getDate() + i);
+    days.push(nextDay);
+  }
+  return days;
+};
+const formatDateString = (dateObj: Date) => {
+  const y = dateObj.getFullYear();
+  const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const d = String(dateObj.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+const getTaskHour = (timeStr: string) => {
+  if (!timeStr) return null;
+  const parts = timeStr.split(':');
+  return parseInt(parts[0], 10);
+};
+
 interface TaskForm {
   title: string;
   description: string;
@@ -89,6 +126,63 @@ export default function TasksScreen() {
   const [isModalEditMode, setIsModalEditMode] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
+
+  // Calendar Schedulers State
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
+  const [calendarTab, setCalendarTab] = useState<'month' | 'week'>('month');
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [selectedTimelineUserId, setSelectedTimelineUserId] = useState<string | number>('all');
+  const [selectedCalendarDay, setSelectedCalendarDay] = useState<string>(formatDateString(new Date()));
+  const [selectedWeekDay, setSelectedWeekDay] = useState<string>(formatDateString(new Date()));
+  const [now, setNow] = useState(new Date());
+
+  React.useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(new Date());
+    }, 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const handlePrevDate = () => {
+    if (calendarTab === 'month') {
+      setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth() - 1, 1));
+    } else if (calendarTab === 'week') {
+      const prevWeek = new Date(selectedDate);
+      prevWeek.setDate(selectedDate.getDate() - 7);
+      setSelectedDate(prevWeek);
+      setSelectedWeekDay(formatDateString(prevWeek));
+    }
+  };
+
+  const handleNextDate = () => {
+    if (calendarTab === 'month') {
+      setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 1));
+    } else if (calendarTab === 'week') {
+      const nextWeek = new Date(selectedDate);
+      nextWeek.setDate(selectedDate.getDate() + 7);
+      setSelectedDate(nextWeek);
+      setSelectedWeekDay(formatDateString(nextWeek));
+    }
+  };
+
+  const handleSetToday = () => {
+    const todayStr = formatDateString(new Date());
+    setSelectedDate(new Date());
+    setSelectedWeekDay(todayStr);
+    setSelectedCalendarDay(todayStr);
+  };
+
+  const getCalendarNavTitle = () => {
+    if (calendarTab === 'month') {
+      return `${monthNames[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`;
+    } else if (calendarTab === 'week') {
+      const weekDays = getWeekDays(selectedDate);
+      const startStr = `${weekDays[0].getDate()}. ${monthNames[weekDays[0].getMonth()].substring(0, 3)}.`;
+      const endStr = `${weekDays[6].getDate()}. ${monthNames[weekDays[6].getMonth()].substring(0, 3)}. ${weekDays[6].getFullYear()}`;
+      return `${startStr} - ${endStr}`;
+    }
+    return '';
+  };
 
   // Form State
   const [formData, setFormData] = useState<TaskForm>({
@@ -563,9 +657,293 @@ export default function TasksScreen() {
     );
   };
 
+  const renderMonthView = () => {
+    const year = selectedDate.getFullYear();
+    const month = selectedDate.getMonth();
+    
+    const daysInMonth = getDaysInMonth(year, month);
+    const firstDayIndex = getFirstDayOfMonth(year, month);
+    const prevMonthDays = getDaysInMonth(year, month - 1);
+    
+    const gridDays = [];
+    
+    // Prev month padding
+    for (let i = firstDayIndex - 1; i >= 0; i--) {
+      gridDays.push({
+        day: prevMonthDays - i,
+        isCurrentMonth: false,
+        dateObj: new Date(year, month - 1, prevMonthDays - i)
+      });
+    }
+    
+    // Current month days
+    for (let i = 1; i <= daysInMonth; i++) {
+      gridDays.push({
+        day: i,
+        isCurrentMonth: true,
+        dateObj: new Date(year, month, i)
+      });
+    }
+    
+    // Next month padding
+    const totalCells = gridDays.length > 35 ? 42 : 35;
+    const nextMonthPadding = totalCells - gridDays.length;
+    for (let i = 1; i <= nextMonthPadding; i++) {
+      gridDays.push({
+        day: i,
+        isCurrentMonth: false,
+        dateObj: new Date(year, month + 1, i)
+      });
+    }
+    
+    const dayTasksForSelected = tasks.filter((t: any) => t.due_date === selectedCalendarDay);
+    
+    return (
+      <View className="space-y-4">
+        <GlassCard className="p-3 bg-black/40">
+          {/* Days of week header */}
+          <View className="flex-row justify-between mb-3 border-b border-white/5 pb-2">
+            {dayNamesShort.map((day, idx) => (
+              <Text key={idx} className="w-[14%] text-center text-[10px] font-black text-gray-500 uppercase">
+                {day}
+              </Text>
+            ))}
+          </View>
+          
+          {/* Days grid */}
+          <View className="flex-row flex-wrap">
+            {gridDays.map((cell, idx) => {
+              const cellDateStr = formatDateString(cell.dateObj);
+              const isToday = formatDateString(new Date()) === cellDateStr;
+              const isSelected = selectedCalendarDay === cellDateStr;
+              
+              const dayTasks = tasks.filter((t: any) => t.due_date === cellDateStr);
+              
+              return (
+                <TouchableOpacity
+                  key={idx}
+                  activeOpacity={0.8}
+                  onPress={() => setSelectedCalendarDay(cellDateStr)}
+                  className={`w-[14.28%] aspect-square justify-center items-center rounded-xl p-1 mb-1 ${
+                    cell.isCurrentMonth ? '' : 'opacity-20'
+                  } ${
+                    isSelected ? 'bg-brand-blue border border-brand-blue' : isToday ? 'border border-blue-500/50 bg-blue-500/10' : ''
+                  }`}
+                >
+                  <Text className={`text-xs font-bold ${isSelected ? 'text-white' : isToday ? 'text-blue-400 font-black' : 'text-gray-300'}`}>
+                    {cell.day}
+                  </Text>
+                  
+                  {/* Color dots for tasks */}
+                  {dayTasks.length > 0 && (
+                    <View className="flex-row gap-x-[3px] mt-1 justify-center w-full">
+                      {dayTasks.slice(0, 3).map((t: any) => (
+                        <View 
+                          key={t.id} 
+                          className={`w-1 h-1 rounded-full ${
+                            t.status === 'Erledigt' ? 'bg-green-500' : t.status === 'Warten' ? 'bg-orange-500' : 'bg-blue-500'
+                          }`} 
+                        />
+                      ))}
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </GlassCard>
+
+        {/* Selected Day Tasks Header */}
+        <View className="flex-row justify-between items-center mt-3 mb-2 px-1">
+          <Text className="text-white font-bold text-xs uppercase tracking-widest">
+            Aufgaben am {formatDate(selectedCalendarDay)}
+          </Text>
+          <TouchableOpacity 
+            onPress={() => handleOpenModalForDate(selectedCalendarDay)}
+            className="flex-row items-center bg-brand-blue/20 px-2.5 py-1.5 rounded-lg border border-brand-blue/30"
+          >
+            <Plus size={10} color="#3B82F6" className="mr-1" />
+            <Text className="text-brand-blue text-[10px] font-bold uppercase tracking-wider">Hinzufügen</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Day Tasks Cards List */}
+        <View className="space-y-3">
+          {dayTasksForSelected.map((t: any) => (
+            <TaskCard key={t.id} task={t} />
+          ))}
+          {dayTasksForSelected.length === 0 && (
+            <GlassCard className="p-8 items-center bg-black/20">
+              <Text className="text-gray-500 text-xs font-bold uppercase tracking-widest text-center">
+                Keine Aufgaben für diesen Tag vorhanden
+              </Text>
+            </GlassCard>
+          )}
+        </View>
+      </View>
+    );
+  };
+
+  const renderWeekView = () => {
+    const weekDays = getWeekDays(selectedDate);
+    
+    // Filter tasks based on selected worker
+    const weekTasks = tasks.filter((t: any) => {
+      if (selectedTimelineUserId !== 'all') {
+        if (!t.assigned_to_id || t.assigned_to_id.toString() !== selectedTimelineUserId.toString()) return false;
+      }
+      return weekDays.some(day => formatDateString(day) === t.due_date);
+    });
+    
+    const activeTasks = weekTasks.filter((t: any) => t.due_date === selectedWeekDay);
+    
+    const hours = [];
+    for (let i = 7; i <= 20; i++) {
+      hours.push(i);
+    }
+    
+    const today = now;
+    const isSelectedDayToday = formatDateString(today) === selectedWeekDay;
+    const currentHour = today.getHours();
+    const currentMinute = today.getMinutes();
+    
+    return (
+      <View className="space-y-4">
+        {/* Days of week tabs */}
+        <GlassCard className="p-3 bg-black/40">
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
+            {weekDays.map((day, idx) => {
+              const dateStr = formatDateString(day);
+              const isSelected = selectedWeekDay === dateStr;
+              const isToday = formatDateString(today) === dateStr;
+              
+              return (
+                <TouchableOpacity
+                  key={idx}
+                  activeOpacity={0.8}
+                  onPress={() => setSelectedWeekDay(dateStr)}
+                  className={`px-3 py-2 rounded-xl mr-2 border items-center min-w-[70px] ${
+                    isSelected 
+                      ? 'bg-brand-blue border-brand-blue' 
+                      : isToday 
+                        ? 'bg-blue-500/10 border-blue-500/50' 
+                        : 'bg-white/5 border-white/5'
+                  }`}
+                >
+                  <Text className={`text-[10px] font-black uppercase ${isSelected ? 'text-white' : isToday ? 'text-blue-400' : 'text-gray-500'}`}>
+                    {dayNamesShort[idx]}
+                  </Text>
+                  <Text className={`text-xs font-black mt-0.5 ${isSelected ? 'text-white' : 'text-gray-200'}`}>
+                    {day.getDate()}.{String(day.getMonth() + 1).padStart(2, '0')}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </GlassCard>
+
+        {/* Ganztägig row */}
+        <GlassCard className="p-3 bg-black/40 flex-row items-center border-l-4 border-l-purple-500">
+          <View className="w-16 items-center border-r border-white/10 pr-2 mr-3">
+            <Text className="text-[8px] font-black text-gray-500 uppercase tracking-wider text-center">Ganztägig</Text>
+          </View>
+          <View className="flex-1 space-y-2">
+            {activeTasks.filter((t: any) => !t.time).map((t: any) => (
+              <TouchableOpacity 
+                key={t.id}
+                onPress={() => handleOpenModal(t, false)}
+                className="bg-white/5 border border-white/10 rounded-lg p-2 flex-row items-center justify-between"
+              >
+                <Text className="text-white font-bold text-xs flex-1 truncate pr-2" numberOfLines={1}>{t.title}</Text>
+                <ChevronRight size={12} color="#6B7280" />
+              </TouchableOpacity>
+            ))}
+            {activeTasks.filter((t: any) => !t.time).length === 0 && (
+              <Text className="text-gray-600 text-[10px] italic font-bold">Keine Aufgaben</Text>
+            )}
+          </View>
+        </GlassCard>
+
+        {/* Hourly rows */}
+        <View className="relative bg-black/20 rounded-2xl border border-white/5 p-3 space-y-3">
+          {/* Running time indicator line */}
+          {isSelectedDayToday && currentHour >= 7 && currentHour < 21 && (
+            <View 
+              className="absolute left-[70px] right-0 flex-row items-center pointer-events-none z-30"
+              style={{ top: `${((currentHour - 7) + currentMinute / 60) * (90 + 12) + 12}px` }} // 90px row height, 12px vertical spacing
+            >
+              <View className="flex-1 border-t-2 border-red-500 relative flex-row items-center">
+                <View className="absolute -left-1 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-red-500/30 animate-pulse" />
+                <View className="absolute -left-[54px] bg-red-500 px-1.5 py-0.5 rounded text-[8px] font-bold text-white flex-row items-center gap-0.5 shadow-lg">
+                  <Clock size={8} color="white" />
+                  <Text className="text-white text-[8px] font-bold">{String(currentHour).padStart(2, '0')}:{String(currentMinute).padStart(2, '0')}</Text>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {hours.map(hour => {
+            const hourStr = `${String(hour).padStart(2, '0')}:00`;
+            const hourTasks = activeTasks.filter((t: any) => {
+              const taskHour = getTaskHour(t.time);
+              return taskHour === hour;
+            });
+            
+            return (
+              <View key={hour} className="flex-row items-stretch h-[90px] border-b border-white/5 pb-2">
+                {/* Hour Label */}
+                <View className="w-16 shrink-0 justify-center items-center border-r border-white/10 pr-2 mr-3">
+                  <Text className="text-xs font-black text-gray-500">{hourStr}</Text>
+                </View>
+                
+                {/* Hour slot container */}
+                <View className="flex-1 flex-row items-center relative">
+                  <View className="flex-1 space-y-1.5 pr-6 overflow-y-auto max-h-[80px]">
+                    {hourTasks.map((t: any) => (
+                      <TouchableOpacity 
+                        key={t.id}
+                        onPress={() => handleOpenModal(t, false)}
+                        className={`bg-white/5 border border-white/10 rounded-lg p-1.5 flex-row items-center justify-between border-l-4 ${
+                          t.status === 'Erledigt' ? 'border-l-green-500' : t.status === 'Warten' ? 'border-l-orange-500' : 'border-l-blue-500'
+                        }`}
+                      >
+                        <View className="flex-1 pr-1">
+                          <Text className="text-white font-bold text-[10px] truncate" numberOfLines={1}>{t.title}</Text>
+                          {selectedTimelineUserId === 'all' && t.assignee && (
+                            <Text className="text-blue-400 text-[8px] font-bold truncate mt-0.5">
+                              {t.assignee.name}
+                            </Text>
+                          )}
+                        </View>
+                        <ChevronRight size={10} color="#6B7280" />
+                      </TouchableOpacity>
+                    ))}
+                    {hourTasks.length === 0 && (
+                      <View className="flex-1 justify-center">
+                        <Text className="text-gray-600 text-[10px] font-bold italic">Frei</Text>
+                      </View>
+                    )}
+                  </View>
+                  
+                  {/* Inline Add Button on Right */}
+                  <TouchableOpacity
+                    onPress={() => handleOpenModalForDate(selectedWeekDay, selectedTimelineUserId === 'all' ? '' : selectedTimelineUserId, `${String(hour).padStart(2, '0')}:00`)}
+                    className="absolute right-0 top-1/2 -translate-y-1/2 w-6 h-6 rounded-md bg-blue-500/20 text-blue-400 items-center justify-center border border-blue-500/30"
+                  >
+                    <Plus size={12} color="#3B82F6" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      </View>
+    );
+  };
+
   return (
     <ScreenLayout scroll={false}>
-      <View className="mb-6 flex-row items-center justify-between">
+      <View className="mb-4 flex-row items-center justify-between">
         <View className="flex-row items-center">
             <View className="w-1 h-6 bg-brand-blue rounded-full mr-3" />
             <Text className="text-white font-bold text-2xl uppercase tracking-widest">Aufgaben</Text>
@@ -578,11 +956,133 @@ export default function TasksScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* View Switcher Toggle */}
+      <View className="flex-row bg-white/5 p-1 rounded-xl border border-white/10 mb-4">
+        <TouchableOpacity
+          onPress={() => setViewMode('list')}
+          className={`flex-1 flex-row items-center justify-center py-2.5 rounded-lg ${
+            viewMode === 'list' 
+              ? 'bg-brand-blue border border-brand-blue' 
+              : ''
+          }`}
+        >
+          <Text className={`text-xs font-bold uppercase tracking-wider ${viewMode === 'list' ? 'text-white' : 'text-gray-400'}`}>
+            Liste
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setViewMode('calendar')}
+          className={`flex-1 flex-row items-center justify-center py-2.5 rounded-lg ${
+            viewMode === 'calendar' 
+              ? 'bg-brand-blue border border-brand-blue' 
+              : ''
+          }`}
+        >
+          <Text className={`text-xs font-bold uppercase tracking-wider ${viewMode === 'calendar' ? 'text-white' : 'text-gray-400'}`}>
+            Zeitplan
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Calendar Mode Tabs & Date Navigation */}
+      {viewMode === 'calendar' && (
+        <View className="mb-4 space-y-3 animate-[fadeIn_0.2s_ease-out]">
+          {/* Sub Tab Switchers */}
+          <View className="flex-row bg-black/40 p-1 rounded-xl border border-white/5 self-start">
+            <TouchableOpacity
+              onPress={() => setCalendarTab('month')}
+              className={`px-3 py-1.5 rounded-lg mr-1 ${
+                calendarTab === 'month' ? 'bg-white/10 border border-white/5' : ''
+              }`}
+            >
+              <Text className={`text-[10px] font-bold uppercase tracking-wider ${calendarTab === 'month' ? 'text-white' : 'text-gray-400'}`}>
+                Monatsansicht
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setCalendarTab('week')}
+              className={`px-3 py-1.5 rounded-lg ${
+                calendarTab === 'week' ? 'bg-white/10 border border-white/5' : ''
+              }`}
+            >
+              <Text className={`text-[10px] font-bold uppercase tracking-wider ${calendarTab === 'week' ? 'text-white' : 'text-gray-400'}`}>
+                Wochenplan
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Date Navigators */}
+          <View className="flex-row items-center justify-between gap-x-2">
+            <View className="flex-row items-center bg-black/40 rounded-xl border border-white/5 overflow-hidden p-0.5">
+              <TouchableOpacity 
+                onPress={handlePrevDate}
+                className="px-3 py-2 rounded-lg bg-white/5 mr-1"
+              >
+                <Text className="text-white text-xs font-bold">{"<"}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                onPress={handleSetToday}
+                className="px-3 py-2 rounded-lg bg-white/5 mr-1"
+              >
+                <Text className="text-blue-400 text-xs font-bold uppercase tracking-wider">Heute</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                onPress={handleNextDate}
+                className="px-3 py-2 rounded-lg bg-white/5"
+              >
+                <Text className="text-white text-xs font-bold">{">"}</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <GlassCard className="px-3 py-2 border border-white/10 flex-1 max-w-[180px] items-center">
+              <Text className="text-white font-bold text-[10px] tracking-wider" numberOfLines={1}>
+                {getCalendarNavTitle()}
+              </Text>
+            </GlassCard>
+          </View>
+
+          {/* Wochenplan Selector Dropdown for Employees */}
+          {calendarTab === 'week' && (
+            <View className="mb-2">
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row py-1">
+                <TouchableOpacity
+                  onPress={() => setSelectedTimelineUserId('all')}
+                  className={`px-3 py-2 rounded-xl mr-2 border ${
+                    selectedTimelineUserId === 'all' 
+                      ? 'bg-brand-blue border-brand-blue' 
+                      : 'bg-white/5 border-white/5'
+                  }`}
+                >
+                  <Text className={`text-[10px] font-bold ${selectedTimelineUserId === 'all' ? 'text-white' : 'text-gray-400'}`}>
+                    Alle Mitarbeiter
+                  </Text>
+                </TouchableOpacity>
+                {usersList.map((u: any) => (
+                  <TouchableOpacity
+                    key={u.id}
+                    onPress={() => setSelectedTimelineUserId(u.id)}
+                    className={`px-3 py-2 rounded-xl mr-2 border ${
+                      selectedTimelineUserId === u.id 
+                        ? 'bg-brand-blue border-brand-blue' 
+                        : 'bg-white/5 border-white/5'
+                    }`}
+                  >
+                    <Text className={`text-[10px] font-bold ${selectedTimelineUserId === u.id ? 'text-white' : 'text-gray-400'}`}>
+                      {u.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+        </View>
+      )}
+
       {isLoading ? (
         <View className="flex-1 justify-center items-center">
           <ActivityIndicator color="#3B82F6" size="large" />
         </View>
-      ) : (
+      ) : viewMode === 'list' ? (
         <FlatList
           data={tasks}
           keyExtractor={(item) => item.id.toString()}
@@ -599,6 +1099,13 @@ export default function TasksScreen() {
           contentContainerStyle={{ paddingBottom: 20 }}
           showsVerticalScrollIndicator={false}
         />
+      ) : (
+        <ScrollView 
+          showsVerticalScrollIndicator={false} 
+          contentContainerStyle={{ paddingBottom: 40 }}
+        >
+          {calendarTab === 'month' ? renderMonthView() : renderWeekView()}
+        </ScrollView>
       )}
 
       {/* Add Task Modal */}
