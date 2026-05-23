@@ -86,6 +86,7 @@ export default function TasksScreen() {
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isModalEditMode, setIsModalEditMode] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
 
@@ -196,7 +197,7 @@ export default function TasksScreen() {
     },
   });
 
-  const handleOpenModal = (task: any = null) => {
+  const handleOpenModal = (task: any = null, forceEditMode: boolean = false) => {
     if (task) {
       setEditingTask(task);
       setFormData({
@@ -208,6 +209,7 @@ export default function TasksScreen() {
         due_date: task.due_date ? task.due_date.split('T')[0] : getISODate(),
         time: task.time || '',
       });
+      setIsModalEditMode(forceEditMode);
     } else {
       setEditingTask(null);
       setFormData({
@@ -219,6 +221,7 @@ export default function TasksScreen() {
         due_date: getISODate(),
         time: '',
       });
+      setIsModalEditMode(true);
     }
     setAttachments([]);
     setIsModalOpen(true);
@@ -421,27 +424,31 @@ export default function TasksScreen() {
     }
   };
 
+  const translateStatus = (st: string) => {
+    if (st === 'IN_PROGRESS') return 'In Arbeit';
+    if (st === 'WAITING') return 'Warten';
+    if (st === 'COMPLETED') return 'Erledigt';
+    return st || 'Offen';
+  };
+
   const TaskCard = ({ task }: any) => {
     const isOwnerOrHigher = canCreateTask || currentUser?.id === task.creator_id;
 
-    const translateStatus = (st: string) => {
-      if (st === 'IN_PROGRESS') return 'In Arbeit';
-      if (st === 'WAITING') return 'Warten';
-      if (st === 'COMPLETED') return 'Erledigt';
-      return st || 'Offen';
-    };
-
     return (
-      <GlassCard className="p-4 mb-4">
-        {/* Top Header Row */}
-        <View className="flex-row justify-between items-start mb-3">
-          <View>
-            <View className={`px-2 py-1 flex-row items-center rounded-lg mb-1 ${task.status === 'In Arbeit' ? 'bg-brand-blue/20' : task.status === 'Erledigt' ? 'bg-green-500/20' : 'bg-orange-500/20'}`}>
-              <Construction size={12} color={task.status === 'In Arbeit' ? '#3B82F6' : task.status === 'Erledigt' ? '#10B981' : '#F59E0B'} />
-              <Text className={`text-[10px] font-bold ml-1 ${task.status === 'In Arbeit' ? 'text-brand-blue' : task.status === 'Erledigt' ? 'text-green-500' : 'text-orange-500'}`}>
-                {translateStatus(task.status)}
-              </Text>
-            </View>
+      <TouchableOpacity 
+        activeOpacity={0.95} 
+        onPress={() => handleOpenModal(task, false)}
+      >
+        <GlassCard className="p-4 mb-4">
+          {/* Top Header Row */}
+          <View className="flex-row justify-between items-start mb-3">
+            <View>
+              <View className={`px-2 py-1 flex-row items-center rounded-lg mb-1 ${task.status === 'In Arbeit' ? 'bg-brand-blue/20' : task.status === 'Erledigt' ? 'bg-green-500/20' : 'bg-orange-500/20'}`}>
+                <Construction size={12} color={task.status === 'In Arbeit' ? '#3B82F6' : task.status === 'Erledigt' ? '#10B981' : '#F59E0B'} />
+                <Text className={`text-[10px] font-bold ml-1 ${task.status === 'In Arbeit' ? 'text-brand-blue' : task.status === 'Erledigt' ? 'text-green-500' : 'text-orange-500'}`}>
+                  {translateStatus(task.status)}
+                </Text>
+              </View>
             <View className="flex-row items-center">
               <CalendarIcon size={10} color="#EF4444" />
               <Text className="text-[#EF4444] text-[10px] font-bold ml-1">
@@ -551,7 +558,8 @@ export default function TasksScreen() {
               </View>
            )}
         </View>
-      </GlassCard>
+        </GlassCard>
+      </TouchableOpacity>
     );
   };
 
@@ -613,14 +621,144 @@ export default function TasksScreen() {
             
             <View className="flex-row justify-between items-center mb-6">
               <Text className="text-white text-xl font-bold uppercase tracking-widest">
-                {editingTask ? 'Aufgabe bearbeiten' : 'Neue Aufgabe'}
+                {editingTask ? (isModalEditMode ? 'Aufgabe bearbeiten' : 'Aufgabendetails') : 'Neue Aufgabe'}
               </Text>
               <TouchableOpacity onPress={closeModal}>
-                <Text className="text-gray-500 font-bold uppercase text-xs tracking-widest">Abbrechen</Text>
+                <Text className="text-gray-500 font-bold uppercase text-xs tracking-widest">Schließen</Text>
               </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} className="flex-1">
+              {!isModalEditMode && editingTask ? (
+                <View className="space-y-6">
+                  {/* Status Indicator */}
+                  <View className="mb-5">
+                    <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Status</Text>
+                    <GlassCard className="p-4 bg-black/40 border border-white/5 flex-row items-center">
+                      <Construction size={18} color={editingTask.status === 'In Arbeit' ? '#3B82F6' : editingTask.status === 'Erledigt' ? '#10B981' : '#F59E0B'} />
+                      <Text className={`font-black text-sm ml-2 ${editingTask.status === 'In Arbeit' ? 'text-brand-blue' : editingTask.status === 'Erledigt' ? 'text-green-500' : 'text-orange-500'}`}>
+                        {translateStatus(editingTask.status)}
+                      </Text>
+                    </GlassCard>
+                  </View>
+
+                  {/* Assignee */}
+                  <View className="mb-5">
+                    <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Zugewiesen an</Text>
+                    <GlassCard className="p-4 bg-black/40 border border-white/5 flex-row items-center">
+                      <User size={16} color="#60A5FA" className="mr-3" />
+                      <Text className="text-white font-bold text-sm">
+                        {editingTask.assigned_to?.name || editingTask.creator?.name || 'Unbekannt'}
+                      </Text>
+                    </GlassCard>
+                  </View>
+
+                  {/* Due Date & Time */}
+                  <View className="mb-5 flex-row justify-between gap-x-3">
+                    <View className="flex-1">
+                      <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Fälligkeit</Text>
+                      <GlassCard className="p-4 bg-black/40 border border-white/5 flex-row items-center">
+                        <CalendarIcon size={16} color="#EF4444" className="mr-2" />
+                        <Text className="text-white font-bold text-xs">
+                          {editingTask.due_date ? new Date(editingTask.due_date).toLocaleDateString('de-DE') : 'Keine Frist'}
+                        </Text>
+                      </GlassCard>
+                    </View>
+                    {editingTask.time && (
+                      <View className="flex-1">
+                        <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Uhrzeit</Text>
+                        <GlassCard className="p-4 bg-black/40 border border-white/5 flex-row items-center">
+                          <Clock size={16} color="#EF4444" className="mr-2" />
+                          <Text className="text-white font-bold text-xs">{editingTask.time}</Text>
+                        </GlassCard>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Project */}
+                  <View className="mb-5">
+                    <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Projekt</Text>
+                    <GlassCard className="p-4 bg-black/40 border border-white/5">
+                      {editingTask.project ? (
+                        <TouchableOpacity
+                          onPress={() => {
+                            closeModal();
+                            navigation.navigate('ProjectDetail', { id: editingTask.project.id });
+                          }}
+                          className="flex-row items-center"
+                        >
+                          <Briefcase size={16} color="#10B981" className="mr-3" />
+                          <Text className="text-blue-400 font-bold text-sm underline flex-1 pr-2" numberOfLines={1}>
+                            {editingTask.project.project_number} - {editingTask.project.title}
+                          </Text>
+                          <ChevronRight size={14} color="#6B7280" />
+                        </TouchableOpacity>
+                      ) : (
+                        <View className="flex-row items-center">
+                          <Briefcase size={16} color="#6B7280" className="mr-3" />
+                          <Text className="text-gray-500 font-bold text-sm">Kein Projekt</Text>
+                        </View>
+                      )}
+                    </GlassCard>
+                  </View>
+
+                  {/* Description */}
+                  <View className="mb-5">
+                    <View className="flex-row justify-between items-center mb-2 ml-1">
+                      <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">Beschreibung</Text>
+                      <TouchableOpacity 
+                        onPress={() => handleCopyDescription(editingTask.description)}
+                        className="flex-row items-center bg-white/5 px-2.5 py-1.5 rounded-lg border border-white/5"
+                      >
+                        <Copy size={10} color="#3B82F6" className="mr-1.5" />
+                        <Text className="text-white text-[9px] font-bold uppercase tracking-widest">Kopieren</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <GlassCard className="p-4 bg-black/40 border border-white/5 min-h-[80px]">
+                      <Text selectable={true} className="text-gray-300 text-sm leading-relaxed">
+                        {editingTask.description || 'Keine Beschreibung vorhanden.'}
+                      </Text>
+                    </GlassCard>
+                  </View>
+
+                  {/* Attachments Display Grid */}
+                  {editingTask.attachments && editingTask.attachments.length > 0 && (
+                    <View className="mb-6">
+                      <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">ANHÄNGE (ZUM ANSEHEN ANKLICKEN)</Text>
+                      <View className="flex-row flex-wrap gap-2">
+                        {editingTask.attachments.map((att: any, idx: number) => {
+                          const url = att.file_url || att.fileUrl;
+                          const thumbUrl = att.thumb_url || att.thumbUrl || url;
+                          const fullUrl = thumbUrl ? (thumbUrl.startsWith('http') ? thumbUrl : `${serverDomain}${thumbUrl}`) : null;
+                          const isImage = att.content_type?.includes('image') || /\.(jpg|jpeg|png|gif|webp)$/i.test(url);
+                          
+                          return (
+                            <TouchableOpacity 
+                              key={att.id}
+                              activeOpacity={0.8}
+                              onPress={() => openAttachment(att)}
+                              className="w-[28%] aspect-square rounded-xl overflow-hidden border border-white/10 bg-black/40 justify-center items-center relative"
+                            >
+                              {isImage && fullUrl ? (
+                                <Image source={{ uri: fullUrl }} className="w-full h-full object-cover" />
+                              ) : (
+                                <View className="items-center p-1">
+                                  <ImageIcon size={20} color="#6B7280" className="mb-1" />
+                                  <Text className="text-[8px] text-gray-400 text-center font-bold px-1" numberOfLines={1}>{att.file_name}</Text>
+                                </View>
+                              )}
+                              <View className="absolute bottom-1 right-1 bg-black/50 p-1 rounded-full">
+                                <Download size={10} color="white" />
+                              </View>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  )}
+                </View>
+              ) : (
+                <View>
               {/* Title Input */}
               <View className="mb-5">
                 <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Titel</Text>
@@ -788,31 +926,64 @@ export default function TasksScreen() {
                 )}
               </View>
 
+                </View>
+              )}
               <View className="h-10" />
             </ScrollView>
 
             <View className="flex-row justify-between pt-4 border-t border-white/5">
-              <TouchableOpacity 
-                onPress={closeModal}
-                className="bg-white/5 flex-1 py-4 rounded-xl items-center mr-2 border border-white/10"
-              >
-                  <Text className="text-white font-bold text-sm tracking-widest">
-                    Abbrechen
-                  </Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                onPress={handleSubmit}
-                disabled={createMutation.isPending || fullUpdateMutation.isPending}
-                className="bg-brand-blue flex-1 py-4 rounded-xl items-center shadow-lg shadow-blue-500/30 border border-brand-blue"
-              >
-                {createMutation.isPending || fullUpdateMutation.isPending ? (
-                  <ActivityIndicator color="white" size="small" />
-                ) : (
-                  <Text className="text-white font-bold text-sm tracking-widest">
-                    {editingTask ? 'Speichern' : 'Aufgabe speichern'}
-                  </Text>
-                )}
-              </TouchableOpacity>
+              {!isModalEditMode && editingTask ? (
+                <>
+                  {(canCreateTask || currentUser?.id === editingTask.creator_id) ? (
+                    <TouchableOpacity 
+                      onPress={() => setIsModalEditMode(true)}
+                      className="bg-brand-blue flex-1 py-4 rounded-xl items-center mr-2 shadow-lg shadow-blue-500/20 border border-brand-blue"
+                    >
+                      <Text className="text-white font-bold text-sm tracking-widest">
+                        BEARBEITEN
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
+                  <TouchableOpacity 
+                    onPress={closeModal}
+                    className="bg-white/5 flex-1 py-4 rounded-xl items-center border border-white/10"
+                  >
+                    <Text className="text-white font-bold text-sm tracking-widest">
+                      SCHLIEẞEN
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <TouchableOpacity 
+                    onPress={() => {
+                      if (editingTask) {
+                        setIsModalEditMode(false);
+                      } else {
+                        closeModal();
+                      }
+                    }}
+                    className="bg-white/5 flex-1 py-4 rounded-xl items-center mr-2 border border-white/10"
+                  >
+                      <Text className="text-white font-bold text-sm tracking-widest">
+                        {editingTask ? 'ZURÜCK' : 'ABBRECHEN'}
+                      </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    onPress={handleSubmit}
+                    disabled={createMutation.isPending || fullUpdateMutation.isPending}
+                    className="bg-brand-blue flex-1 py-4 rounded-xl items-center shadow-lg shadow-blue-500/30 border border-brand-blue"
+                  >
+                    {createMutation.isPending || fullUpdateMutation.isPending ? (
+                      <ActivityIndicator color="white" size="small" />
+                    ) : (
+                      <Text className="text-white font-bold text-sm tracking-widest">
+                        {editingTask ? 'SPEICHERN' : 'SPEICHERN'}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </GlassCard>
         </BlurView>
