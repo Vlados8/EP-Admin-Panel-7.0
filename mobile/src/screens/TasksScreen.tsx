@@ -250,8 +250,11 @@ export default function TasksScreen() {
 
   const updateMutation = useMutation({
     mutationFn: ({ id, status }: { id: number; status: string }) => updateTaskStatus(id, status),
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      if (editingTask && editingTask.id === variables.id) {
+        setEditingTask((prev: any) => prev ? { ...prev, status: variables.status } : null);
+      }
     },
   });
 
@@ -1140,13 +1143,18 @@ export default function TasksScreen() {
                 <View className="space-y-6">
                   {/* Status Indicator */}
                   <View className="mb-5">
-                    <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Status</Text>
-                    <GlassCard className="p-4 bg-black/40 border border-white/5 flex-row items-center">
-                      <Construction size={18} color={editingTask.status === 'In Arbeit' ? '#3B82F6' : editingTask.status === 'Erledigt' ? '#10B981' : '#F59E0B'} />
-                      <Text className={`font-black text-sm ml-2 ${editingTask.status === 'In Arbeit' ? 'text-brand-blue' : editingTask.status === 'Erledigt' ? 'text-green-500' : 'text-orange-500'}`}>
-                        {translateStatus(editingTask.status)}
-                      </Text>
-                    </GlassCard>
+                    <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Status (Zum Ändern tippen)</Text>
+                    <TouchableOpacity activeOpacity={0.8} onPress={() => handleStatusChange(editingTask)}>
+                      <GlassCard className="p-4 bg-black/40 border border-white/5 flex-row items-center justify-between">
+                        <View className="flex-row items-center">
+                          <Construction size={18} color={editingTask.status === 'In Arbeit' ? '#3B82F6' : editingTask.status === 'Erledigt' ? '#10B981' : '#F59E0B'} />
+                          <Text className={`font-black text-sm ml-2 ${editingTask.status === 'In Arbeit' ? 'text-brand-blue' : editingTask.status === 'Erledigt' ? 'text-green-500' : 'text-orange-500'}`}>
+                            {translateStatus(editingTask.status)}
+                          </Text>
+                        </View>
+                        <RefreshCw size={14} color="#6B7280" />
+                      </GlassCard>
+                    </TouchableOpacity>
                   </View>
 
                   {/* Assignee */}

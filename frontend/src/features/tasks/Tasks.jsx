@@ -602,6 +602,16 @@ const Tasks = () => {
         }
     };
 
+    const handleStatusChange = async (task, newStatus) => {
+        try {
+            await api.patch(`/tasks/${task.id}`, { status: newStatus });
+            fetchTasksUsersAndProjects();
+            setEditingTask(prev => prev ? { ...prev, status: newStatus } : null);
+        } catch (error) {
+            console.error('Error updating task status:', error);
+        }
+    };
+
     const deleteTask = async (taskId, e) => {
         if (e) e.stopPropagation();
         if (!window.confirm('Möchten Sie diese Aufgabe wirklich löschen?')) return;
@@ -923,13 +933,24 @@ const Tasks = () => {
                                 {/* Detail properties */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     {/* Status */}
-                                    <div className="bg-white/5 border border-white/10 rounded-xl p-3 flex items-center gap-3">
+                                    <div className="bg-white/5 border border-white/10 rounded-xl p-3 flex items-center gap-3 relative group">
                                         <div className={`w-8 h-8 rounded-lg ${getStatusIconAndColor(editingTask.status).bg} flex items-center justify-center flex-shrink-0`}>
                                             <i className={`fa-solid ${getStatusIconAndColor(editingTask.status).icon} ${getStatusIconAndColor(editingTask.status).color} text-sm`}></i>
                                         </div>
-                                        <div>
-                                            <p className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">Status</p>
-                                            <p className="text-white text-xs font-bold mt-0.5">{editingTask.status}</p>
+                                        <div className="flex-1 pr-4 relative">
+                                            <p className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">Status (Klicken zum Ändern)</p>
+                                            <select
+                                                value={editingTask.status}
+                                                onChange={(e) => handleStatusChange(editingTask, e.target.value)}
+                                                className="bg-transparent border-none text-white text-xs font-black mt-0.5 focus:outline-none cursor-pointer appearance-none w-full [&>option]:bg-gray-900"
+                                            >
+                                                <option value="In Arbeit">In Arbeit</option>
+                                                <option value="Warten">Warten</option>
+                                                <option value="Erledigt">Erledigt</option>
+                                            </select>
+                                            <div className="absolute right-0 top-[60%] -translate-y-1/2 pointer-events-none text-gray-500 text-[10px]">
+                                                <i className="fa-solid fa-chevron-down"></i>
+                                            </div>
                                         </div>
                                     </div>
 
