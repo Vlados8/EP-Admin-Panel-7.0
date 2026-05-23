@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import usePermission from '../../hooks/usePermission';
 import MediaViewer from '../../components/common/MediaViewer';
+import { getImageUrl } from '../../utils/config';
 
 const Tasks = () => {
     const { user: currentUser } = useSelector(state => state.auth);
@@ -38,13 +39,16 @@ const Tasks = () => {
     const [viewMode, setViewMode] = useState('grid');
     const [calendarTab, setCalendarTab] = useState('month');
     const [selectedDate, setSelectedDate] = useState(new Date());
-    const [selectedTimelineUserId, setSelectedTimelineUserId] = useState('');
+    const [selectedTimelineUserId, setSelectedTimelineUserId] = useState('all');
+    const [isModalEditMode, setIsModalEditMode] = useState(false);
+    const [now, setNow] = useState(new Date());
 
     useEffect(() => {
-        if (currentUser?.id && !selectedTimelineUserId) {
-            setSelectedTimelineUserId(currentUser.id);
-        }
-    }, [currentUser, users]);
+        const timer = setInterval(() => {
+            setNow(new Date());
+        }, 30000);
+        return () => clearInterval(timer);
+    }, []);
 
     const monthNames = [
         'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
@@ -97,14 +101,13 @@ const Tasks = () => {
             due_date: dateStr || '',
             time: timeStr || ''
         });
+        setIsModalEditMode(true);
         setIsModalOpen(true);
     };
 
     const handlePrevDate = () => {
         if (calendarTab === 'month') {
             setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth() - 1, 1));
-        } else if (calendarTab === 'timeline') {
-            setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() - 1));
         } else if (calendarTab === 'week') {
             setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() - 7));
         }
@@ -113,8 +116,6 @@ const Tasks = () => {
     const handleNextDate = () => {
         if (calendarTab === 'month') {
             setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 1));
-        } else if (calendarTab === 'timeline') {
-            setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() + 1));
         } else if (calendarTab === 'week') {
             setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() + 7));
         }
@@ -127,8 +128,6 @@ const Tasks = () => {
     const getCalendarNavTitle = () => {
         if (calendarTab === 'month') {
             return `${monthNames[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`;
-        } else if (calendarTab === 'timeline') {
-            return `${dayNamesLong[selectedDate.getDay()]}, ${selectedDate.getDate()}. ${monthNames[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`;
         } else if (calendarTab === 'week') {
             const weekDays = getWeekDays(selectedDate);
             const startStr = `${weekDays[0].getDate()}. ${monthNames[weekDays[0].getMonth()]}`;
@@ -154,18 +153,27 @@ const Tasks = () => {
                     <i className={`fa-solid ${statusUI.icon} ${statusUI.color} text-[8px] shrink-0`}></i>
                 </div>
                 
-                <div className="flex items-center justify-between text-[8px] text-gray-500 font-bold">
-                    {t.time ? (
-                        <span className="flex items-center gap-0.5">
-                            <i className="fa-regular fa-clock text-[7px] opacity-75"></i>
-                            {t.time}
-                        </span>
-                    ) : (
-                        <span>Ganztägig</span>
-                    )}
-                    {t.project && (
-                        <span className="text-emerald-400 bg-emerald-400/10 px-1 rounded truncate max-w-[60px]">
-                            {t.project.project_number}
+                <div className="flex flex-col gap-1 text-[8px] text-gray-500 font-bold">
+                    <div className="flex items-center justify-between gap-2">
+                        {t.time ? (
+                            <span className="flex items-center gap-0.5">
+                                <i className="fa-regular fa-clock text-[7px] opacity-75"></i>
+                                {t.time}
+                            </span>
+                        ) : (
+                            <span>Ganztägig</span>
+                        )}
+                        {t.project && (
+                            <span className="text-emerald-400 bg-emerald-400/10 px-1 rounded truncate max-w-[60px] shrink-0">
+                                {t.project.project_number}
+                            </span>
+                        )}
+                    </div>
+                    {/* Show Assignee Name if viewing All Workers */}
+                    {selectedTimelineUserId === 'all' && t.assignee && (
+                        <span className="text-blue-400 truncate font-semibold flex items-center gap-0.5">
+                            <i className="fa-solid fa-user text-[7px] opacity-75"></i>
+                            {t.assignee.name}
                         </span>
                     )}
                 </div>
@@ -293,129 +301,15 @@ const Tasks = () => {
         );
     };
 
-    const renderTimelineView = () => {
-        const dateStr = formatDateString(selectedDate);
-        
-        const timelineUsers = [
-            ...assignableUsers,
-            ...(assignableUsers.some(u => u.id === currentUser?.id) ? [] : [currentUser])
-        ].filter(Boolean);
-        
-        const activeTasks = displayedTasks.filter(t => t.due_date === dateStr);
-        
-        const hours = [];
-        for (let i = 7; i <= 20; i++) {
-            hours.push(i);
-        }
-        
-        return (
-            <div className="glass-card rounded-2xl border border-white/10 p-5 bg-black/20 overflow-x-auto custom-scrollbar animate-[fadeIn_0.3s_ease-out]">
-                <div className="min-w-[900px] flex flex-col">
-                    {/* Columns Header (User Avatars) */}
-                    <div className="flex border-b border-white/10 pb-3 mb-2">
-                        {/* Time label placeholder */}
-                        <div className="w-24 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-widest text-center self-end">
-                            Uhrzeit
-                        </div>
-                        {/* User Columns */}
-                        <div className="flex flex-1 gap-3">
-                            {timelineUsers.map(user => {
-                                const initials = user.name?.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
-                                return (
-                                    <div key={user.id} className="flex-1 min-w-[150px] bg-white/5 border border-white/10 p-3 rounded-xl flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
-                                            <span className="text-blue-400 text-xs font-bold">{initials}</span>
-                                        </div>
-                                        <div className="min-w-0">
-                                            <p className="text-white text-xs font-bold truncate leading-tight">{user.name}</p>
-                                            <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">
-                                                {user.role?.name || user.role || 'Team'}
-                                            </span>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                    
-                    {/* Ganztägig (All Day) Row */}
-                    <div className="flex border-b border-white/5 py-2.5 bg-white/[0.02] rounded-xl mb-3 border border-white/10">
-                        <div className="w-24 shrink-0 flex flex-col items-center justify-center px-2">
-                            <span className="text-[9px] font-black uppercase text-gray-500 tracking-wider">Ganztägig</span>
-                            <i className="fa-solid fa-umbrella text-gray-600 text-xs mt-1"></i>
-                        </div>
-                        <div className="flex flex-1 gap-3">
-                            {timelineUsers.map(user => {
-                                const userAllDayTasks = activeTasks.filter(t => t.assigned_to_id === user.id && !t.time);
-                                return (
-                                    <div key={user.id} className="flex-1 min-w-[150px] space-y-1.5 px-1 min-h-[50px] justify-center flex flex-col">
-                                        {userAllDayTasks.map(t => renderCompactTaskCard(t))}
-                                        {userAllDayTasks.length === 0 && (
-                                            <span className="text-[10px] text-gray-600 italic text-center font-medium">Keine</span>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                    
-                    {/* Hourly Rows */}
-                    <div className="space-y-2">
-                        {hours.map(hour => {
-                            const hourStr = `${String(hour).padStart(2, '0')}:00`;
-                            return (
-                                <div key={hour} className="flex items-stretch min-h-[85px] border-b border-white/5 pb-2">
-                                    {/* Hour Label */}
-                                    <div className="w-24 shrink-0 flex items-center justify-center font-black text-sm text-gray-500">
-                                        <i className="fa-regular fa-clock text-xs text-gray-600 mr-1.5"></i>
-                                        {hourStr}
-                                    </div>
-                                    
-                                    {/* Slots per user */}
-                                    <div className="flex flex-1 gap-3">
-                                        {timelineUsers.map(user => {
-                                            const userHourTasks = activeTasks.filter(t => {
-                                                if (t.assigned_to_id !== user.id) return false;
-                                                const taskHour = getTaskHour(t.time);
-                                                return taskHour === hour;
-                                            });
-                                            
-                                            return (
-                                                <div 
-                                                    key={user.id} 
-                                                    className="flex-1 min-w-[150px] bg-white/[0.02] hover:bg-blue-500/[0.03] border border-white/5 hover:border-blue-500/20 rounded-xl p-2 flex flex-col justify-between group relative transition-all"
-                                                >
-                                                    <div className="space-y-1.5 flex-1 flex flex-col justify-center">
-                                                        {userHourTasks.map(t => renderCompactTaskCard(t))}
-                                                    </div>
-                                                    
-                                                    {/* Inline Add Button inside specific Slot */}
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleOpenModalForDate(dateStr, user.id, `${String(hour).padStart(2, '0')}:00`)}
-                                                        className="absolute bottom-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 rounded-md bg-blue-500/20 text-blue-400 hover:bg-blue-500 hover:text-white flex items-center justify-center text-[10px]"
-                                                        title={`Aufgabe für ${user.name} um ${hourStr} erstellen`}
-                                                    >
-                                                        <i className="fa-solid fa-plus"></i>
-                                                    </button>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            </div>
-        );
-    };
+
 
     const renderWeekView = () => {
         const weekDays = getWeekDays(selectedDate);
         
         const weekTasks = displayedTasks.filter(t => {
-            if (!t.assigned_to_id || t.assigned_to_id.toString() !== selectedTimelineUserId.toString()) return false;
+            if (selectedTimelineUserId !== 'all') {
+                if (!t.assigned_to_id || t.assigned_to_id.toString() !== selectedTimelineUserId.toString()) return false;
+            }
             return weekDays.some(day => formatDateString(day) === t.due_date);
         });
         
@@ -423,6 +317,11 @@ const Tasks = () => {
         for (let i = 7; i <= 20; i++) {
             hours.push(i);
         }
+
+        const today = now;
+        const isCurrentWeek = weekDays.some(day => formatDateString(day) === formatDateString(today));
+        const currentHour = today.getHours();
+        const currentMinute = today.getMinutes();
         
         return (
             <div className="glass-card rounded-2xl border border-white/10 p-5 bg-black/20 overflow-x-auto custom-scrollbar animate-[fadeIn_0.3s_ease-out]">
@@ -436,7 +335,7 @@ const Tasks = () => {
                         {/* Week Days Columns */}
                         <div className="flex flex-1 gap-3">
                             {weekDays.map((day, idx) => {
-                                const isToday = formatDateString(new Date()) === formatDateString(day);
+                                const isToday = formatDateString(today) === formatDateString(day);
                                 return (
                                     <div key={idx} className={`flex-1 min-w-[110px] p-3 rounded-xl flex flex-col items-center justify-center border ${
                                         isToday 
@@ -466,7 +365,7 @@ const Tasks = () => {
                                 const dateStr = formatDateString(day);
                                 const dayAllDayTasks = weekTasks.filter(t => t.due_date === dateStr && !t.time);
                                 return (
-                                    <div key={idx} className="flex-1 min-w-[110px] space-y-1.5 px-1 min-h-[50px] justify-center flex flex-col">
+                                    <div key={idx} className="flex-1 min-w-[110px] space-y-1.5 px-1 min-h-[55px] justify-center flex flex-col">
                                         {dayAllDayTasks.map(t => renderCompactTaskCard(t))}
                                         {dayAllDayTasks.length === 0 && (
                                             <span className="text-[10px] text-gray-600 italic text-center font-medium">Keine</span>
@@ -478,11 +377,27 @@ const Tasks = () => {
                     </div>
                     
                     {/* Hourly Rows */}
-                    <div className="space-y-2">
+                    <div className="space-y-2 relative">
+                        {/* Live Running current time indicator line */}
+                        {isCurrentWeek && currentHour >= 7 && currentHour < 21 && (
+                            <div 
+                                className="absolute left-[96px] right-0 flex items-center pointer-events-none z-30"
+                                style={{ top: `${((currentHour - 7) + currentMinute / 60) * (90 + 8)}px` }}
+                            >
+                                <div className="w-full border-t-2 border-red-500 relative flex items-center">
+                                    <div className="absolute -left-1.5 w-3 h-3 rounded-full bg-red-500 ring-4 ring-red-500/30 animate-pulse"></div>
+                                    <div className="absolute -left-[58px] bg-red-500 text-white font-black text-[9px] px-1.5 py-0.5 rounded shadow-lg flex items-center gap-0.5">
+                                        <i className="fa-regular fa-clock text-[8px]"></i>
+                                        {String(currentHour).padStart(2, '0')}:{String(currentMinute).padStart(2, '0')}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {hours.map(hour => {
                             const hourStr = `${String(hour).padStart(2, '0')}:00`;
                             return (
-                                <div key={hour} className="flex items-stretch min-h-[85px] border-b border-white/5 pb-2">
+                                <div key={hour} className="flex items-stretch h-[90px] border-b border-white/5 pb-2">
                                     {/* Hour Label */}
                                     <div className="w-24 shrink-0 flex items-center justify-center font-black text-sm text-gray-500">
                                         <i className="fa-regular fa-clock text-xs text-gray-600 mr-1.5"></i>
@@ -504,14 +419,14 @@ const Tasks = () => {
                                                     key={idx} 
                                                     className="flex-1 min-w-[110px] bg-white/[0.02] hover:bg-blue-500/[0.03] border border-white/5 hover:border-blue-500/20 rounded-xl p-2 flex flex-col justify-between group relative transition-all"
                                                 >
-                                                    <div className="space-y-1.5 flex-1 flex flex-col justify-center">
+                                                    <div className="space-y-1.5 flex-1 flex flex-col justify-center overflow-y-auto max-h-[80px] custom-scrollbar pr-0.5">
                                                         {dayHourTasks.map(t => renderCompactTaskCard(t))}
                                                     </div>
                                                     
                                                     {/* Inline Add Button inside specific Slot */}
                                                     <button
                                                         type="button"
-                                                        onClick={() => handleOpenModalForDate(dateStr, selectedTimelineUserId, `${String(hour).padStart(2, '0')}:00`)}
+                                                        onClick={() => handleOpenModalForDate(dateStr, selectedTimelineUserId === 'all' ? '' : selectedTimelineUserId, `${String(hour).padStart(2, '0')}:00`)}
                                                         className="absolute bottom-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 rounded-md bg-blue-500/20 text-blue-400 hover:bg-blue-500 hover:text-white flex items-center justify-center text-[10px]"
                                                         title={`Aufgabe für ${dayNamesLong[day.getDay()]} um ${hourStr} erstellen`}
                                                     >
@@ -577,8 +492,10 @@ const Tasks = () => {
                 due_date: task.due_date || '',
                 time: task.time || ''
             });
+            setIsModalEditMode(false);
         } else {
             resetForm();
+            setIsModalEditMode(true);
         }
         setIsModalOpen(true);
     };
@@ -919,17 +836,6 @@ const Tasks = () => {
                             </button>
                             <button
                                 type="button"
-                                onClick={() => setCalendarTab('timeline')}
-                                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
-                                    calendarTab === 'timeline' 
-                                        ? 'bg-white/10 text-white border border-white/10' 
-                                        : 'text-gray-400 hover:text-white'
-                                }`}
-                            >
-                                <i className="fa-solid fa-timeline"></i> Team-Tagesplan
-                            </button>
-                            <button
-                                type="button"
                                 onClick={() => setCalendarTab('week')}
                                 className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
                                     calendarTab === 'week' 
@@ -974,13 +880,14 @@ const Tasks = () => {
 
                         {/* Weekly Timeline view: User Select Dropdown */}
                         {calendarTab === 'week' && (
-                            <div className="flex items-center gap-2 self-stretch lg:self-auto min-w-[200px]">
+                            <div className="flex items-center gap-2 self-stretch lg:self-auto min-w-[220px]">
                                 <i className="fa-solid fa-user-clock text-blue-400 text-sm"></i>
                                 <select
                                     value={selectedTimelineUserId}
                                     onChange={(e) => setSelectedTimelineUserId(e.target.value)}
                                     className="flex-1 bg-black/40 border border-white/15 rounded-xl py-2 px-3 text-xs text-white focus:outline-none focus:border-blue-500 appearance-none [&>option]:bg-gray-900"
                                 >
+                                    <option value="all">Wochenplan: Alle Mitarbeiter</option>
                                     {users.map(u => (
                                         <option key={u.id} value={u.id}>Wochenplan: {u.name}</option>
                                     ))}
@@ -991,7 +898,6 @@ const Tasks = () => {
 
                     {/* Sub-mode views contents */}
                     {calendarTab === 'month' && renderMonthView()}
-                    {calendarTab === 'timeline' && renderTimelineView()}
                     {calendarTab === 'week' && renderWeekView()}
                 </div>
             )}
@@ -1002,7 +908,7 @@ const Tasks = () => {
                     <div className="glass-card w-full max-w-xl rounded-2xl border border-white/10 shadow-2xl animate-[slideUp_0.3s_ease-out] my-auto">
                         <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/5 rounded-t-2xl">
                             <h2 className="text-xl font-semibold text-white flex items-center gap-3">
-                                <i className="fa-solid fa-list-check text-blue-400"></i> {editingTask ? 'Aufgabe bearbeiten' : 'Neue Aufgabe'}
+                                <i className="fa-solid fa-list-check text-blue-400"></i> {editingTask ? (isModalEditMode ? 'Aufgabe bearbeiten' : 'Aufgabendetails') : 'Neue Aufgabe'}
                             </h2>
                              <button 
                                 onClick={() => { setIsModalOpen(false); resetForm(); }} 
@@ -1011,7 +917,140 @@ const Tasks = () => {
                                 <i className="fa-solid fa-xmark"></i>
                             </button>
                         </div>
-                        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+                        
+                        {editingTask && !isModalEditMode ? (
+                            <div className="p-6 space-y-5 animate-[fadeIn_0.2s_ease-out]">
+                                {/* Detail properties */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    {/* Status */}
+                                    <div className="bg-white/5 border border-white/10 rounded-xl p-3 flex items-center gap-3">
+                                        <div className={`w-8 h-8 rounded-lg ${getStatusIconAndColor(editingTask.status).bg} flex items-center justify-center flex-shrink-0`}>
+                                            <i className={`fa-solid ${getStatusIconAndColor(editingTask.status).icon} ${getStatusIconAndColor(editingTask.status).color} text-sm`}></i>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">Status</p>
+                                            <p className="text-white text-xs font-bold mt-0.5">{editingTask.status}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Zuweisung */}
+                                    <div className="bg-white/5 border border-white/10 rounded-xl p-3 flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center flex-shrink-0">
+                                            <i className="fa-solid fa-user-check text-sm"></i>
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">Zugewiesen an</p>
+                                            <p className="text-white text-xs font-bold truncate mt-0.5">{editingTask.assignee?.name || 'Keine Zuweisung'}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Projekt */}
+                                    <div className="bg-white/5 border border-white/10 rounded-xl p-3 flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center flex-shrink-0">
+                                            <i className="fa-solid fa-folder text-sm"></i>
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">Projekt</p>
+                                            {editingTask.project ? (
+                                                <p 
+                                                    onClick={() => { setIsModalOpen(false); navigate(`/projekte/${editingTask.project.id}`); }}
+                                                    className="text-emerald-400 hover:text-emerald-300 text-xs font-bold truncate mt-0.5 cursor-pointer underline decoration-dotted"
+                                                >
+                                                    {editingTask.project.project_number} - {editingTask.project.title}
+                                                </p>
+                                            ) : (
+                                                <p className="text-gray-400 text-xs mt-0.5">Kein Projekt</p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Fälligkeit */}
+                                    <div className="bg-white/5 border border-white/10 rounded-xl p-3 flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center flex-shrink-0">
+                                            <i className="fa-solid fa-calendar-day text-sm"></i>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">Fälligkeit</p>
+                                            <p className="text-white text-xs font-bold mt-0.5">
+                                                {editingTask.due_date ? new Date(editingTask.due_date).toLocaleDateString('de-DE') : 'Kein Datum'}
+                                                {editingTask.time ? ` um ${editingTask.time}` : ''}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Beschreibung */}
+                                <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-2">
+                                    <p className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">Beschreibung</p>
+                                    <p className="text-gray-200 text-sm whitespace-pre-wrap leading-relaxed max-h-[160px] overflow-y-auto custom-scrollbar">
+                                        {editingTask.description || <span className="text-gray-500 italic">Keine Beschreibung angegeben.</span>}
+                                    </p>
+                                </div>
+
+                                {/* Anhänge Grid */}
+                                {editingTask.attachments && editingTask.attachments.length > 0 && (
+                                    <div className="space-y-3">
+                                        <p className="text-[10px] text-gray-500 uppercase tracking-wider font-bold pl-1">Anhänge (Zum Vergrößern anklicken)</p>
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                            {editingTask.attachments.map((att, index) => {
+                                                const isImg = att.content_type?.startsWith('image/');
+                                                const isVid = att.content_type?.startsWith('video/');
+                                                return (
+                                                    <div 
+                                                        key={att.id} 
+                                                        onClick={() => openGallery(editingTask.attachments, index)}
+                                                        className="group relative aspect-video bg-black/40 rounded-xl overflow-hidden border border-white/10 hover:border-blue-500/50 hover:scale-[1.02] cursor-pointer transition-all shadow-md"
+                                                    >
+                                                        {isImg ? (
+                                                            <img 
+                                                                crossOrigin="anonymous" 
+                                                                src={getImageUrl(att.thumb_url || att.file_url)} 
+                                                                alt={att.file_name} 
+                                                                className="w-full h-full object-cover" 
+                                                            />
+                                                        ) : (
+                                                            <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 p-2 bg-gradient-to-b from-black/20 to-black/60">
+                                                                <i className={`fa-solid ${isVid ? 'fa-video text-blue-400' : 'fa-file-invoice text-gray-400'} text-2xl`}></i>
+                                                                <span className="text-[9px] text-gray-300 truncate w-full text-center px-1 font-medium">{att.file_name}</span>
+                                                            </div>
+                                                        )}
+                                                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                            <i className="fa-solid fa-magnifying-glass-plus text-white text-lg"></i>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Action buttons inside View Mode */}
+                                <div className="pt-4 flex justify-between items-center border-t border-white/10">
+                                    {canCreateTasks ? (
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setIsModalEditMode(true)} 
+                                            className="px-5 py-2 text-sm font-semibold text-white bg-blue-500 hover:bg-blue-600 rounded-xl transition-all shadow-[0_4px_15px_rgba(59,130,246,0.2)] flex items-center gap-2"
+                                        >
+                                            <i className="fa-solid fa-pen-to-square"></i> Bearbeiten
+                                        </button>
+                                    ) : (
+                                        <div></div>
+                                    )}
+                                    
+                                    <div className="flex gap-3">
+                                        <button 
+                                            type="button" 
+                                            onClick={() => { setIsModalOpen(false); resetForm(); }} 
+                                            className="px-5 py-2 text-sm font-medium text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-colors"
+                                        >
+                                            Schließen
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <form onSubmit={handleSubmit} className="p-6 space-y-5">
                             <div className="space-y-1">
                                 <label className="text-xs font-medium text-gray-400 pl-1">Titel</label>
                                 <div className="relative">
@@ -1175,8 +1214,19 @@ const Tasks = () => {
                             </div>
 
                             <div className="pt-4 flex justify-end gap-3 border-t border-white/10">
-                                <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 text-sm font-medium text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-colors">
-                                    Abbrechen
+                                <button 
+                                    type="button" 
+                                    onClick={() => { 
+                                        if (editingTask) {
+                                            setIsModalEditMode(false);
+                                        } else {
+                                            setIsModalOpen(false); 
+                                            resetForm(); 
+                                        }
+                                    }} 
+                                    className="px-5 py-2.5 text-sm font-medium text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-colors"
+                                >
+                                    {editingTask ? 'Zurück zur Ansicht' : 'Abbrechen'}
                                 </button>
                                 <button 
                                     type="submit" 
@@ -1194,6 +1244,7 @@ const Tasks = () => {
                                 </button>
                             </div>
                         </form>
+                    )}
                     </div>
                 </div>
             )}
