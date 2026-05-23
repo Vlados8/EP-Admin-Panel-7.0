@@ -34,6 +34,502 @@ const Tasks = () => {
     const [galleryItems, setGalleryItems] = useState([]);
     const [galleryIndex, setGalleryIndex] = useState(0);
 
+    // View Modes
+    const [viewMode, setViewMode] = useState('grid');
+    const [calendarTab, setCalendarTab] = useState('month');
+    const [selectedDate, setSelectedDate] = useState(new Date());
+    const [selectedTimelineUserId, setSelectedTimelineUserId] = useState('');
+
+    useEffect(() => {
+        if (currentUser?.id && !selectedTimelineUserId) {
+            setSelectedTimelineUserId(currentUser.id);
+        }
+    }, [currentUser, users]);
+
+    const monthNames = [
+        'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+        'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'
+    ];
+    const dayNamesShort = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+    const dayNamesLong = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+
+    const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
+    const getFirstDayOfMonth = (year, month) => {
+        const day = new Date(year, month, 1).getDay();
+        return day === 0 ? 6 : day - 1; // Monday is 0, Sunday is 6
+    };
+
+    const getWeekDays = (d) => {
+        const date = new Date(d);
+        const day = date.getDay();
+        const diff = date.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
+        const monday = new Date(date.setDate(diff));
+        const days = [];
+        for (let i = 0; i < 7; i++) {
+            const nextDay = new Date(monday);
+            nextDay.setDate(monday.getDate() + i);
+            days.push(nextDay);
+        }
+        return days;
+    };
+
+    const formatDateString = (dateObj) => {
+        const y = dateObj.getFullYear();
+        const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const d = String(dateObj.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    };
+
+    const getTaskHour = (timeStr) => {
+        if (!timeStr) return null;
+        const parts = timeStr.split(':');
+        return parseInt(parts[0], 10);
+    };
+
+    const handleOpenModalForDate = (dateStr, assignedToId = '', timeStr = '') => {
+        resetForm();
+        setFormData({
+            title: '',
+            description: '',
+            status: 'In Arbeit',
+            assigned_to_id: assignedToId || currentUser?.id || '',
+            project_id: '',
+            due_date: dateStr || '',
+            time: timeStr || ''
+        });
+        setIsModalOpen(true);
+    };
+
+    const handlePrevDate = () => {
+        if (calendarTab === 'month') {
+            setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth() - 1, 1));
+        } else if (calendarTab === 'timeline') {
+            setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() - 1));
+        } else if (calendarTab === 'week') {
+            setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() - 7));
+        }
+    };
+
+    const handleNextDate = () => {
+        if (calendarTab === 'month') {
+            setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 1));
+        } else if (calendarTab === 'timeline') {
+            setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() + 1));
+        } else if (calendarTab === 'week') {
+            setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() + 7));
+        }
+    };
+
+    const handleSetToday = () => {
+        setSelectedDate(new Date());
+    };
+
+    const getCalendarNavTitle = () => {
+        if (calendarTab === 'month') {
+            return `${monthNames[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`;
+        } else if (calendarTab === 'timeline') {
+            return `${dayNamesLong[selectedDate.getDay()]}, ${selectedDate.getDate()}. ${monthNames[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`;
+        } else if (calendarTab === 'week') {
+            const weekDays = getWeekDays(selectedDate);
+            const startStr = `${weekDays[0].getDate()}. ${monthNames[weekDays[0].getMonth()]}`;
+            const endStr = `${weekDays[6].getDate()}. ${monthNames[weekDays[6].getMonth()]} ${weekDays[6].getFullYear()}`;
+            return `${startStr} - ${endStr}`;
+        }
+        return '';
+    };
+
+    const renderCompactTaskCard = (t) => {
+        const statusUI = getStatusIconAndColor(t.status);
+        return (
+            <div
+                key={t.id}
+                onClick={(e) => { e.stopPropagation(); handleOpenModal(t); }}
+                className={`p-2.5 rounded-xl border border-white/10 bg-black/60 hover:bg-black/80 flex flex-col justify-between gap-1.5 cursor-pointer border-l-4 ${statusUI.border} transition-all shadow-md group/card`}
+                title={`${t.title} (${t.status})`}
+            >
+                <div className="flex justify-between items-start gap-1">
+                    <span className="text-[10px] font-bold text-white truncate max-w-[110px] leading-tight group-hover/card:text-blue-400 transition-colors">
+                        {t.title}
+                    </span>
+                    <i className={`fa-solid ${statusUI.icon} ${statusUI.color} text-[8px] shrink-0`}></i>
+                </div>
+                
+                <div className="flex items-center justify-between text-[8px] text-gray-500 font-bold">
+                    {t.time ? (
+                        <span className="flex items-center gap-0.5">
+                            <i className="fa-regular fa-clock text-[7px] opacity-75"></i>
+                            {t.time}
+                        </span>
+                    ) : (
+                        <span>Ganztägig</span>
+                    )}
+                    {t.project && (
+                        <span className="text-emerald-400 bg-emerald-400/10 px-1 rounded truncate max-w-[60px]">
+                            {t.project.project_number}
+                        </span>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    const renderMonthView = () => {
+        const year = selectedDate.getFullYear();
+        const month = selectedDate.getMonth();
+        
+        const daysInMonth = getDaysInMonth(year, month);
+        const firstDayIndex = getFirstDayOfMonth(year, month);
+        
+        const prevMonthDays = getDaysInMonth(year, month - 1);
+        
+        const gridDays = [];
+        
+        // Prev month days padding
+        for (let i = firstDayIndex - 1; i >= 0; i--) {
+            gridDays.push({
+                day: prevMonthDays - i,
+                isCurrentMonth: false,
+                dateObj: new Date(year, month - 1, prevMonthDays - i)
+            });
+        }
+        
+        // Current month days
+        for (let i = 1; i <= daysInMonth; i++) {
+            gridDays.push({
+                day: i,
+                isCurrentMonth: true,
+                dateObj: new Date(year, month, i)
+            });
+        }
+        
+        // Next month days padding (fill grid of 42 or 35 cells)
+        const totalCells = gridDays.length > 35 ? 42 : 35;
+        const nextMonthPadding = totalCells - gridDays.length;
+        for (let i = 1; i <= nextMonthPadding; i++) {
+            gridDays.push({
+                day: i,
+                isCurrentMonth: false,
+                dateObj: new Date(year, month + 1, i)
+            });
+        }
+        
+        return (
+            <div className="glass-card rounded-2xl border border-white/10 p-5 bg-black/20 animate-[fadeIn_0.3s_ease-out] w-full overflow-x-auto">
+                <div className="min-w-[700px]">
+                    {/* Days of week header */}
+                    <div className="grid grid-cols-7 gap-2 mb-3">
+                        {dayNamesShort.map((day, idx) => (
+                            <div key={idx} className="text-center text-xs font-bold text-gray-500 uppercase tracking-widest py-2">
+                                {day}
+                            </div>
+                        ))}
+                    </div>
+                    
+                    {/* Cells Grid */}
+                    <div className="grid grid-cols-7 gap-2">
+                        {gridDays.map((cell, idx) => {
+                            const dateStr = formatDateString(cell.dateObj);
+                            const isToday = formatDateString(new Date()) === dateStr;
+                            
+                            const dayTasks = displayedTasks.filter(t => t.due_date === dateStr);
+                            
+                            return (
+                                <div 
+                                    key={idx} 
+                                    className={`min-h-[110px] rounded-xl border p-2 flex flex-col justify-between group relative transition-all ${
+                                        cell.isCurrentMonth 
+                                            ? 'bg-white/5 border-white/10 hover:border-blue-500/50 hover:bg-blue-500/5' 
+                                            : 'bg-white/[0.01] border-white/5 opacity-40 hover:opacity-60'
+                                    } ${isToday ? 'border-blue-500 ring-1 ring-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.15)] bg-blue-500/5' : ''}`}
+                                >
+                                    <div className="flex justify-between items-center mb-1">
+                                        <span className={`text-xs font-black ${isToday ? 'text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-md' : 'text-gray-400'}`}>
+                                            {cell.day}
+                                        </span>
+                                        
+                                        {/* Inline Add Button on Hover */}
+                                        <button
+                                            type="button"
+                                            onClick={() => handleOpenModalForDate(dateStr)}
+                                            className="opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 rounded-md bg-blue-500/20 text-blue-400 hover:bg-blue-500 hover:text-white flex items-center justify-center text-[10px]"
+                                            title="Aufgabe an diesem Tag erstellen"
+                                        >
+                                            <i className="fa-solid fa-plus"></i>
+                                        </button>
+                                    </div>
+                                    
+                                    {/* Day Tasks Pills list */}
+                                    <div className="flex-1 space-y-1.5 overflow-y-auto max-h-[85px] pr-1 custom-scrollbar">
+                                        {dayTasks.map(t => {
+                                            const statusUI = getStatusIconAndColor(t.status);
+                                            return (
+                                                <div
+                                                    key={t.id}
+                                                    onClick={(e) => { e.stopPropagation(); handleOpenModal(t); }}
+                                                    className={`px-2 py-1 rounded-lg border border-white/5 flex items-center justify-between gap-1.5 cursor-pointer bg-black/40 hover:bg-black/60 transition-all ${statusUI.color} border-l-[3px] ${statusUI.border}`}
+                                                    title={`${t.time ? `${t.time} - ` : ''}${t.title} (${t.status})`}
+                                                >
+                                                    <div className="flex items-center gap-1 min-w-0 flex-1">
+                                                        {t.time && (
+                                                            <span className="text-[9px] font-black opacity-80 shrink-0">
+                                                                {t.time}
+                                                            </span>
+                                                        )}
+                                                        <span className="text-[10px] font-bold truncate flex-1 leading-tight">
+                                                            {t.title}
+                                                        </span>
+                                                    </div>
+                                                    <i className={`fa-solid ${statusUI.icon} text-[9px] shrink-0 opacity-70`}></i>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const renderTimelineView = () => {
+        const dateStr = formatDateString(selectedDate);
+        
+        const timelineUsers = [
+            ...assignableUsers,
+            ...(assignableUsers.some(u => u.id === currentUser?.id) ? [] : [currentUser])
+        ].filter(Boolean);
+        
+        const activeTasks = displayedTasks.filter(t => t.due_date === dateStr);
+        
+        const hours = [];
+        for (let i = 7; i <= 20; i++) {
+            hours.push(i);
+        }
+        
+        return (
+            <div className="glass-card rounded-2xl border border-white/10 p-5 bg-black/20 overflow-x-auto custom-scrollbar animate-[fadeIn_0.3s_ease-out]">
+                <div className="min-w-[900px] flex flex-col">
+                    {/* Columns Header (User Avatars) */}
+                    <div className="flex border-b border-white/10 pb-3 mb-2">
+                        {/* Time label placeholder */}
+                        <div className="w-24 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-widest text-center self-end">
+                            Uhrzeit
+                        </div>
+                        {/* User Columns */}
+                        <div className="flex flex-1 gap-3">
+                            {timelineUsers.map(user => {
+                                const initials = user.name?.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+                                return (
+                                    <div key={user.id} className="flex-1 min-w-[150px] bg-white/5 border border-white/10 p-3 rounded-xl flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
+                                            <span className="text-blue-400 text-xs font-bold">{initials}</span>
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="text-white text-xs font-bold truncate leading-tight">{user.name}</p>
+                                            <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">
+                                                {user.role?.name || user.role || 'Team'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                    
+                    {/* Ganztägig (All Day) Row */}
+                    <div className="flex border-b border-white/5 py-2.5 bg-white/[0.02] rounded-xl mb-3 border border-white/10">
+                        <div className="w-24 shrink-0 flex flex-col items-center justify-center px-2">
+                            <span className="text-[9px] font-black uppercase text-gray-500 tracking-wider">Ganztägig</span>
+                            <i className="fa-solid fa-umbrella text-gray-600 text-xs mt-1"></i>
+                        </div>
+                        <div className="flex flex-1 gap-3">
+                            {timelineUsers.map(user => {
+                                const userAllDayTasks = activeTasks.filter(t => t.assigned_to_id === user.id && !t.time);
+                                return (
+                                    <div key={user.id} className="flex-1 min-w-[150px] space-y-1.5 px-1 min-h-[50px] justify-center flex flex-col">
+                                        {userAllDayTasks.map(t => renderCompactTaskCard(t))}
+                                        {userAllDayTasks.length === 0 && (
+                                            <span className="text-[10px] text-gray-600 italic text-center font-medium">Keine</span>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                    
+                    {/* Hourly Rows */}
+                    <div className="space-y-2">
+                        {hours.map(hour => {
+                            const hourStr = `${String(hour).padStart(2, '0')}:00`;
+                            return (
+                                <div key={hour} className="flex items-stretch min-h-[85px] border-b border-white/5 pb-2">
+                                    {/* Hour Label */}
+                                    <div className="w-24 shrink-0 flex items-center justify-center font-black text-sm text-gray-500">
+                                        <i className="fa-regular fa-clock text-xs text-gray-600 mr-1.5"></i>
+                                        {hourStr}
+                                    </div>
+                                    
+                                    {/* Slots per user */}
+                                    <div className="flex flex-1 gap-3">
+                                        {timelineUsers.map(user => {
+                                            const userHourTasks = activeTasks.filter(t => {
+                                                if (t.assigned_to_id !== user.id) return false;
+                                                const taskHour = getTaskHour(t.time);
+                                                return taskHour === hour;
+                                            });
+                                            
+                                            return (
+                                                <div 
+                                                    key={user.id} 
+                                                    className="flex-1 min-w-[150px] bg-white/[0.02] hover:bg-blue-500/[0.03] border border-white/5 hover:border-blue-500/20 rounded-xl p-2 flex flex-col justify-between group relative transition-all"
+                                                >
+                                                    <div className="space-y-1.5 flex-1 flex flex-col justify-center">
+                                                        {userHourTasks.map(t => renderCompactTaskCard(t))}
+                                                    </div>
+                                                    
+                                                    {/* Inline Add Button inside specific Slot */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleOpenModalForDate(dateStr, user.id, `${String(hour).padStart(2, '0')}:00`)}
+                                                        className="absolute bottom-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 rounded-md bg-blue-500/20 text-blue-400 hover:bg-blue-500 hover:text-white flex items-center justify-center text-[10px]"
+                                                        title={`Aufgabe für ${user.name} um ${hourStr} erstellen`}
+                                                    >
+                                                        <i className="fa-solid fa-plus"></i>
+                                                    </button>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const renderWeekView = () => {
+        const weekDays = getWeekDays(selectedDate);
+        
+        const weekTasks = displayedTasks.filter(t => {
+            if (!t.assigned_to_id || t.assigned_to_id.toString() !== selectedTimelineUserId.toString()) return false;
+            return weekDays.some(day => formatDateString(day) === t.due_date);
+        });
+        
+        const hours = [];
+        for (let i = 7; i <= 20; i++) {
+            hours.push(i);
+        }
+        
+        return (
+            <div className="glass-card rounded-2xl border border-white/10 p-5 bg-black/20 overflow-x-auto custom-scrollbar animate-[fadeIn_0.3s_ease-out]">
+                <div className="min-w-[900px] flex flex-col">
+                    {/* Columns Header (Days Mon-Sun) */}
+                    <div className="flex border-b border-white/10 pb-3 mb-2">
+                        {/* Time label placeholder */}
+                        <div className="w-24 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-widest text-center self-end">
+                            Uhrzeit
+                        </div>
+                        {/* Week Days Columns */}
+                        <div className="flex flex-1 gap-3">
+                            {weekDays.map((day, idx) => {
+                                const isToday = formatDateString(new Date()) === formatDateString(day);
+                                return (
+                                    <div key={idx} className={`flex-1 min-w-[110px] p-3 rounded-xl flex flex-col items-center justify-center border ${
+                                        isToday 
+                                            ? 'bg-blue-500/10 border-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.1)]' 
+                                            : 'bg-white/5 border-white/10'
+                                    }`}>
+                                        <p className={`text-xs font-black uppercase tracking-wider ${isToday ? 'text-blue-400' : 'text-gray-400'}`}>
+                                            {dayNamesShort[idx]}
+                                        </p>
+                                        <span className={`text-sm font-black mt-1 ${isToday ? 'text-white' : 'text-gray-300'}`}>
+                                            {day.getDate()}.{String(day.getMonth() + 1).padStart(2, '0')}
+                                        </span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                    
+                    {/* Ganztägig (All Day) Row */}
+                    <div className="flex border-b border-white/5 py-2.5 bg-white/[0.02] rounded-xl mb-3 border border-white/10">
+                        <div className="w-24 shrink-0 flex flex-col items-center justify-center px-2">
+                            <span className="text-[9px] font-black uppercase text-gray-500 tracking-wider">Ganztägig</span>
+                            <i className="fa-solid fa-umbrella text-gray-600 text-xs mt-1"></i>
+                        </div>
+                        <div className="flex flex-1 gap-3">
+                            {weekDays.map((day, idx) => {
+                                const dateStr = formatDateString(day);
+                                const dayAllDayTasks = weekTasks.filter(t => t.due_date === dateStr && !t.time);
+                                return (
+                                    <div key={idx} className="flex-1 min-w-[110px] space-y-1.5 px-1 min-h-[50px] justify-center flex flex-col">
+                                        {dayAllDayTasks.map(t => renderCompactTaskCard(t))}
+                                        {dayAllDayTasks.length === 0 && (
+                                            <span className="text-[10px] text-gray-600 italic text-center font-medium">Keine</span>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                    
+                    {/* Hourly Rows */}
+                    <div className="space-y-2">
+                        {hours.map(hour => {
+                            const hourStr = `${String(hour).padStart(2, '0')}:00`;
+                            return (
+                                <div key={hour} className="flex items-stretch min-h-[85px] border-b border-white/5 pb-2">
+                                    {/* Hour Label */}
+                                    <div className="w-24 shrink-0 flex items-center justify-center font-black text-sm text-gray-500">
+                                        <i className="fa-regular fa-clock text-xs text-gray-600 mr-1.5"></i>
+                                        {hourStr}
+                                    </div>
+                                    
+                                    {/* Slots per day */}
+                                    <div className="flex flex-1 gap-3">
+                                        {weekDays.map((day, idx) => {
+                                            const dateStr = formatDateString(day);
+                                            const dayHourTasks = weekTasks.filter(t => {
+                                                if (t.due_date !== dateStr) return false;
+                                                const taskHour = getTaskHour(t.time);
+                                                return taskHour === hour;
+                                            });
+                                            
+                                            return (
+                                                <div 
+                                                    key={idx} 
+                                                    className="flex-1 min-w-[110px] bg-white/[0.02] hover:bg-blue-500/[0.03] border border-white/5 hover:border-blue-500/20 rounded-xl p-2 flex flex-col justify-between group relative transition-all"
+                                                >
+                                                    <div className="space-y-1.5 flex-1 flex flex-col justify-center">
+                                                        {dayHourTasks.map(t => renderCompactTaskCard(t))}
+                                                    </div>
+                                                    
+                                                    {/* Inline Add Button inside specific Slot */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleOpenModalForDate(dateStr, selectedTimelineUserId, `${String(hour).padStart(2, '0')}:00`)}
+                                                        className="absolute bottom-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 rounded-md bg-blue-500/20 text-blue-400 hover:bg-blue-500 hover:text-white flex items-center justify-center text-[10px]"
+                                                        title={`Aufgabe für ${dayNamesLong[day.getDay()]} um ${hourStr} erstellen`}
+                                                    >
+                                                        <i className="fa-solid fa-plus"></i>
+                                                    </button>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     const openGallery = (items, index) => {
         setGalleryItems(items);
         setGalleryIndex(index);
@@ -245,7 +741,33 @@ const Tasks = () => {
                     <p className="text-gray-400 text-sm mt-1">Aufgaben verwalten und zuweisen.</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-                    {canCreateTasks && (
+                    {/* View Switcher Toggle */}
+                    <div className="flex bg-white/5 p-1 rounded-xl border border-white/10 mr-2">
+                        <button
+                            type="button"
+                            onClick={() => setViewMode('grid')}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all ${
+                                viewMode === 'grid' 
+                                    ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20' 
+                                    : 'text-gray-400 hover:text-white'
+                            }`}
+                        >
+                            <i className="fa-solid fa-clipboard-list"></i> Kachelansicht
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setViewMode('calendar')}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all ${
+                                viewMode === 'calendar' 
+                                    ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20' 
+                                    : 'text-gray-400 hover:text-white'
+                            }`}
+                        >
+                            <i className="fa-solid fa-calendar-days"></i> Kalender & Zeitplan
+                        </button>
+                    </div>
+
+                    {canCreateTasks && viewMode === 'grid' && (
                         <div className="relative flex-grow md:flex-grow-0">
                             <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
                             <input
@@ -265,118 +787,214 @@ const Tasks = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {loading ? (
-                    <div className="col-span-full py-12 text-center text-gray-400">
-                        <i className="fa-solid fa-circle-notch fa-spin text-2xl mb-2"></i>
-                        <p>Aufgaben werden geladen...</p>
-                    </div>
-                ) : displayedTasks.length === 0 ? (
-                    <div className="col-span-full py-12 text-center text-gray-400 bg-white/5 rounded-2xl border border-white/10 border-dashed">
-                        <i className="fa-solid fa-clipboard-list text-4xl mb-3 opacity-50"></i>
-                        <p>Keine Aufgaben gefunden.</p>
-                    </div>
-                ) : (
-                    displayedTasks.map(task => {
-                        const statusUI = getStatusIconAndColor(task.status);
-                        const isDone = task.status === 'Erledigt';
+            {viewMode === 'grid' ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {loading ? (
+                        <div className="col-span-full py-12 text-center text-gray-400">
+                            <i className="fa-solid fa-circle-notch fa-spin text-2xl mb-2"></i>
+                            <p>Aufgaben werden geladen...</p>
+                        </div>
+                    ) : displayedTasks.length === 0 ? (
+                        <div className="col-span-full py-12 text-center text-gray-400 bg-white/5 rounded-2xl border border-white/10 border-dashed">
+                            <i className="fa-solid fa-clipboard-list text-4xl mb-3 opacity-50"></i>
+                            <p>Keine Aufgaben gefunden.</p>
+                        </div>
+                    ) : (
+                        displayedTasks.map(task => {
+                            const statusUI = getStatusIconAndColor(task.status);
+                            const isDone = task.status === 'Erledigt';
 
-                        return (
-                            <div key={task.id} className={`glass-card p-5 rounded-2xl border-l-[6px] ${statusUI.border} ${isDone ? 'opacity-60' : ''} flex flex-col justify-between hover:-translate-y-1 transition-transform duration-300 shadow-lg`}>
-                                <div>
-                                    <div className="flex justify-between items-start mb-3">
-                                        <div className="flex flex-col gap-1">
-                                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${statusUI.bg} ${statusUI.color} w-fit`}>
-                                                <i className={`fa-solid ${statusUI.icon}`}></i> {task.status}
-                                            </span>
-                                            {task.due_date && (
-                                                <span className={`text-xs mt-1 font-medium ${new Date(task.due_date) < new Date() && !isDone ? 'text-red-400' : 'text-gray-400'}`}>
-                                                    <i className="fa-regular fa-calendar mr-1"></i>
-                                                    Bis: {new Date(task.due_date).toLocaleDateString('de-DE')}
-                                                    {task.time && ` ${task.time}`}
+                            return (
+                                <div key={task.id} className={`glass-card p-5 rounded-2xl border-l-[6px] ${statusUI.border} ${isDone ? 'opacity-60' : ''} flex flex-col justify-between hover:-translate-y-1 transition-transform duration-300 shadow-lg`}>
+                                    <div>
+                                        <div className="flex justify-between items-start mb-3">
+                                            <div className="flex flex-col gap-1">
+                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${statusUI.bg} ${statusUI.color} w-fit`}>
+                                                    <i className={`fa-solid ${statusUI.icon}`}></i> {task.status}
                                                 </span>
-                                            )}
-                                        </div>
-                                        <div className="flex gap-2">
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); handleOpenModal(task); }}
-                                                className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/5 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
-                                                title="Aufgabe bearbeiten"
-                                            >
-                                                <i className="fa-solid fa-pen-to-square"></i>
-                                            </button>
-                                            <button
-                                                onClick={(e) => toggleStatus(task, e)}
-                                                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors bg-white/5 text-gray-400 hover:text-white hover:bg-white/10`}
-                                                title="Status ändern"
-                                            >
-                                                <i className="fa-solid fa-rotate"></i>
-                                            </button>
-                                            {(currentUserRole === 'Admin' || currentUserRole === 'Büro' || task.creator?.id === currentUser?.id) && canCreateTasks && (
+                                                {task.due_date && (
+                                                    <span className={`text-xs mt-1 font-medium ${new Date(task.due_date) < new Date() && !isDone ? 'text-red-400' : 'text-gray-400'}`}>
+                                                        <i className="fa-regular fa-calendar mr-1"></i>
+                                                        Bis: {new Date(task.due_date).toLocaleDateString('de-DE')}
+                                                        {task.time && ` ${task.time}`}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="flex gap-2">
                                                 <button
-                                                    onClick={(e) => deleteTask(task.id, e)}
-                                                    className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                                                    title="Aufgabe löschen"
+                                                    onClick={(e) => { e.stopPropagation(); handleOpenModal(task); }}
+                                                    className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/5 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
+                                                    title="Aufgabe bearbeiten"
                                                 >
-                                                    <i className="fa-solid fa-trash"></i>
+                                                    <i className="fa-solid fa-pen-to-square"></i>
                                                 </button>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    <h4 className={`font-semibold text-lg text-white mb-2 ${isDone ? 'line-through text-gray-400' : ''}`}>{task.title}</h4>
-                                    <p className={`text-sm mb-4 line-clamp-3 ${isDone ? 'text-gray-500' : 'text-gray-300'}`}>{task.description}</p>
-
-                                    {/* Attachments Display */}
-                                    {task.attachments && task.attachments.length > 0 && (
-                                        <div className="mt-2 space-y-2">
-                                            <p className="text-[10px] uppercase tracking-wider text-gray-500 font-bold">Anhänge</p>
-                                            <div className="flex flex-wrap gap-2">
-                                                {task.attachments.map((att, index) => (
-                                                    <div 
-                                                        key={att.id} 
-                                                        onClick={(e) => { e.stopPropagation(); openGallery(task.attachments, index); }}
-                                                        className="group relative flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg p-1 hover:bg-white/10 transition-all cursor-pointer"
+                                                <button
+                                                    onClick={(e) => toggleStatus(task, e)}
+                                                    className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors bg-white/5 text-gray-400 hover:text-white hover:bg-white/10`}
+                                                    title="Status ändern"
+                                                >
+                                                    <i className="fa-solid fa-rotate"></i>
+                                                </button>
+                                                {(currentUserRole === 'Admin' || currentUserRole === 'Büro' || task.creator?.id === currentUser?.id) && canCreateTasks && (
+                                                    <button
+                                                        onClick={(e) => deleteTask(task.id, e)}
+                                                        className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                                                        title="Aufgabe löschen"
                                                     >
-                                                        <div className="w-8 h-8 rounded bg-blue-500/20 text-blue-400 flex items-center justify-center flex-shrink-0">
-                                                            <i className={`fa-solid ${att.content_type?.startsWith('image/') ? 'fa-image' : att.content_type?.startsWith('video/') ? 'fa-video' : 'fa-file'} text-xs`}></i>
-                                                        </div>
-                                                        <span className="text-[10px] text-gray-300 truncate max-w-[80px] pr-2" title={att.file_name}>{att.file_name}</span>
-                                                    </div>
-                                                ))}
+                                                        <i className="fa-solid fa-trash"></i>
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
-                                    )}
-                                </div>
 
-                                <div className="mt-4 pt-4 border-t border-white/10 flex flex-col gap-2">
-                                    <div className="flex justify-between items-center text-xs text-gray-400">
-                                        <div className="flex items-center gap-1.5" title={`Erstellt von: ${task.creator?.name || 'Unbekannt'}`}>
-                                            <i className="fa-solid fa-arrow-right-from-bracket opacity-70"></i>
-                                            <span>{task.creator?.name || 'Unbekannt'}</span>
-                                        </div>
-                                        <div className="flex items-center gap-1.5 font-medium text-white bg-white/10 px-2 py-1 rounded-md" title="Zugewiesen an">
-                                            <i className="fa-solid fa-user-check opacity-70 text-blue-400"></i>
-                                            <span>{task.assignee?.name || 'Unbekannt'}</span>
-                                        </div>
+                                        <h4 className={`font-semibold text-lg text-white mb-2 ${isDone ? 'line-through text-gray-400' : ''}`}>{task.title}</h4>
+                                        <p className={`text-sm mb-4 line-clamp-3 ${isDone ? 'text-gray-500' : 'text-gray-300'}`}>{task.description}</p>
+
+                                        {/* Attachments Display */}
+                                        {task.attachments && task.attachments.length > 0 && (
+                                            <div className="mt-2 space-y-2">
+                                                <p className="text-[10px] uppercase tracking-wider text-gray-500 font-bold">Anhänge</p>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {task.attachments.map((att, index) => (
+                                                        <div 
+                                                            key={att.id} 
+                                                            onClick={(e) => { e.stopPropagation(); openGallery(task.attachments, index); }}
+                                                            className="group relative flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg p-1 hover:bg-white/10 transition-all cursor-pointer"
+                                                        >
+                                                            <div className="w-8 h-8 rounded bg-blue-500/20 text-blue-400 flex items-center justify-center flex-shrink-0">
+                                                                <i className={`fa-solid ${att.content_type?.startsWith('image/') ? 'fa-image' : att.content_type?.startsWith('video/') ? 'fa-video' : 'fa-file'} text-xs`}></i>
+                                                            </div>
+                                                            <span className="text-[10px] text-gray-300 truncate max-w-[80px] pr-2" title={att.file_name}>{att.file_name}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
 
-                                    {task.project && (
-                                        <span
-                                            onClick={(e) => { e.stopPropagation(); navigate(`/projekte/${task.project.id}`); }}
-                                            className="inline-flex items-center gap-1 mt-1 text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded-md w-fit border border-emerald-400/20 max-w-full truncate cursor-pointer hover:bg-emerald-400/20 transition-colors text-xs"
-                                            title={`${task.project.project_number} - ${task.project.title}`}
-                                        >
-                                            <i className="fa-solid fa-folder shrink-0"></i>
-                                            <span className="truncate">{task.project.project_number} - {task.project.title}</span>
-                                        </span>
-                                    )}
+                                    <div className="mt-4 pt-4 border-t border-white/10 flex flex-col gap-2">
+                                        <div className="flex justify-between items-center text-xs text-gray-400">
+                                            <div className="flex items-center gap-1.5" title={`Erstellt von: ${task.creator?.name || 'Unbekannt'}`}>
+                                                <i className="fa-solid fa-arrow-right-from-bracket opacity-70"></i>
+                                                <span>{task.creator?.name || 'Unbekannt'}</span>
+                                            </div>
+                                            <div className="flex items-center gap-1.5 font-medium text-white bg-white/10 px-2 py-1 rounded-md" title="Zugewiesen an">
+                                                <i className="fa-solid fa-user-check opacity-70 text-blue-400"></i>
+                                                <span>{task.assignee?.name || 'Unbekannt'}</span>
+                                            </div>
+                                        </div>
+
+                                        {task.project && (
+                                            <span
+                                                onClick={(e) => { e.stopPropagation(); navigate(`/projekte/${task.project.id}`); }}
+                                                className="inline-flex items-center gap-1 mt-1 text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded-md w-fit border border-emerald-400/20 max-w-full truncate cursor-pointer hover:bg-emerald-400/20 transition-colors text-xs"
+                                                title={`${task.project.project_number} - ${task.project.title}`}
+                                            >
+                                                <i className="fa-solid fa-folder shrink-0"></i>
+                                                <span className="truncate">{task.project.project_number} - {task.project.title}</span>
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
+                            )
+                        })
+                    )}
+                </div>
+            ) : (
+                <div className="space-y-6">
+                    {/* Calendar Mode Tabs & Date Nav */}
+                    <div className="glass-card p-4 rounded-2xl border border-white/10 flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-4 bg-black/30 animate-[fadeIn_0.3s_ease-out]">
+                        {/* Tab Switchers */}
+                        <div className="flex bg-black/40 p-1 rounded-xl border border-white/5 self-start">
+                            <button
+                                type="button"
+                                onClick={() => setCalendarTab('month')}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+                                    calendarTab === 'month' 
+                                        ? 'bg-white/10 text-white border border-white/10' 
+                                        : 'text-gray-400 hover:text-white'
+                                }`}
+                            >
+                                <i className="fa-solid fa-calendar"></i> Monatsansicht
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setCalendarTab('timeline')}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+                                    calendarTab === 'timeline' 
+                                        ? 'bg-white/10 text-white border border-white/10' 
+                                        : 'text-gray-400 hover:text-white'
+                                }`}
+                            >
+                                <i className="fa-solid fa-timeline"></i> Team-Tagesplan
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setCalendarTab('week')}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+                                    calendarTab === 'week' 
+                                        ? 'bg-white/10 text-white border border-white/10' 
+                                        : 'text-gray-400 hover:text-white'
+                                }`}
+                            >
+                                <i className="fa-solid fa-calendar-week"></i> Wochenplan
+                            </button>
+                        </div>
+
+                        {/* Date Navigation Controllers */}
+                        <div className="flex items-center gap-3 justify-between lg:justify-end">
+                            <div className="flex items-center bg-black/40 rounded-xl border border-white/5 overflow-hidden p-0.5">
+                                <button 
+                                    type="button"
+                                    onClick={handlePrevDate}
+                                    className="p-2 text-gray-400 hover:text-white hover:bg-white/5 transition-colors rounded-lg"
+                                >
+                                    <i className="fa-solid fa-chevron-left text-sm"></i>
+                                </button>
+                                <button 
+                                    type="button"
+                                    onClick={handleSetToday}
+                                    className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-blue-400 hover:text-white hover:bg-white/5 transition-colors rounded-lg border-x border-white/5"
+                                >
+                                    Heute
+                                </button>
+                                <button 
+                                    type="button"
+                                    onClick={handleNextDate}
+                                    className="p-2 text-gray-400 hover:text-white hover:bg-white/5 transition-colors rounded-lg"
+                                >
+                                    <i className="fa-solid fa-chevron-right text-sm"></i>
+                                </button>
                             </div>
-                        )
-                    })
-                )}
-            </div>
+                            
+                            <h3 className="text-white font-bold text-sm tracking-wide bg-white/5 border border-white/10 px-4 py-2 rounded-xl">
+                                {getCalendarNavTitle()}
+                            </h3>
+                        </div>
+
+                        {/* Weekly Timeline view: User Select Dropdown */}
+                        {calendarTab === 'week' && (
+                            <div className="flex items-center gap-2 self-stretch lg:self-auto min-w-[200px]">
+                                <i className="fa-solid fa-user-clock text-blue-400 text-sm"></i>
+                                <select
+                                    value={selectedTimelineUserId}
+                                    onChange={(e) => setSelectedTimelineUserId(e.target.value)}
+                                    className="flex-1 bg-black/40 border border-white/15 rounded-xl py-2 px-3 text-xs text-white focus:outline-none focus:border-blue-500 appearance-none [&>option]:bg-gray-900"
+                                >
+                                    {users.map(u => (
+                                        <option key={u.id} value={u.id}>Wochenplan: {u.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Sub-mode views contents */}
+                    {calendarTab === 'month' && renderMonthView()}
+                    {calendarTab === 'timeline' && renderTimelineView()}
+                    {calendarTab === 'week' && renderWeekView()}
+                </div>
+            )}
 
             {/* Modal for Creating Task */}
             {isModalOpen && (
