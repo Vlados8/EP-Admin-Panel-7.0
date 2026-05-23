@@ -12,12 +12,12 @@ const logger = require('../../utils/logger');
  */
 const uploadToR2 = async (localPath, destinationKey, contentType) => {
     try {
-        const fileContent = fs.readFileSync(localPath);
+        const fileStream = fs.createReadStream(localPath);
 
         const command = new PutObjectCommand({
             Bucket: R2_BUCKET_NAME,
             Key: destinationKey,
-            Body: fileContent,
+            Body: fileStream,
             ContentType: contentType,
         });
 

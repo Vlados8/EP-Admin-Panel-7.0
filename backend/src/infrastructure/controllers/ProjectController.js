@@ -369,6 +369,9 @@ exports.updateProject = async (req, res) => {
         if (basicInfo.subcategory_id !== undefined) basicInfo.subcategory_id = parseId(basicInfo.subcategory_id);
         if (basicInfo.start_date !== undefined) basicInfo.start_date = parseDate(basicInfo.start_date);
         if (basicInfo.end_date !== undefined) basicInfo.end_date = parseDate(basicInfo.end_date);
+        if (basicInfo.budget !== undefined) {
+            basicInfo.budget = (basicInfo.budget === '' || basicInfo.budget === null || basicInfo.budget === 'null') ? null : parseFloat(basicInfo.budget);
+        }
 
         const oldStatus = project.status;
         // Update basic info

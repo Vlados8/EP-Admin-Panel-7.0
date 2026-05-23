@@ -30,11 +30,15 @@ export const baseURL = getBaseUrl();
 export const serverDomain = baseURL.replace('/api/v1', '');
 export const frontendDomain = serverDomain.replace(':3001', ':5173');
 
+export const getFullUrl = (url: string | undefined | null) => {
+  if (!url) return '';
+  if (url.startsWith('http')) return url;
+  return `${serverDomain}${url.startsWith('/') ? '' : '/'}${url}`;
+};
+
 export const apiClient = axios.create({
   baseURL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  headers: {},
 });
 
 apiClient.interceptors.request.use(async (config) => {

@@ -43,6 +43,7 @@ router.get('/stats', auth.checkPermission('MANAGE_EMAIL_ACCOUNTS'), emailControl
 router.get('/', auth.checkPermission('VIEW_EMAILS'), emailController.getEmailAccounts);
 router.get('/domain', auth.checkPermission('VIEW_EMAILS'), emailController.getDomain);
 router.post('/send', auth.checkPermission('VIEW_EMAILS'), upload.array('attachments'), emailController.sendEmail);
+router.post('/send-bulk', auth.checkPermission('VIEW_EMAILS'), auth.restrictTo('Admin'), upload.array('attachments'), emailController.sendBulkEmail);
 
 // Message Management
 router.get('/messages', auth.checkPermission('VIEW_EMAILS'), emailController.getEmailMessages);

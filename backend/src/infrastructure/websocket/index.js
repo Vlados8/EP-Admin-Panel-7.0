@@ -183,7 +183,13 @@ const getIO = () => {
     return io;
 };
 
+const emitToCompany = (companyId, event, data) => {
+    if (!io) return;
+    io.to(`company_${companyId}`).emit(event, data);
+};
+
 module.exports = {
     initWebSocket,
-    getIO
+    getIO,
+    emitToCompany
 };

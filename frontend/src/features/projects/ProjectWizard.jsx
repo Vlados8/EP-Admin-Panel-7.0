@@ -118,7 +118,6 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
                 api.get('/users'),
                 api.get('/subcontractors')
             ]);
-            setInquiries(inqRes.data.data.inquiries || []);
             setCategories(catRes.data.data.categories || []);
             setUsers(userRes.data.data.users || []);
             setSubcontractors(subRes.data.data.subcontractors || []);
@@ -391,11 +390,13 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
                                             <select
                                                 value={selectedClientId}
                                                 onChange={(e) => setSelectedClientId(e.target.value)}
-                                                className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors text-center"
+                                                className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors text-center [&>option]:bg-slate-900"
                                             >
-                                                <option value="">-- Bitte wählen --</option>
+                                                <option value="" className="bg-slate-900 text-white">-- Bitte wählen --</option>
                                                 {clients.map(c => (
-                                                    <option key={c.id} value={c.id}>{c.name} {c.company ? `(${c.company})` : ''}</option>
+                                                    <option key={c.id} value={c.id} className="bg-slate-900 text-white">
+                                                        {c.name} {c.contact_person ? `(${c.contact_person})` : ''}
+                                                    </option>
                                                 ))}
                                             </select>
                                         </div>
@@ -407,9 +408,9 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
                                             </div>
                                             <div className="col-span-2 md:col-span-1">
                                                 <label className="block text-sm font-medium text-gray-400 mb-2 text-center">Kundentyp</label>
-                                                <select value={newClientData.type} onChange={e => setNewClientData({ ...newClientData, type: e.target.value })} className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-blue-500 focus:outline-none text-center">
-                                                    <option value="company">Firma</option>
-                                                    <option value="private">Privatperson</option>
+                                                <select value={newClientData.type} onChange={e => setNewClientData({ ...newClientData, type: e.target.value })} className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-blue-500 focus:outline-none text-center [&>option]:bg-slate-900">
+                                                    <option value="company" className="bg-slate-900 text-white">Firma</option>
+                                                    <option value="private" className="bg-slate-900 text-white">Privatperson</option>
                                                 </select>
                                             </div>
                                             <div className="col-span-2 md:col-span-1">
@@ -499,7 +500,7 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
                                     {initialData && initialData.category_id && catViewLevel === 'main' && (
                                         <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-4 rounded-xl max-w-2xl mx-auto text-center mb-6">
                                             <i className="fa-solid fa-check-circle mr-2"></i>
-                                            Die Antworten aus der Anfrage wurden bereits übernommen.
+                                            Die Antworten aus की Anfrage wurden bereits übernommen.
                                             <button
                                                 onClick={() => setStep(4)}
                                                 className="ml-4 underline hover:text-white transition-colors text-sm font-medium"
@@ -566,11 +567,11 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
                                                             const selectedAns = currentQuestion.answers?.find(a => a.id === parseInt(e.target.value));
                                                             if (selectedAns) handleAnswerQuestion(currentQuestion, selectedAns.answer_text, selectedAns.id, selectedAns.next_question_id);
                                                         }}
-                                                        className="w-full bg-slate-800 border-2 border-white/10 rounded-xl p-4 text-lg text-white appearance-none cursor-pointer hover:border-blue-500/50 transition-colors text-center focus:outline-none focus:border-blue-500"
+                                                        className="w-full bg-slate-800 border-2 border-white/10 rounded-xl p-4 text-lg text-white appearance-none cursor-pointer hover:border-blue-500/50 transition-colors text-center focus:outline-none focus:border-blue-500 [&>option]:bg-slate-900"
                                                     >
-                                                        <option value="">-- Bitte wählen --</option>
+                                                        <option value="" className="bg-slate-900 text-white">-- Bitte wählen --</option>
                                                         {currentQuestion.answers?.map(ans => (
-                                                            <option key={ans.id} value={ans.id}>{ans.answer_text}</option>
+                                                            <option key={ans.id} value={ans.id} className="bg-slate-900 text-white">{ans.answer_text}</option>
                                                         ))}
                                                     </select>
                                                     <div className="mt-4 flex justify-center text-gray-500">
@@ -679,10 +680,10 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
                                                             setTreeTopUser(e.target.value);
                                                             setTreeGL('');
                                                             setTreeWorker('');
-                                                        }} className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 text-center">
-                                                            <option value="">-- Person wählen --</option>
+                                                        }} className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 text-center [&>option]:bg-slate-900">
+                                                            <option value="" className="bg-slate-900 text-white">-- Person wählen --</option>
                                                             {users.filter(u => u.role?.name?.toLowerCase() === 'projektleiter').map(u => (
-                                                                <option key={u.id} value={u.id}>
+                                                                <option key={u.id} value={u.id} className="bg-slate-900 text-white">
                                                                     {u.name} {u.specialty ? `(${u.specialty})` : ''}
                                                                 </option>
                                                             ))}
@@ -734,151 +735,137 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
                                     </div>
 
                                     {/* INTERNAL USERS: GRUPPENLEITER */}
-                                    {(assignedUsers.some(au => au.role === 'projektleiter') || treeTopUser) && (
-                                        <div className="bg-white/5 border border-white/10 rounded-xl p-6 animate-[fadeIn_0.3s_ease-out] w-full max-w-4xl">
-                                            <h4 className="text-lg font-medium text-white mb-4 flex items-center justify-center gap-2">
-                                                <i className="fa-solid fa-users-gear text-emerald-400"></i> Gruppenleiter
-                                            </h4>
-                                            <div className="space-y-4 mb-2 relative">
-                                                <div className="bg-[#1e2336] border border-white/5 rounded-2xl p-6">
-                                                    <div className="flex gap-4 justify-center">
-                                                        <div className="flex-1 max-w-md mx-auto">
-                                                            <label className="block text-sm font-medium text-gray-400 mb-2 text-center">Person wählen</label>
-                                                            <select value={treeGL} onChange={e => {
-                                                                setTreeGL(e.target.value);
-                                                                setTreeWorker('');
-                                                            }} className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 text-center">
-                                                                <option value="">-- Person wählen --</option>
-                                                                {users.filter(u => {
-                                                                    const isGL = u.role?.name?.toLowerCase() === 'gruppenleiter';
-                                                                    const reportsToAssignedPL = assignedUsers.some(au => au.role === 'projektleiter' && au.user_id === u.manager_id);
-                                                                    const reportsToSelectedPL = treeTopUser && u.manager_id === treeTopUser;
-                                                                    return isGL && (reportsToAssignedPL || reportsToSelectedPL);
-                                                                }).map(u => (
-                                                                    <option key={u.id} value={u.id}>
-                                                                        {u.name} {u.specialty ? `(${u.specialty})` : ''} - Manager: {users.find(m => m.id === u.manager_id)?.name || 'N/A'}
-                                                                    </option>
-                                                                ))}
-                                                            </select>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex justify-center mt-4">
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.preventDefault();
-                                                                if (treeGL) {
-                                                                    const selectedUserObj = users.find(u => u.id === treeGL);
-                                                                    if (selectedUserObj && !assignedUsers.some(au => au.user_id === selectedUserObj.id)) {
-                                                                        setAssignedUsers([...assignedUsers, { user_id: selectedUserObj.id, role: 'gruppenleiter' }]);
-                                                                        setTreeGL('');
-                                                                    }
-                                                                }
-                                                            }}
-                                                            disabled={!treeGL}
-                                                            className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl font-medium transition-colors"
-                                                        >
-                                                            Zum Projekt hinzufügen
-                                                        </button>
+                                    <div className="bg-white/5 border border-white/10 rounded-xl p-6 w-full max-w-4xl">
+                                        <h4 className="text-lg font-medium text-white mb-4 flex items-center justify-center gap-2">
+                                            <i className="fa-solid fa-users-gear text-emerald-400"></i> Gruppenleiter
+                                        </h4>
+                                        <div className="space-y-4 mb-2 relative">
+                                            <div className="bg-[#1e2336] border border-white/5 rounded-2xl p-6">
+                                                <div className="flex gap-4 justify-center">
+                                                    <div className="flex-1 max-w-md mx-auto">
+                                                        <label className="block text-sm font-medium text-gray-400 mb-2 text-center">Person wählen</label>
+                                                        <select value={treeGL} onChange={e => {
+                                                            setTreeGL(e.target.value);
+                                                            setTreeWorker('');
+                                                        }} className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 text-center [&>option]:bg-slate-900">
+                                                            <option value="" className="bg-slate-900 text-white">-- Person wählen --</option>
+                                                            {users.filter(u => u.role?.name?.toLowerCase() === 'gruppenleiter').map(u => (
+                                                                <option key={u.id} value={u.id} className="bg-slate-900 text-white">
+                                                                    {u.name} {u.specialty ? `(${u.specialty})` : ''} - Manager: {users.find(m => m.id === u.manager_id)?.name || 'N/A'}
+                                                                </option>
+                                                            ))}
+                                                        </select>
                                                     </div>
                                                 </div>
-
-                                                {/* List of Added Gruppenleiters */}
-                                                {assignedUsers.filter(au => au.role === 'gruppenleiter').length > 0 && (
-                                                    <div className="space-y-3 mt-4">
-                                                        {assignedUsers.filter(au => au.role === 'gruppenleiter').map(au => {
-                                                            const u = users.find(user => user.id === au.user_id);
-                                                            return u ? (
-                                                                <div key={u.id} className="flex justify-between items-center bg-[#1e2336] border border-white/5 rounded-xl px-5 py-4">
-                                                                    <span className="text-white font-medium text-center block w-full">
-                                                                        {u.name} {u.specialty && <span className="text-gray-400 font-normal ml-1">({u.specialty})</span>}
-                                                                        <span className="text-gray-500 font-normal text-xs block">Manager: {users.find(m => m.id === u.manager_id)?.name || 'N/A'}</span>
-                                                                    </span>
-                                                                    <button onClick={(e) => {
-                                                                        e.preventDefault();
-                                                                        setAssignedUsers(assignedUsers.filter(x => x.user_id !== u.id));
-                                                                    }} className="text-red-400 hover:text-red-300 p-1 transition-colors">
-                                                                        <i className="fa-solid fa-trash-can"></i>
-                                                                    </button>
-                                                                </div>
-                                                            ) : null;
-                                                        })}
-                                                    </div>
-                                                )}
+                                                <div className="flex justify-center mt-4">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            if (treeGL) {
+                                                                const selectedUserObj = users.find(u => u.id === treeGL);
+                                                                if (selectedUserObj && !assignedUsers.some(au => au.user_id === selectedUserObj.id)) {
+                                                                    setAssignedUsers([...assignedUsers, { user_id: selectedUserObj.id, role: 'gruppenleiter' }]);
+                                                                    setTreeGL('');
+                                                                }
+                                                            }
+                                                        }}
+                                                        disabled={!treeGL}
+                                                        className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl font-medium transition-colors"
+                                                    >
+                                                        Zum Projekt hinzufügen
+                                                    </button>
+                                                </div>
                                             </div>
+
+                                            {/* List of Added Gruppenleiters */}
+                                            {assignedUsers.filter(au => au.role === 'gruppenleiter').length > 0 && (
+                                                <div className="space-y-3 mt-4">
+                                                    {assignedUsers.filter(au => au.role === 'gruppenleiter').map(au => {
+                                                        const u = users.find(user => user.id === au.user_id);
+                                                        return u ? (
+                                                            <div key={u.id} className="flex justify-between items-center bg-[#1e2336] border border-white/5 rounded-xl px-5 py-4">
+                                                                <span className="text-white font-medium text-center block w-full">
+                                                                    {u.name} {u.specialty && <span className="text-gray-400 font-normal ml-1">({u.specialty})</span>}
+                                                                    <span className="text-gray-500 font-normal text-xs block">Manager: {users.find(m => m.id === u.manager_id)?.name || 'N/A'}</span>
+                                                                </span>
+                                                                <button onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    setAssignedUsers(assignedUsers.filter(x => x.user_id !== u.id));
+                                                                }} className="text-red-400 hover:text-red-300 p-1 transition-colors">
+                                                                    <i className="fa-solid fa-trash-can"></i>
+                                                                </button>
+                                                            </div>
+                                                        ) : null;
+                                                    })}
+                                                </div>
+                                            )}
                                         </div>
-                                    )}
+                                    </div>
 
                                     {/* INTERNAL USERS: MITARBEITER */}
-                                    {(assignedUsers.some(au => au.role === 'gruppenleiter') || treeGL) && (
-                                        <div className="bg-white/5 border border-white/10 rounded-xl p-6 animate-[fadeIn_0.3s_ease-out] w-full max-w-4xl">
-                                            <h4 className="text-lg font-medium text-white mb-4 flex items-center justify-center gap-2">
-                                                <i className="fa-solid fa-hard-hat text-yellow-500"></i> Mitarbeiter (Worker)
-                                            </h4>
-                                            <div className="space-y-4 mb-2 relative">
-                                                <div className="bg-[#1e2336] border border-white/5 rounded-2xl p-6">
-                                                    <div className="flex gap-4 justify-center">
-                                                        <div className="flex-1 max-w-md mx-auto">
-                                                            <label className="block text-sm font-medium text-gray-400 mb-2 text-center">Person wählen</label>
-                                                            <select value={treeWorker} onChange={e => setTreeWorker(e.target.value)} className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 text-center">
-                                                                <option value="">-- Person wählen --</option>
-                                                                {users.filter(u => {
-                                                                    const isWorker = u.role?.name?.toLowerCase() === 'worker';
-                                                                    const reportsToAssignedGL = assignedUsers.some(au => au.role === 'gruppenleiter' && au.user_id === u.manager_id);
-                                                                    const reportsToSelectedGL = treeGL && u.manager_id === treeGL;
-                                                                    return isWorker && (reportsToAssignedGL || reportsToSelectedGL);
-                                                                }).map(u => (
-                                                                    <option key={u.id} value={u.id}>
-                                                                        {u.name} {u.specialty ? `(${u.specialty})` : ''} - Manager: {users.find(m => m.id === u.manager_id)?.name || 'N/A'}
-                                                                    </option>
-                                                                ))}
-                                                            </select>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex justify-center mt-4">
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.preventDefault();
-                                                                if (treeWorker) {
-                                                                    const selectedUserObj = users.find(u => u.id === treeWorker);
-                                                                    if (selectedUserObj && !assignedUsers.some(au => au.user_id === selectedUserObj.id)) {
-                                                                        setAssignedUsers([...assignedUsers, { user_id: selectedUserObj.id, role: 'worker' }]);
-                                                                        setTreeWorker('');
-                                                                    }
-                                                                }
-                                                            }}
-                                                            disabled={!treeWorker}
-                                                            className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl font-medium transition-colors"
-                                                        >
-                                                            Zum Projekt hinzufügen
-                                                        </button>
+                                    <div className="bg-white/5 border border-white/10 rounded-xl p-6 w-full max-w-4xl">
+                                        <h4 className="text-lg font-medium text-white mb-4 flex items-center justify-center gap-2">
+                                            <i className="fa-solid fa-hard-hat text-yellow-500"></i> Mitarbeiter (Worker)
+                                        </h4>
+                                        <div className="space-y-4 mb-2 relative">
+                                            <div className="bg-[#1e2336] border border-white/5 rounded-2xl p-6">
+                                                <div className="flex gap-4 justify-center">
+                                                    <div className="flex-1 max-w-md mx-auto">
+                                                        <label className="block text-sm font-medium text-gray-400 mb-2 text-center">Person wählen</label>
+                                                        <select value={treeWorker} onChange={e => setTreeWorker(e.target.value)} className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 text-center [&>option]:bg-slate-900">
+                                                            <option value="" className="bg-slate-900 text-white">-- Person wählen --</option>
+                                                            {users.filter(u => u.role?.name?.toLowerCase() === 'worker').map(u => (
+                                                                <option key={u.id} value={u.id} className="bg-slate-900 text-white">
+                                                                    {u.name} {u.specialty ? `(${u.specialty})` : ''} - Manager: {users.find(m => m.id === u.manager_id)?.name || 'N/A'}
+                                                                </option>
+                                                            ))}
+                                                        </select>
                                                     </div>
                                                 </div>
-
-                                                {/* List of Added Workers */}
-                                                {assignedUsers.filter(au => au.role === 'worker').length > 0 && (
-                                                    <div className="space-y-3 mt-4">
-                                                        {assignedUsers.filter(au => au.role === 'worker').map(au => {
-                                                            const u = users.find(user => user.id === au.user_id);
-                                                            return u ? (
-                                                                <div key={u.id} className="flex justify-between items-center bg-[#1e2336] border border-white/5 rounded-xl px-5 py-4">
-                                                                    <span className="text-white font-medium text-center block w-full">
-                                                                        {u.name} {u.specialty && <span className="text-gray-400 font-normal ml-1">({u.specialty})</span>}
-                                                                        <span className="text-gray-500 font-normal text-xs block">Manager: {users.find(m => m.id === u.manager_id)?.name || 'N/A'}</span>
-                                                                    </span>
-                                                                    <button onClick={(e) => {
-                                                                        e.preventDefault();
-                                                                        setAssignedUsers(assignedUsers.filter(x => x.user_id !== u.id));
-                                                                    }} className="text-red-400 hover:text-red-300 p-1 transition-colors">
-                                                                        <i className="fa-solid fa-trash-can"></i>
-                                                                    </button>
-                                                                </div>
-                                                            ) : null;
-                                                        })}
-                                                    </div>
-                                                )}
+                                                <div className="flex justify-center mt-4">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            if (treeWorker) {
+                                                                const selectedUserObj = users.find(u => u.id === treeWorker);
+                                                                if (selectedUserObj && !assignedUsers.some(au => au.user_id === selectedUserObj.id)) {
+                                                                    setAssignedUsers([...assignedUsers, { user_id: selectedUserObj.id, role: 'worker' }]);
+                                                                    setTreeWorker('');
+                                                                }
+                                                            }
+                                                        }}
+                                                        disabled={!treeWorker}
+                                                        className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl font-medium transition-colors"
+                                                    >
+                                                        Zum Projekt hinzufügen
+                                                    </button>
+                                                </div>
                                             </div>
+
+                                            {/* List of Added Workers */}
+                                            {assignedUsers.filter(au => au.role === 'worker').length > 0 && (
+                                                <div className="space-y-3 mt-4">
+                                                    {assignedUsers.filter(au => au.role === 'worker').map(au => {
+                                                        const u = users.find(user => user.id === au.user_id);
+                                                        return u ? (
+                                                            <div key={u.id} className="flex justify-between items-center bg-[#1e2336] border border-white/5 rounded-xl px-5 py-4">
+                                                                <span className="text-white font-medium text-center block w-full">
+                                                                    {u.name} {u.specialty && <span className="text-gray-400 font-normal ml-1">({u.specialty})</span>}
+                                                                    <span className="text-gray-500 font-normal text-xs block">Manager: {users.find(m => m.id === u.manager_id)?.name || 'N/A'}</span>
+                                                                </span>
+                                                                <button onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    setAssignedUsers(assignedUsers.filter(x => x.user_id !== u.id));
+                                                                }} className="text-red-400 hover:text-red-300 p-1 transition-colors">
+                                                                    <i className="fa-solid fa-trash-can"></i>
+                                                                </button>
+                                                            </div>
+                                                        ) : null;
+                                                    })}
+                                                </div>
+                                            )}
                                         </div>
-                                    )}
+                                    </div>
 
                                     {/* SUBCONTRACTORS */}
                                     <div className="bg-white/5 border border-white/10 rounded-xl p-6 w-full max-w-4xl">

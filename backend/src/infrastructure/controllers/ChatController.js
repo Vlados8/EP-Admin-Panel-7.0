@@ -41,7 +41,7 @@ const ChatController = {
                             {
                                 model: User,
                                 as: 'user',
-                                attributes: ['id', 'name', 'status', 'last_seen_at'],
+                                attributes: ['id', 'name', 'email', 'phone', 'status', 'last_seen_at'],
                                 include: [{ model: Role, as: 'role', attributes: ['name'] }]
                             }
                         ]
@@ -141,11 +141,11 @@ const ChatController = {
     sendMessage: async (req, res) => {
         try {
             const { conversationId } = req.params;
-            const { text, replyToId } = req.body;
+            const { text, replyToId, type, caption } = req.body;
             const { id: userId } = req.user;
 
-            if (!text || !text.trim()) {
-                return res.status(400).json({ success: false, message: 'Nachrichtentext ist erforderlich' });
+            if (!text) {
+                return res.status(400).json({ success: false, message: 'Nachrichtentext fehlt' });
             }
 
             // Verify participation
@@ -161,8 +161,9 @@ const ChatController = {
                 conversationId,
                 senderId: userId,
                 text: text.trim(),
-                type: 'text',
-                replyToId: replyToId || null
+                type: type || 'text',
+                replyToId: replyToId || null,
+                caption: caption || null
             });
 
             const fullMessage = await Message.findByPk(message.id, {
@@ -708,6 +709,61 @@ const ChatController = {
             res.json({ success: true, data: { reactions } });
         } catch (error) {
             logger.error(`Error toggling reaction: ${error.message}`);
+            res.status(500).json({ success: false, message: 'Internal Server Error' });
+        }
+    },
+
+    leaveGroup: async (req, res) => {
+        try {
+            const { conversationId } = req.params;
+            const { id: userId } = req.user;
+
+            const conversation = await Conversation.findByPk(conversationId);
+            if (!conversation || !conversation.isGroup) {
+                return res.status(404).json({ success: false, message: 'Gruppe nicht gefunden' });
+            }
+
+            // Verify participation before leaving
+            const participant = await Participant.findOne({
+                where: { conversationId, userId }
+            });
+
+            if (!participant) {
+                return res.status(403).json({ success: false, message: 'Nicht Teil der Gruppe' });
+            }
+
+            // Remove participant
+            await participant.destroy();
+            logger.info(`User ${userId} left group ${conversationId}`);
+
+            // Broadcast to remaining participants that user left
+            try {
+                const io = socketService.getIO();
+                const remainingParticipants = await Participant.findAll({ where: { conversationId } });
+                
+                remainingParticipants.forEach(p => {
+                    io.to(`user_${p.userId}`).emit('user_left_group', {
+                        conversationId: parseInt(conversationId),
+                        userId
+                    });
+                });
+            } catch (err) {
+                logger.error(`Socket broadcast failed for user leaving group: ${err.message}`);
+            }
+
+            // Check if group is empty now, if so, delete the group and its messages
+            const participantsCount = await Participant.count({ where: { conversationId } });
+            if (participantsCount === 0) {
+                // Delete messages associated with conversation
+                await Message.destroy({ where: { conversationId } });
+                // Delete conversation
+                await conversation.destroy();
+                logger.info(`Deleted empty group ${conversationId}`);
+            }
+
+            res.json({ success: true, message: 'Gruppe verlassen' });
+        } catch (error) {
+            logger.error(`Error leaving group: ${error.message}`);
             res.status(500).json({ success: false, message: error.message });
         }
     }

@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { hasPermission } = require('../../utils/permissions');
 const { uploadToR2, deleteFromR2 } = require('../utils/storage');
+const sharp = require('sharp');
 
 // Get all tasks
 exports.getTasks = async (req, res, next) => {
@@ -71,17 +72,39 @@ exports.createTask = async (req, res, next) => {
             created_by_id
         });
 
-        // Handle uploaded images: upload to R2
+        // Handle uploaded images: upload to R2 with tiered quality (Original, Compressed, Thumbnail)
         if (req.files && req.files.length > 0) {
             for (const file of req.files) {
                 try {
-                    const r2Key = `tasks/${file.filename}`;
-                    const fileUrl = await uploadToR2(file.path, r2Key, file.mimetype);
-                    
+                    let fileUrl = null;
+                    let thumbUrl = null;
+                    let originalUrl = null;
+
+                    // 1. Upload Original File
+                    const originalR2Key = `tasks/original_${file.filename}`;
+                    originalUrl = await uploadToR2(file.path, originalR2Key, file.mimetype);
+
+                    if (file.mimetype.startsWith('image/')) {
+                        // 2. Create Compressed Version (High resolution, 75% quality)
+                        const compressedPath = file.path + '_compressed.jpg';
+                        await sharp(file.path)
+                            .jpeg({ quality: 75, progressive: true })
+                            .toFile(compressedPath);
+                        
+                        const compressedR2Key = `tasks/${file.filename}`;
+                        fileUrl = await uploadToR2(compressedPath, compressedR2Key, 'image/jpeg');
+                        if (fs.existsSync(compressedPath)) fs.unlinkSync(compressedPath);
+                    } else {
+                        // For non-images, fileUrl is the same as originalUrl
+                        fileUrl = originalUrl;
+                    }
+
                     await Attachment.create({
                         task_id: newTask.id,
                         file_name: file.originalname,
                         file_url: fileUrl,
+                        thumb_url: null, // No longer creating thumbnails
+                        original_url: originalUrl,
                         file_size: file.size,
                         content_type: file.mimetype
                     });
@@ -143,17 +166,38 @@ exports.updateTask = async (req, res, next) => {
 
         await task.save();
 
-        // Handle New File Uploads in Update
+        // Handle New File Uploads in Update with tiered quality
         if (req.files && req.files.length > 0) {
             for (const file of req.files) {
                 try {
-                    const r2Key = `tasks/${file.filename}`;
-                    const fileUrl = await uploadToR2(file.path, r2Key, file.mimetype);
+                    let fileUrl = null;
+                    let thumbUrl = null;
+                    let originalUrl = null;
+
+                    // 1. Upload Original File
+                    const originalR2Key = `tasks/original_${file.filename}`;
+                    originalUrl = await uploadToR2(file.path, originalR2Key, file.mimetype);
+
+                    if (file.mimetype.startsWith('image/')) {
+                        // 2. Create Compressed Version
+                        const compressedPath = file.path + '_compressed.jpg';
+                        await sharp(file.path)
+                            .jpeg({ quality: 75, progressive: true })
+                            .toFile(compressedPath);
+                        
+                        const compressedR2Key = `tasks/${file.filename}`;
+                        fileUrl = await uploadToR2(compressedPath, compressedR2Key, 'image/jpeg');
+                        if (fs.existsSync(compressedPath)) fs.unlinkSync(compressedPath);
+                    } else {
+                        fileUrl = originalUrl;
+                    }
 
                     await Attachment.create({
                         task_id: task.id,
                         file_name: file.originalname,
                         file_url: fileUrl,
+                        thumb_url: null, // No longer creating thumbnails
+                        original_url: originalUrl,
                         file_size: file.size,
                         content_type: file.mimetype
                     });
@@ -162,7 +206,7 @@ exports.updateTask = async (req, res, next) => {
                         fs.unlinkSync(file.path);
                     }
                 } catch (uploadErr) {
-                    console.error(`Failed to upload attachment ${file.originalname} to R2:`, uploadErr);
+                    console.error(`Failed to upload task attachment ${file.originalname} to R2:`, uploadErr);
                 }
             }
         }
@@ -207,17 +251,32 @@ exports.deleteTask = async (req, res, next) => {
         // Delete File Attachments
         if (task.attachments && task.attachments.length > 0) {
             for (const att of task.attachments) {
-                if (att.file_url.startsWith('http')) {
-                    // R2 File
+                if (att.file_url && att.file_url.startsWith('http')) {
+                    // 1. Delete compressed file (file_url)
                     try {
-                        // Extract key from URL (e.g., https://pub-xxx.r2.dev/tasks/filename)
                         const urlObj = new URL(att.file_url);
                         const key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
                         await deleteFromR2(key);
-                    } catch (delErr) {
-                        console.error('Error deleting from R2:', delErr);
+                    } catch (err) { console.error('Error deleting file_url:', err); }
+
+                    // 2. Delete original file (original_url)
+                    if (att.original_url && att.original_url !== att.file_url) {
+                        try {
+                            const urlObj = new URL(att.original_url);
+                            const key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
+                            await deleteFromR2(key);
+                        } catch (err) { console.error('Error deleting original_url:', err); }
                     }
-                } else {
+
+                    // 3. Delete thumbnail (thumb_url)
+                    if (att.thumb_url) {
+                        try {
+                            const urlObj = new URL(att.thumb_url);
+                            const key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
+                            await deleteFromR2(key);
+                        } catch (err) { console.error('Error deleting thumb_url:', err); }
+                    }
+                } else if (att.file_url) {
                     // Local File
                     const filePath = path.join(__dirname, '../../../../', att.file_url);
                     if (fs.existsSync(filePath)) {

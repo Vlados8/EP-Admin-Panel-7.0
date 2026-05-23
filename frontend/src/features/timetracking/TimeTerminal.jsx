@@ -18,6 +18,25 @@ const TimeTerminal = () => {
         return () => clearInterval(timer);
     }, []);
 
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            // Do not capture keys if a modal is open, status is not idle, or typing in an input
+            if (showProjectModal || status !== 'idle') return;
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+            if (e.key >= '0' && e.key <= '9') {
+                setPin(prev => prev.length < 6 ? prev + e.key : prev);
+            } else if (e.key === 'Backspace') {
+                setPin(prev => prev.slice(0, -1));
+            } else if (e.key === 'Escape' || e.key.toLowerCase() === 'c') {
+                setPin('');
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [showProjectModal, status]);
+
     const fetchProjects = async () => {
         try {
             const res = await api.get('/projects');

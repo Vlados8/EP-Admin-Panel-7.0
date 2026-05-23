@@ -14,13 +14,13 @@ class TimeTrackingController {
             const { pin, rfid_tag, project_id } = req.body;
 
             // Find worker by PIN or RFID
-            const worker = await User.findOne({ 
-                where: { 
+            const worker = await User.findOne({
+                where: {
                     [Op.or]: [
                         pin ? { pin } : null,
                         rfid_tag ? { rfid_tag } : null
                     ].filter(Boolean)
-                } 
+                }
             });
 
             if (!worker) {
@@ -57,8 +57,8 @@ class TimeTrackingController {
                 status: 'open'
             });
 
-            return res.status(201).json({ 
-                success: true, 
+            return res.status(201).json({
+                success: true,
                 message: `Приход зафиксирован: ${now.toLocaleTimeString('de-DE')}`,
                 data: {
                     worker_name: worker.name,
@@ -77,13 +77,13 @@ class TimeTrackingController {
         try {
             const { pin, rfid_tag } = req.body;
 
-            const worker = await User.findOne({ 
-                where: { 
+            const worker = await User.findOne({
+                where: {
                     [Op.or]: [
                         pin ? { pin } : null,
                         rfid_tag ? { rfid_tag } : null
                     ].filter(Boolean)
-                } 
+                }
             });
 
             if (!worker) {
@@ -103,11 +103,11 @@ class TimeTrackingController {
 
             const checkOutTime = new Date();
             const checkInTime = new Date(openSession.check_in_time);
-            
+
             // Fetch company settings for break rules
             const company = await Company.findByPk(worker.company_id);
             const ttSettings = company?.settings?.time_tracking || {};
-            
+
             const break_6 = ttSettings.break_duration_6 ?? 0;
             const break_6_10 = ttSettings.break_duration_6_10 ?? 0.5;
             const break_10 = ttSettings.break_duration_10 ?? 0.75;
@@ -115,7 +115,7 @@ class TimeTrackingController {
             // Calculate duration in hours
             let durationSeconds = (checkOutTime - checkInTime) / 1000;
             let durationHours = durationSeconds / 3600;
-            
+
             // Apply tiered break deduction
             let breakDeducted = 0;
             if (durationHours > 10) {
@@ -125,7 +125,7 @@ class TimeTrackingController {
             } else {
                 breakDeducted = break_6;
             }
-            
+
             durationHours -= breakDeducted;
 
             await openSession.update({
@@ -135,8 +135,8 @@ class TimeTrackingController {
                 status: 'closed'
             });
 
-            return res.status(200).json({ 
-                success: true, 
+            return res.status(200).json({
+                success: true,
                 message: `Уход зафиксирован: ${checkOutTime.toLocaleTimeString('de-DE')}`,
                 data: {
                     worker_name: worker.name,
@@ -155,7 +155,7 @@ class TimeTrackingController {
         try {
             const { worker_id, start_date, end_date } = req.query;
             const where = {};
-            
+
             if (worker_id) where.worker_id = worker_id;
             if (start_date && end_date) {
                 where.date = { [Op.between]: [start_date, end_date] };
@@ -228,7 +228,7 @@ class TimeTrackingController {
                 logger.warn(`[Report] Worker not found: ${worker_id}`);
                 return res.status(404).json({ success: false, message: 'Сотрудник не найден' });
             }
-            
+
             const company = await Company.findByPk(worker.company_id);
             logger.info(`[Report] Worker: ${worker.name}, Company ID: ${worker.company_id}`);
 
@@ -255,32 +255,32 @@ class TimeTrackingController {
                 logger.error(`[Report] Template read error: ${readErr.message}`);
                 throw new Error(`Template file not found at ${templatePath}`);
             }
-            
+
             const worksheet = workbook.getWorksheet(1);
             if (!worksheet) throw new Error('Worksheet not found in template');
             logger.info('[Report] Template loaded successfully');
 
             // 1. Fill Headers
             const monthNamesDe = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
-            
+
             if (company && company.name) {
                 worksheet.getCell('B1').value = company.name;
             } else {
                 worksheet.getCell('B1').value = 'Empire Premium Bau';
             }
-            
+
             // Set B2 as Month Header (German String to avoid locale issues)
             const monthIdx = parseInt(month) - 1;
             worksheet.getCell('B2').value = `${monthNamesDe[monthIdx] || 'Unbekannt'} ${year}`;
-            
+
             // Set B3 as Personnel Number
             worksheet.getCell('B3').value = worker.personnel_number || String(worker.id).substring(0, 8);
-            
+
             const workerName = worker.name || 'Unbekannt';
             const nameParts = workerName.trim().split(' ');
             const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : workerName;
             const firstName = nameParts.length > 1 ? nameParts.slice(0, -1).join(' ') : '';
-            
+
             worksheet.getCell('B4').value = lastName;
             worksheet.getCell('B5').value = firstName;
 
@@ -295,27 +295,27 @@ class TimeTrackingController {
 
                 // REINFORCE INTERACTIVE FORMULAS
                 const rowNum = i;
-                
+
                 // Column B: Weekday (Forced German via CHOOSE)
                 // We use English formula names (CHOOSE, WEEKDAY) as exceljs/Excel requires
-                row.getCell('B').value = { 
-                    formula: `CHOOSE(WEEKDAY(A${rowNum}),"So","Mo","Di","Mi","Do","Fr","Sa")`, 
+                row.getCell('B').value = {
+                    formula: `CHOOSE(WEEKDAY(A${rowNum}),"So","Mo","Di","Mi","Do","Fr","Sa")`,
                     result: "" // Will be set in date population
                 };
                 row.getCell('B').numFmt = '@'; // Plain text format
                 row.getCell('B').alignment = { horizontal: 'left' };
 
                 // Column G: Dauer = (F - E - D) * 24
-                row.getCell('G').value = { 
-                    formula: `(F${rowNum}-E${rowNum}-D${rowNum})*24`, 
-                    result: 0 
+                row.getCell('G').value = {
+                    formula: `(F${rowNum}-E${rowNum}-D${rowNum})*24`,
+                    result: 0
                 };
                 row.getCell('G').numFmt = '0.00';
 
                 // Column I: Lohnart = IF(G > 0, G, "")
-                row.getCell('I').value = { 
-                    formula: `IF(G${rowNum}>0,G${rowNum},"")`, 
-                    result: "" 
+                row.getCell('I').value = {
+                    formula: `IF(G${rowNum}>0,G${rowNum},"")`,
+                    result: ""
                 };
                 row.getCell('I').numFmt = '0.00';
 
@@ -329,7 +329,7 @@ class TimeTrackingController {
                 const row = worksheet.getRow(rowNum);
                 const currentDate = new Date(year, month - 1, day, 12, 0, 0);
                 row.getCell('A').value = currentDate;
-                
+
                 // Cache the day name result for B
                 row.getCell('B').value.result = daysOfWeekDe[currentDate.getDay()];
             }
@@ -349,7 +349,7 @@ class TimeTrackingController {
                 const row = worksheet.getRow(10 + day - 1);
 
                 row.getCell('C').value = log.project_name || 'Allgemein';
-                
+
                 const ttSettings = company?.settings?.time_tracking || {};
                 const standardDay = ttSettings.standard_workday_hours ?? 8.5;
 
@@ -375,12 +375,12 @@ class TimeTrackingController {
                 } else {
                     // Normal work entry (Type 'work')
                     row.getCell('C').value = log.project_name || 'Allgemein';
-                    
+
                     if (log.check_in_time) {
                         const t = new Date(log.check_in_time);
                         row.getCell('D').value = (t.getHours() + t.getMinutes() / 60) / 24;
                     }
-                    
+
                     if (log.break_deducted) {
                         row.getCell('E').value = Number(log.break_deducted) / 24;
                     }
@@ -394,7 +394,7 @@ class TimeTrackingController {
                     const pause = row.getCell('E').value || 0;
                     const start = row.getCell('D').value || 0;
                     const calculatedDauer = (work - pause - start) * 24;
-                    
+
                     if (calculatedDauer > 0) {
                         row.getCell('G').value.result = calculatedDauer;
                         row.getCell('I').value = calculatedDauer;

@@ -6,8 +6,10 @@ import { useDispatch } from 'react-redux';
 import { setBreadcrumbOverride } from '../../store/slices/uiSlice';
 import ProjectEditModal from './ProjectEditModal';
 import ProjectFileManager from './ProjectFileManager';
+import MediaViewer from '../../components/common/MediaViewer';
 import { getImageUrl } from '../../utils/config';
 import usePermission from '../../hooks/usePermission';
+import { useCompany } from '../../context/CompanyContext';
 
 const ProjectDetails = () => {
     const { id } = useParams();
@@ -33,6 +35,281 @@ const ProjectDetails = () => {
     const [selectedFiles, setSelectedFiles] = useState([]);
     const [isUpdatingMainImage, setIsUpdatingMainImage] = useState(false);
     const mainImageInputRef = React.useRef(null);
+
+    const { companyData } = useCompany();
+    const [routeInfo, setRouteInfo] = useState(null);
+    const [calculatingRoute, setCalculatingRoute] = useState(false);
+    
+    // Wetter & Koordinaten State
+    const [projectCoords, setProjectCoords] = useState(null);
+    const [weatherForecast, setWeatherForecast] = useState(null);
+    const [loadingWeather, setLoadingWeather] = useState(false);
+
+    // Bautagebuch (Journal) State
+    const [diaryLogs, setDiaryLogs] = useState([]);
+    const [loadingDiary, setLoadingDiary] = useState(false);
+    const [isAddingLog, setIsAddingLog] = useState(false);
+    const [newLogTitle, setNewLogTitle] = useState('');
+    const [newLogContent, setNewLogContent] = useState('');
+    const [newLogCategory, setNewLogCategory] = useState('blue'); // blue (Info), green (Fortschritt), yellow (Wichtig), red (Problem)
+    const [newLogDate, setNewLogDate] = useState(new Date().toISOString().split('T')[0]);
+    const [newLogFiles, setNewLogFiles] = useState([]);
+    const [newLogIsPinned, setNewLogIsPinned] = useState(false);
+    const logFileInputRef = React.useRef(null);
+
+    // Media Viewer State for feed images
+    const [isMediaViewerOpen, setIsMediaViewerOpen] = useState(false);
+    const [mediaViewerItems, setMediaViewerItems] = useState([]);
+    const [mediaViewerIndex, setMediaViewerIndex] = useState(0);
+
+    const openMediaViewer = (attachments, initialIdx) => {
+        setMediaViewerItems(attachments);
+        setMediaViewerIndex(initialIdx);
+        setIsMediaViewerOpen(true);
+    };
+
+    // States for Bautagebuch note upload progress and button disabling
+    const [isSavingLog, setIsSavingLog] = useState(false);
+    const [logUploadProgress, setLogUploadProgress] = useState(0);
+
+    // States for Etappen (Stages) upload progress and button disabling
+    const [isSavingTask, setIsSavingTask] = useState(false);
+    const [taskUploadProgress, setTaskUploadProgress] = useState(0);
+
+    // Haversine fallback formula for straight line distance
+    const haversineDistance = (lat1, lon1, lat2, lon2) => {
+        const toRad = (x) => x * Math.PI / 180;
+        const R = 6371; // Earth radius in km
+        const dLat = toRad(lat2 - lat1);
+        const dLon = toRad(lon2 - lon1);
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                  Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+                  Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    };
+
+    const calculateDistance = async (fromAddr, toAddr) => {
+        try {
+            // 1. Geocode Company address
+            const fromRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(fromAddr)}&format=json&limit=1`, {
+                headers: { 'User-Agent': 'EP-Admin-Panel-Geocoder' }
+            });
+            const fromData = await fromRes.json();
+            if (!fromData || fromData.length === 0) return null;
+            const fromLat = parseFloat(fromData[0].lat);
+            const fromLon = parseFloat(fromData[0].lon);
+
+            // 2. Geocode Project address
+            const toRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(toAddr)}&format=json&limit=1`, {
+                headers: { 'User-Agent': 'EP-Admin-Panel-Geocoder' }
+            });
+            const toData = await toRes.json();
+            if (!toData || toData.length === 0) return null;
+            const toLat = parseFloat(toData[0].lat);
+            const toLon = parseFloat(toData[0].lon);
+            
+            // Save coordinates to state for weather fetching
+            setProjectCoords({ lat: toLat, lon: toLon });
+
+            // 3. Get OSRM road distance
+            try {
+                const osrmRes = await fetch(`https://router.project-osrm.org/route/v1/driving/${fromLon},${fromLat};${toLon},${toLat}?overview=false`);
+                const osrmData = await osrmRes.json();
+                if (osrmData.code === 'Ok' && osrmData.routes && osrmData.routes.length > 0) {
+                    const route = osrmData.routes[0];
+                    const distanceKm = (route.distance / 1000).toFixed(1); // Convert meters to km
+                    const durationMin = Math.round(route.duration / 60); // Convert seconds to minutes
+                    return { distance: distanceKm, duration: durationMin };
+                }
+            } catch (osrmErr) {
+                console.warn('OSRM router failed, using Haversine fallback:', osrmErr);
+            }
+            
+            // Fallback to straight-line distance
+            const distanceKm = haversineDistance(fromLat, fromLon, toLat, toLon).toFixed(1);
+            return { distance: distanceKm, duration: Math.round(distanceKm * 1.2) }; // Estimate 1.2 min per km
+        } catch (err) {
+            console.error('Error calculating distance:', err);
+            return null;
+        }
+    };
+
+    // Fetch Weather Forecast when coordinates are available
+    useEffect(() => {
+        if (projectCoords) {
+            setLoadingWeather(true);
+            fetch(`https://api.open-meteo.com/v1/forecast?latitude=${projectCoords.lat}&longitude=${projectCoords.lon}&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data && data.daily) {
+                        const forecast = [];
+                        for (let i = 0; i < 3; i++) {
+                            forecast.push({
+                                date: new Date(data.daily.time[i]).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' }),
+                                code: data.daily.weathercode[i],
+                                tempMax: Math.round(data.daily.temperature_2m_max[i]),
+                                tempMin: Math.round(data.daily.temperature_2m_min[i])
+                            });
+                        }
+                        setWeatherForecast(forecast);
+                    }
+                    setLoadingWeather(false);
+                })
+                .catch(err => {
+                    console.error('Weather forecast fetch error:', err);
+                    setLoadingWeather(false);
+                });
+        }
+    }, [projectCoords]);
+
+    const sortLogs = (logs) => {
+        return [...logs].sort((a, b) => {
+            if (a.isPinned && !b.isPinned) return -1;
+            if (!a.isPinned && b.isPinned) return 1;
+            return new Date(b.date + 'T' + (b.time || '00:00')) - new Date(a.date + 'T' + (a.time || '00:00'));
+        });
+    };
+
+    // Fetch Bautagebuch (notes) when activeTab is diary or on mount
+    const fetchDiaryLogs = async () => {
+        try {
+            setLoadingDiary(true);
+            const res = await api.get(`/notes?projectId=${id}`);
+            if (res.data && res.data.status === 'success') {
+                setDiaryLogs(sortLogs(res.data.data.notes));
+            }
+        } catch (err) {
+            console.error('Error fetching diary logs:', err);
+        } finally {
+            setLoadingDiary(false);
+        }
+    };
+
+    useEffect(() => {
+        if (id && (activeTab === 'diary' || activeTab === 'info')) {
+            fetchDiaryLogs();
+        }
+    }, [id, activeTab]);
+
+    const handleAddDiaryLog = async (e) => {
+        e.preventDefault();
+        if (!newLogTitle.trim() || !newLogContent.trim()) {
+            alert('Bitte Titel und Inhalt für den Bautagebucheintrag ausfüllen.');
+            return;
+        }
+
+        setIsSavingLog(true);
+        setLogUploadProgress(0);
+
+        const formData = new FormData();
+        formData.append('title', newLogTitle);
+        formData.append('content', newLogContent);
+        formData.append('date', newLogDate);
+        formData.append('color', newLogCategory);
+        formData.append('project_id', id);
+        formData.append('isPinned', newLogIsPinned);
+        formData.append('showInDiary', 'true');
+
+        newLogFiles.forEach(file => {
+            formData.append('files', file);
+        });
+
+        try {
+            const res = await api.post('/notes', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+                onUploadProgress: (progressEvent) => {
+                    const total = progressEvent.total || 1;
+                    const percentCompleted = Math.round((progressEvent.loaded * 100) / total);
+                    setLogUploadProgress(percentCompleted);
+                }
+            });
+
+            if (res.data?.status === 'success') {
+                const newNote = res.data.data.note;
+                setDiaryLogs(prev => sortLogs([newNote, ...prev]));
+                setNewLogTitle('');
+                setNewLogContent('');
+                setNewLogCategory('blue');
+                setNewLogIsPinned(false);
+                setNewLogFiles([]);
+                setIsAddingLog(false);
+            }
+        } catch (err) {
+            console.error('Error adding Bautagebuch log:', err);
+            alert('Fehler beim Speichern des Bautagebucheintrags.');
+        } finally {
+            setIsSavingLog(false);
+            setLogUploadProgress(0);
+        }
+    };
+
+    const handleTogglePinDiaryLog = async (logId, currentPinnedState) => {
+        try {
+            const res = await api.patch(`/notes/${logId}`, { isPinned: !currentPinnedState });
+            if (res.data?.status === 'success') {
+                const updated = res.data.data.note;
+                setDiaryLogs(prev => sortLogs(prev.map(l => l.id === logId ? updated : l)));
+            }
+        } catch (err) {
+            console.error('Error toggling pin:', err);
+            alert('Fehler beim Anheften/Lösen.');
+        }
+    };
+
+    const handleDeleteDiaryLog = async (logId) => {
+        if (!window.confirm('Möchten Sie diesen Bautagebucheintrag wirklich unwiderruflich löschen?')) return;
+        try {
+            await api.delete(`/notes/${logId}`);
+            setDiaryLogs(prev => prev.filter(l => l.id !== logId));
+        } catch (err) {
+            console.error('Error deleting note:', err);
+            alert('Fehler beim Löschen.');
+        }
+    };
+
+    const handleLogFileChange = (e) => {
+        const files = Array.from(e.target.files);
+        setNewLogFiles(prev => [...prev, ...files]);
+    };
+
+    const removeLogFile = (index) => {
+        setNewLogFiles(prev => prev.filter((_, i) => i !== index));
+    };
+
+    // OpenMeteo helpers
+    const getWeatherIconClass = (code) => {
+        if (code === 0) return 'fa-sun text-yellow-400';
+        if ([1, 2, 3].includes(code)) return 'fa-cloud-sun text-blue-300';
+        if ([45, 48].includes(code)) return 'fa-smog text-gray-400';
+        if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return 'fa-cloud-showers-heavy text-blue-400';
+        if ([71, 73, 75, 77, 85, 86].includes(code)) return 'fa-snowflake text-white';
+        if ([95, 96, 99].includes(code)) return 'fa-cloud-bolt text-purple-400';
+        return 'fa-cloud text-gray-300';
+    };
+
+    const getWeatherDesc = (code) => {
+        if (code === 0) return 'Sonnig';
+        if ([1, 2, 3].includes(code)) return 'Leicht bewölkt';
+        if ([45, 48].includes(code)) return 'Nebel';
+        if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return 'Regen';
+        if ([71, 73, 75, 77, 85, 86].includes(code)) return 'Schnee';
+        if ([95, 96, 99].includes(code)) return 'Gewitter';
+        return 'Bewölkt';
+    };
+
+    useEffect(() => {
+        if (project?.address && companyData?.settings?.address) {
+            const fromAddr = `${companyData.settings.address}, ${companyData.settings.zipCity || ''}`;
+            const toAddr = project.address;
+            
+            setCalculatingRoute(true);
+            calculateDistance(fromAddr, toAddr).then(info => {
+                setRouteInfo(info);
+                setCalculatingRoute(false);
+            });
+        }
+    }, [project?.address, companyData?.settings?.address]);
 
     useEffect(() => {
         const fetchProject = async () => {
@@ -89,7 +366,11 @@ const ProjectDetails = () => {
     };
 
     const handleAddTask = async () => {
-        if (!newTaskTitle.trim()) return;
+        if (!newTaskTitle.trim() || isSavingTask) return;
+
+        setIsSavingTask(true);
+        setTaskUploadProgress(0);
+
         try {
             const formData = new FormData();
             formData.append('title', newTaskTitle);
@@ -105,7 +386,12 @@ const ProjectDetails = () => {
             });
 
             const res = await api.post('/project-stages', formData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
+                headers: { 'Content-Type': 'multipart/form-data' },
+                onUploadProgress: (progressEvent) => {
+                    const total = progressEvent.total || 1;
+                    const percentCompleted = Math.round((progressEvent.loaded * 100) / total);
+                    setTaskUploadProgress(percentCompleted);
+                }
             });
 
             if (res.data?.status === 'success' && res.data.data?.stage) {
@@ -129,6 +415,9 @@ const ProjectDetails = () => {
             console.error('Error adding stage:', error);
             const errorMsg = error.response?.data?.message || error.response?.data?.error || 'Fehler beim Hinzufügen der Etappe.';
             alert(errorMsg);
+        } finally {
+            setIsSavingTask(false);
+            setTaskUploadProgress(0);
         }
     };
 
@@ -154,7 +443,11 @@ const ProjectDetails = () => {
     };
 
     const handleSaveTaskEdit = async (taskId) => {
-        if (!editTaskTitle.trim()) return;
+        if (!editTaskTitle.trim() || isSavingTask) return;
+
+        setIsSavingTask(true);
+        setTaskUploadProgress(0);
+
         try {
             const formData = new FormData();
             formData.append('title', editTaskTitle);
@@ -169,7 +462,12 @@ const ProjectDetails = () => {
             });
 
             const res = await api.patch(`/project-stages/${taskId}`, formData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
+                headers: { 'Content-Type': 'multipart/form-data' },
+                onUploadProgress: (progressEvent) => {
+                    const total = progressEvent.total || 1;
+                    const percentCompleted = Math.round((progressEvent.loaded * 100) / total);
+                    setTaskUploadProgress(percentCompleted);
+                }
             });
 
             if (res.data?.status === 'success') {
@@ -186,6 +484,9 @@ const ProjectDetails = () => {
             console.error('Error updating stage:', error);
             const errorMsg = error.response?.data?.message || 'Fehler beim Aktualisieren der Etappe.';
             alert(errorMsg);
+        } finally {
+            setIsSavingTask(false);
+            setTaskUploadProgress(0);
         }
     };
 
@@ -377,6 +678,13 @@ const ProjectDetails = () => {
                     <i className="fa-solid fa-folder-open mr-2"></i>Dateien
                     {activeTab === 'files' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-400 shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>}
                 </button>
+                <button
+                    onClick={() => setActiveTab('diary')}
+                    className={`px-6 py-3 text-sm font-medium transition-all relative ${activeTab === 'diary' ? 'text-blue-400' : 'text-gray-400 hover:text-gray-200'}`}
+                >
+                    <i className="fa-solid fa-book-open mr-2"></i>Bautagebuch
+                    {activeTab === 'diary' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-400 shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>}
+                </button>
             </div>
 
             {/* Tab: Main Information */}
@@ -442,6 +750,64 @@ const ProjectDetails = () => {
                             </div>
                         </div>
 
+                        {/* Pinned Notes Card */}
+                        {diaryLogs.some(l => l.isPinned) && (
+                            <div className="glass-card rounded-2xl p-6 border-amber-500/20 bg-amber-500/[0.02] shadow-[0_0_20px_rgba(245,158,11,0.05)] animate-[fadeInUp_0.4s_ease-out]">
+                                <h3 className="text-sm font-semibold text-amber-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                    <i className="fa-solid fa-thumbtack text-amber-400"></i> Angeheftete Notizen
+                                </h3>
+                                <div className="space-y-4">
+                                    {diaryLogs.filter(l => l.isPinned).map(log => (
+                                        <div key={log.id} className="bg-white/5 p-4 rounded-xl border border-white/5 relative group/pinned flex justify-between items-start gap-4">
+                                            <div>
+                                                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                                    <span className="text-[10px] text-gray-400 font-medium">
+                                                        {new Date(log.date).toLocaleDateString('de-DE')} {log.time || ''}
+                                                    </span>
+                                                    {log.user && (
+                                                        <span className="text-[10px] text-blue-400 font-bold">
+                                                            von {log.user.name}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <h4 className="text-sm font-bold text-white mb-1">{log.title}</h4>
+                                                <p className="text-xs text-gray-300 leading-relaxed whitespace-pre-wrap">{log.content}</p>
+                                                
+                                                {/* Photos attached to pinned note */}
+                                                {log.attachments?.length > 0 && (
+                                                    <div className="flex flex-wrap gap-2 pt-2 mt-2 border-t border-white/5">
+                                                        {log.attachments.map((att, attIdx) => (
+                                                            <div 
+                                                                key={att.id} 
+                                                                className="w-12 h-12 rounded-lg overflow-hidden border border-white/10 hover:border-blue-500/50 transition-all cursor-pointer"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    openMediaViewer(log.attachments, attIdx);
+                                                                }}
+                                                            >
+                                                                <img 
+                                                                    src={getImageUrl(att.file_url || att.original_url)} 
+                                                                    alt={att.file_name} 
+                                                                    className="w-full h-full object-cover"
+                                                                />
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <button
+                                                onClick={() => handleTogglePinDiaryLog(log.id, true)}
+                                                className="text-amber-400 hover:text-gray-400 transition-colors p-1"
+                                                title="Notiz lösen"
+                                            >
+                                                <i className="fa-solid fa-thumbtack text-xs"></i>
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         {/* Details Card */}
                         <div className="glass-card rounded-2xl p-6">
                             <h3 className="text-lg font-semibold text-white mb-6 border-b border-white/10 pb-4">Projektdetails</h3>
@@ -455,31 +821,142 @@ const ProjectDetails = () => {
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-6">
-                                    <div>
+                                    <div className="col-span-2 md:col-span-1">
                                         <h4 className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-2 flex items-center gap-2">
                                             <i className="fa-solid fa-location-dot"></i> Standort
                                         </h4>
-                                        <p className="text-white text-sm">{project.address || '-'}</p>
+                                        <p className="text-white text-sm font-semibold">{project.address || '-'}</p>
+                                        
+                                        {calculatingRoute && (
+                                            <div className="flex items-center gap-2 mt-2 text-xs text-gray-500 animate-pulse select-none">
+                                                <i className="fa-solid fa-circle-notch animate-spin"></i>
+                                                Berechne Route...
+                                            </div>
+                                        )}
+                                        {routeInfo && (
+                                            <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center gap-3 animate-[fadeIn_0.3s_ease-out]">
+                                                <div className="w-9 h-9 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400">
+                                                    <i className="fa-solid fa-car-side"></i>
+                                                </div>
+                                                <div>
+                                                    <div className="font-bold text-white text-xs">{routeInfo.distance} km Anfahrtsweg</div>
+                                                    <div className="text-[10px] text-gray-400">ca. {routeInfo.duration} Min. Fahrtzeit vom Firmensitz</div>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                    <div>
-                                        <h4 className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-2 flex items-center gap-2">
-                                            <i className="fa-solid fa-euro-sign"></i> Budget
-                                        </h4>
-                                        <p className="text-white text-sm">
-                                            {project.budget !== undefined && project.budget !== null
-                                                ? new Number(project.budget).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
-                                                : '-'}
-                                        </p>
+                                    <div className="grid grid-cols-1 gap-4">
+                                        <div>
+                                            <h4 className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-2 flex items-center gap-2">
+                                                <i className="fa-solid fa-euro-sign"></i> Budget
+                                            </h4>
+                                            <p className="text-white text-sm">
+                                                {project.budget !== undefined && project.budget !== null
+                                                    ? new Number(project.budget).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
+                                                    : '-'}
+                                            </p>
+                                        </div>
+                                        {project.start_date && (
+                                            <div>
+                                                <h4 className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-2 flex items-center gap-2">
+                                                    <i className="fa-regular fa-calendar text-blue-400"></i> Startdatum
+                                                </h4>
+                                                <p className="text-white text-sm font-semibold">{new Date(project.start_date).toLocaleDateString('de-DE')}</p>
+                                            </div>
+                                        )}
+                                        {project.end_date && (
+                                            <div>
+                                                <h4 className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-2 flex items-center gap-2">
+                                                    <i className="fa-regular fa-calendar text-emerald-400"></i> Enddatum
+                                                </h4>
+                                                <p className="text-white text-sm font-semibold">{new Date(project.end_date).toLocaleDateString('de-DE')}</p>
+                                            </div>
+                                        )}
+                                        <div>
+                                            <h4 className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-2 flex items-center gap-2">
+                                                <i className="fa-regular fa-calendar"></i> Erstellt am
+                                            </h4>
+                                            <p className="text-white text-sm">{project.createdAt ? new Date(project.createdAt).toLocaleDateString('de-DE') : '-'}</p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <h4 className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-2 flex items-center gap-2">
-                                            <i className="fa-regular fa-calendar"></i> Erstellt am
-                                        </h4>
-                                        <p className="text-white text-sm">{project.createdAt ? new Date(project.createdAt).toLocaleDateString('de-DE') : '-'}</p>
-                                    </div>
+
+                                    {project.address && (
+                                        <div className="col-span-2 mt-2">
+                                            <div className="rounded-2xl overflow-hidden border border-white/10 h-64 relative group shadow-inner">
+                                                <iframe 
+                                                    width="100%" 
+                                                    height="100%" 
+                                                    frameBorder="0" 
+                                                    style={{ border: 0, opacity: 0.8 }} 
+                                                    src={`https://maps.google.com/maps?q=${encodeURIComponent(project.address)}&t=&z=14&ie=UTF8&iwloc=&output=embed`} 
+                                                    allowFullScreen
+                                                    title="Project Location Map"
+                                                ></iframe>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
+
+                        {/* Financial Widget */}
+                        {(() => {
+                            const budget = parseFloat(project.budget || 0);
+                            const estimatedCosts = project.estimated_costs !== undefined && project.estimated_costs !== null
+                                ? parseFloat(project.estimated_costs)
+                                : budget * 0.65;
+                            const profitMargin = budget - estimatedCosts;
+                            
+                            const costPercent = budget > 0 ? Math.round((estimatedCosts / budget) * 100) : 65;
+                            const marginPercent = budget > 0 ? Math.round((profitMargin / budget) * 100) : 35;
+                            
+                            return (
+                                <div className="glass-card rounded-2xl p-6">
+                                    <h3 className="text-lg font-semibold text-white mb-6 border-b border-white/10 pb-4 flex items-center gap-2">
+                                        <i className="fa-solid fa-chart-pie text-blue-400"></i> Finanzübersicht & Marge
+                                    </h3>
+                                    <div className="space-y-5">
+                                        <div>
+                                            <div className="flex justify-between text-xs font-bold text-gray-400 mb-1.5">
+                                                <span>Gesamtbudget</span>
+                                                <span className="text-white font-black">
+                                                    {budget.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}
+                                                </span>
+                                            </div>
+                                            <div className="w-full h-3 rounded-full bg-white/5 overflow-hidden border border-white/10 p-[2px] relative flex">
+                                                <div 
+                                                    className="h-full rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 transition-all duration-500"
+                                                    style={{ width: `${costPercent}%` }}
+                                                ></div>
+                                                <div 
+                                                    className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-500"
+                                                    style={{ width: `${marginPercent}%` }}
+                                                ></div>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                                                <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">
+                                                    Geschätzte Kosten ({costPercent}%)
+                                                </div>
+                                                <div className="text-base font-black text-amber-400">
+                                                    {estimatedCosts.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}
+                                                </div>
+                                            </div>
+                                            <div className="bg-emerald-500/5 p-4 rounded-xl border border-emerald-500/10">
+                                                <div className={`text-[10px] uppercase tracking-widest font-bold mb-1 ${profitMargin >= 0 ? 'text-emerald-500/70' : 'text-red-500/70'}`}>
+                                                    Geplante Marge ({marginPercent}%)
+                                                </div>
+                                                <div className={`text-base font-black ${profitMargin >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                    {profitMargin.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
 
                         {/* Survey/Answers Card */}
                         {(project.category || (project.answers && project.answers.length > 0)) && (
@@ -542,6 +1019,39 @@ const ProjectDetails = () => {
 
                     {/* Sidebar Info */}
                     <div className="space-y-6">
+                        {/* Weather Forecast Widget */}
+                        {project.address && (
+                            <div className="glass-card rounded-2xl p-6">
+                                <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4 border-b border-white/10 pb-3 flex items-center gap-2">
+                                    <i className="fa-solid fa-cloud-sun text-blue-400"></i> Wetter vor Ort
+                                </h3>
+                                {loadingWeather && (
+                                    <div className="flex items-center justify-center py-6 text-xs text-gray-500 animate-pulse">
+                                        <i className="fa-solid fa-circle-notch animate-spin mr-2"></i> Lade Wetterdaten...
+                                    </div>
+                                )}
+                                {!loadingWeather && weatherForecast && (
+                                    <div className="grid grid-cols-3 gap-3">
+                                        {weatherForecast.map((w, idx) => (
+                                            <div key={idx} className="bg-white/5 p-3 rounded-xl border border-white/5 text-center flex flex-col items-center justify-between gap-2 hover:bg-white/10 transition-all">
+                                                <span className="text-[10px] text-gray-400 font-bold uppercase">{w.date}</span>
+                                                <div className="text-xl">
+                                                    <i className={`fa-solid ${getWeatherIconClass(w.code)}`}></i>
+                                                </div>
+                                                <div className="flex flex-col">
+                                                    <span className="text-xs font-black text-white">{w.tempMax}°C</span>
+                                                    <span className="text-[9px] text-gray-500">{w.tempMin}°C</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                {!loadingWeather && !weatherForecast && (
+                                    <div className="text-xs text-gray-500 italic text-center py-4">Wetterdaten nicht verfügbar</div>
+                                )}
+                            </div>
+                        )}
+
                         {/* Client Info */}
                         <div className="glass-card rounded-2xl p-6">
                             <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4 border-b border-white/10 pb-3">Kundeninformationen</h3>
@@ -672,10 +1182,19 @@ const ProjectDetails = () => {
                                 >
                                     <i className="fa-solid fa-check-square text-emerald-400 w-4"></i> Etappe hinzufügen
                                 </button>
-                                <button className="w-full bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 rounded-lg py-2 text-sm transition-colors text-left px-4 flex items-center gap-3">
-                                    <i className="fa-solid fa-note-sticky text-yellow-400 w-4"></i> Notiz anheften
+                                <button 
+                                    onClick={() => {
+                                        setActiveTab('diary');
+                                        setIsAddingLog(true);
+                                    }}
+                                    className="w-full bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 rounded-lg py-2 text-sm transition-colors text-left px-4 flex items-center gap-3"
+                                >
+                                    <i className="fa-solid fa-note-sticky text-yellow-400 w-4"></i> Bautagebuch-Eintrag
                                 </button>
-                                <button className="w-full bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 rounded-lg py-2 text-sm transition-colors text-left px-4 flex items-center gap-3">
+                                <button 
+                                    onClick={() => setActiveTab('files')}
+                                    className="w-full bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 rounded-lg py-2 text-sm transition-colors text-left px-4 flex items-center gap-3"
+                                >
                                     <i className="fa-solid fa-folder text-blue-400 w-4"></i> Dateien verwalten
                                 </button>
                             </div>
@@ -734,23 +1253,33 @@ const ProjectDetails = () => {
                                         type="text"
                                         value={newTaskTitle}
                                         onChange={e => setNewTaskTitle(e.target.value)}
+                                        disabled={isSavingTask}
                                         placeholder="Etappenname (z.B. Fundament gießen)"
-                                        className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500"
+                                        className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                                         onKeyDown={e => e.key === 'Enter' && handleAddTask()}
                                     />
                                     <button
                                         onClick={handleAddTask}
-                                        className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg shadow-blue-500/20"
+                                        disabled={isSavingTask}
+                                        className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                        Erstellen
+                                        {isSavingTask ? (
+                                            <>
+                                                <i className="fa-solid fa-circle-notch animate-spin"></i>
+                                                Speichern...
+                                            </>
+                                        ) : (
+                                            'Erstellen'
+                                        )}
                                     </button>
                                 </div>
 
                                 <textarea
                                     value={newTaskDescription}
                                     onChange={e => setNewTaskDescription(e.target.value)}
+                                    disabled={isSavingTask}
                                     placeholder="Beschreibung der Etappe (optional)"
-                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-blue-500 resize-none"
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-blue-500 resize-none disabled:opacity-50 disabled:cursor-not-allowed"
                                     rows="3"
                                 />
 
@@ -760,26 +1289,56 @@ const ProjectDetails = () => {
                                         {selectedFiles.map((file, i) => (
                                             <div key={i} className="relative w-20 h-20 rounded-xl overflow-hidden border border-white/10 shadow-lg">
                                                 <img src={URL.createObjectURL(file)} alt="" className="w-full h-full object-cover" />
-                                                <button
-                                                    onClick={() => setSelectedFiles(selectedFiles.filter((_, idx) => idx !== i))}
-                                                    className="absolute top-1 right-1 bg-black/60 text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px] hover:bg-red-500 transition-colors"
-                                                >
-                                                    <i className="fa-solid fa-xmark"></i>
-                                                </button>
+                                                {!isSavingTask && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSelectedFiles(selectedFiles.filter((_, idx) => idx !== i))}
+                                                        className="absolute top-1 right-1 bg-black/60 text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px] hover:bg-red-500 transition-colors"
+                                                    >
+                                                        <i className="fa-solid fa-xmark"></i>
+                                                    </button>
+                                                )}
                                             </div>
                                         ))}
-                                        <label className="w-20 h-20 rounded-xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center text-gray-500 hover:border-blue-500/50 hover:text-blue-400 cursor-pointer transition-all bg-white/5">
-                                            <i className="fa-solid fa-camera text-lg"></i>
-                                            <span className="text-[10px] mt-1 font-bold">Upload</span>
-                                            <input
-                                                type="file"
-                                                multiple
-                                                className="hidden"
-                                                onChange={e => setSelectedFiles([...selectedFiles, ...Array.from(e.target.files)])}
-                                            />
-                                        </label>
+                                        {!isSavingTask ? (
+                                            <label className="w-20 h-20 rounded-xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center text-gray-500 hover:border-blue-500/50 hover:text-blue-400 cursor-pointer transition-all bg-white/5">
+                                                <i className="fa-solid fa-camera text-lg"></i>
+                                                <span className="text-[10px] mt-1 font-bold">Upload</span>
+                                                <input
+                                                    type="file"
+                                                    multiple
+                                                    className="hidden"
+                                                    onChange={e => setSelectedFiles([...selectedFiles, ...Array.from(e.target.files)])}
+                                                />
+                                            </label>
+                                        ) : (
+                                            <div className="w-20 h-20 rounded-xl border-2 border-dashed border-white/5 flex flex-col items-center justify-center text-gray-600 bg-white/[0.02] cursor-not-allowed">
+                                                <i className="fa-solid fa-camera text-lg"></i>
+                                                <span className="text-[10px] mt-1 font-bold">Warten...</span>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
+
+                                {isSavingTask && (
+                                    <div className="space-y-2 bg-white/5 p-4 rounded-xl border border-white/5 animate-[fadeIn_0.3s_ease-out] pt-4 border-t border-white/10 mt-2">
+                                        <div className="flex justify-between text-xs font-bold text-gray-400">
+                                            <span className="flex items-center gap-2">
+                                                <i className="fa-solid fa-circle-notch animate-spin text-blue-400"></i>
+                                                Bilder werden hochgeladen...
+                                            </span>
+                                            <span className="text-blue-400 font-mono">{taskUploadProgress}%</span>
+                                        </div>
+                                        <div className="w-full h-2 bg-black/40 rounded-full overflow-hidden border border-white/5">
+                                            <div 
+                                                className="h-full bg-gradient-to-r from-blue-500 to-indigo-400 transition-all duration-300 relative"
+                                                style={{ width: `${taskUploadProgress}%` }}
+                                            >
+                                                <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
 
@@ -818,15 +1377,24 @@ const ProjectDetails = () => {
                                                             type="text"
                                                             value={editTaskTitle}
                                                             onChange={e => setEditTaskTitle(e.target.value)}
-                                                            className="flex-1 bg-black/40 border border-blue-500/40 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
+                                                            disabled={isSavingTask}
+                                                            className="flex-1 bg-black/40 border border-blue-500/40 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                                                             autoFocus
                                                             placeholder="Titel"
                                                         />
                                                         <div className="flex gap-2">
-                                                            <button onClick={() => handleSaveTaskEdit(task.id)} className="flex-1 sm:w-10 h-10 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 flex items-center justify-center transition-all border border-emerald-500/30">
-                                                                <i className="fa-solid fa-check"></i>
+                                                            <button 
+                                                                onClick={() => handleSaveTaskEdit(task.id)} 
+                                                                disabled={isSavingTask}
+                                                                className="flex-1 sm:w-10 h-10 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 flex items-center justify-center transition-all border border-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            >
+                                                                {isSavingTask ? <i className="fa-solid fa-circle-notch animate-spin"></i> : <i className="fa-solid fa-check"></i>}
                                                             </button>
-                                                            <button onClick={() => setEditingTaskId(null)} className="flex-1 sm:w-10 h-10 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 flex items-center justify-center transition-all border border-red-500/30">
+                                                            <button 
+                                                                onClick={() => setEditingTaskId(null)} 
+                                                                disabled={isSavingTask}
+                                                                className="flex-1 sm:w-10 h-10 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 flex items-center justify-center transition-all border border-red-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            >
                                                                 <i className="fa-solid fa-xmark"></i>
                                                             </button>
                                                         </div>
@@ -835,8 +1403,9 @@ const ProjectDetails = () => {
                                                     <textarea
                                                         value={editTaskDescription}
                                                         onChange={e => setEditTaskDescription(e.target.value)}
+                                                        disabled={isSavingTask}
                                                         placeholder="Beschreibung"
-                                                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:border-blue-500 resize-none"
+                                                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:border-blue-500 resize-none disabled:opacity-50 disabled:cursor-not-allowed"
                                                         rows="3"
                                                     />
 
@@ -847,18 +1416,20 @@ const ProjectDetails = () => {
                                                             {task.images?.map(img => (
                                                                 <div key={img.id} className={`relative w-16 h-16 rounded-lg overflow-hidden border transition-all ${imagesToDelete.includes(img.id) ? 'border-red-500 opacity-40 grayscale' : 'border-white/10'}`}>
                                                                     <img src={getImageUrl(img.path)} alt="" className="w-full h-full object-cover" />
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            if (imagesToDelete.includes(img.id)) {
-                                                                                setImagesToDelete(imagesToDelete.filter(id => id !== img.id));
-                                                                            } else {
-                                                                                setImagesToDelete([...imagesToDelete, img.id]);
-                                                                            }
-                                                                        }}
-                                                                        className={`absolute top-0.5 right-0.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] shadow-lg transition-colors ${imagesToDelete.includes(img.id) ? 'bg-emerald-500 text-white' : 'bg-red-500/80 text-white hover:bg-red-600'}`}
-                                                                    >
-                                                                        <i className={`fa-solid ${imagesToDelete.includes(img.id) ? 'fa-undo' : 'fa-trash'}`}></i>
-                                                                    </button>
+                                                                    {!isSavingTask && (
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                if (imagesToDelete.includes(img.id)) {
+                                                                                    setImagesToDelete(imagesToDelete.filter(id => id !== img.id));
+                                                                                } else {
+                                                                                    setImagesToDelete([...imagesToDelete, img.id]);
+                                                                                }
+                                                                            }}
+                                                                            className={`absolute top-0.5 right-0.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] shadow-lg transition-colors ${imagesToDelete.includes(img.id) ? 'bg-emerald-500 text-white' : 'bg-red-500/80 text-white hover:bg-red-600'}`}
+                                                                        >
+                                                                            <i className={`fa-solid ${imagesToDelete.includes(img.id) ? 'fa-undo' : 'fa-trash'}`}></i>
+                                                                        </button>
+                                                                    )}
                                                                 </div>
                                                             ))}
                                                             {!task.images?.length && <div className="text-[10px] text-gray-500 italic px-1">Keine Bilder vorhanden</div>}
@@ -872,26 +1443,56 @@ const ProjectDetails = () => {
                                                             {editSelectedFiles.map((file, i) => (
                                                                 <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-blue-500/30">
                                                                     <img src={URL.createObjectURL(file)} alt="" className="w-full h-full object-cover" />
-                                                                    <button
-                                                                        onClick={() => setEditSelectedFiles(editSelectedFiles.filter((_, idx) => idx !== i))}
-                                                                        className="absolute top-0.5 right-0.5 bg-black/60 text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px]"
-                                                                    >
-                                                                        <i className="fa-solid fa-xmark"></i>
-                                                                    </button>
+                                                                    {!isSavingTask && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => setEditSelectedFiles(editSelectedFiles.filter((_, idx) => idx !== i))}
+                                                                            className="absolute top-0.5 right-0.5 bg-black/60 text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px]"
+                                                                        >
+                                                                            <i className="fa-solid fa-xmark"></i>
+                                                                        </button>
+                                                                    )}
                                                                 </div>
                                                             ))}
-                                                            <label className="w-16 h-16 rounded-lg border-2 border-dashed border-white/10 flex flex-col items-center justify-center text-gray-500 hover:border-blue-500/50 hover:text-blue-400 cursor-pointer transition-all">
-                                                                <i className="fa-solid fa-plus text-xs"></i>
-                                                                <span className="text-[8px] mt-1">Upload</span>
-                                                                <input
-                                                                    type="file"
-                                                                    multiple
-                                                                    className="hidden"
-                                                                    onChange={e => setEditSelectedFiles([...editSelectedFiles, ...Array.from(e.target.files)])}
-                                                                />
-                                                            </label>
+                                                            {!isSavingTask ? (
+                                                                <label className="w-16 h-16 rounded-lg border-2 border-dashed border-white/10 flex flex-col items-center justify-center text-gray-500 hover:border-blue-500/50 hover:text-blue-400 cursor-pointer transition-all">
+                                                                    <i className="fa-solid fa-plus text-xs"></i>
+                                                                    <span className="text-[8px] mt-1">Upload</span>
+                                                                    <input
+                                                                        type="file"
+                                                                        multiple
+                                                                        className="hidden"
+                                                                        onChange={e => setEditSelectedFiles([...editSelectedFiles, ...Array.from(e.target.files)])}
+                                                                    />
+                                                                </label>
+                                                            ) : (
+                                                                <div className="w-16 h-16 rounded-lg border-2 border-dashed border-white/5 flex flex-col items-center justify-center text-gray-600 bg-white/[0.02] cursor-not-allowed">
+                                                                    <i className="fa-solid fa-plus text-xs"></i>
+                                                                    <span className="text-[8px] mt-1">Warten...</span>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
+
+                                                    {isSavingTask && (
+                                                        <div className="space-y-2 bg-white/5 p-4 rounded-xl border border-white/5 animate-[fadeIn_0.3s_ease-out] pt-4 border-t border-white/10 mt-2">
+                                                            <div className="flex justify-between text-xs font-bold text-gray-400">
+                                                                <span className="flex items-center gap-2">
+                                                                    <i className="fa-solid fa-circle-notch animate-spin text-blue-400"></i>
+                                                                    Änderungen werden gespeichert...
+                                                                </span>
+                                                                <span className="text-blue-400 font-mono">{taskUploadProgress}%</span>
+                                                            </div>
+                                                            <div className="w-full h-2 bg-black/40 rounded-full overflow-hidden border border-white/5">
+                                                                <div 
+                                                                    className="h-full bg-gradient-to-r from-blue-500 to-indigo-400 transition-all duration-300 relative"
+                                                                    style={{ width: `${taskUploadProgress}%` }}
+                                                                >
+                                                                    <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             ) : (
                                                 <div className="space-y-2">
@@ -925,13 +1526,29 @@ const ProjectDetails = () => {
                                                     {/* Task Images */}
                                                     {task.images?.length > 0 && (
                                                         <div className="flex flex-wrap gap-2 pt-1">
-                                                            {task.images.map(img => (
-                                                                <div key={img.id} className="w-14 h-14 rounded-xl overflow-hidden border border-white/10 cursor-pointer hover:border-blue-500/50 transition-all shadow-lg">
+                                                            {task.images.map((img, imgIdx) => (
+                                                                <div 
+                                                                    key={img.id} 
+                                                                    className="w-14 h-14 rounded-xl overflow-hidden border border-white/10 cursor-pointer hover:border-blue-500/50 transition-all shadow-lg"
+                                                                    title="Bild in Vollbild öffnen"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        const mappedImages = task.images.map(ti => ({
+                                                                            id: ti.id,
+                                                                            file_name: ti.path.split('/').pop() || 'Bild',
+                                                                            content_type: 'image/jpeg',
+                                                                            file_url: ti.path,
+                                                                            original_url: ti.path,
+                                                                            thumb_url: ti.path,
+                                                                            file_size: 0
+                                                                        }));
+                                                                        openMediaViewer(mappedImages, imgIdx);
+                                                                    }}
+                                                                >
                                                                     <img
                                                                         src={getImageUrl(img.path)}
                                                                         alt=""
                                                                         className="w-full h-full object-cover"
-                                                                        onClick={() => window.open(getImageUrl(img.path), '_blank')}
                                                                     />
                                                                 </div>
                                                             ))}
@@ -994,6 +1611,302 @@ const ProjectDetails = () => {
                 <ProjectFileManager project={project} />
             )}
 
+            {/* Tab: Bautagebuch (Journal) */}
+            {activeTab === 'diary' && (
+                <div className="space-y-6 animate-[fadeIn_0.3s_ease-out]">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <h3 className="text-xl font-bold text-white">Bautagebuch & Journal</h3>
+                            <p className="text-gray-400 text-xs mt-1">Dokumentieren Sie den täglichen Fortschritt und Vorfälle auf der Baustelle.</p>
+                        </div>
+                        <button
+                            onClick={() => setIsAddingLog(!isAddingLog)}
+                            className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2 self-start sm:self-center"
+                        >
+                            <i className={`fa-solid ${isAddingLog ? 'fa-xmark' : 'fa-plus'}`}></i>
+                            {isAddingLog ? 'Abbrechen' : 'Eintrag hinzufügen'}
+                        </button>
+                    </div>
+
+                    {isAddingLog && (
+                        <div className="glass-card rounded-2xl p-6 border border-white/10 bg-white/5 animate-[fadeInUp_0.4s_ease-out]">
+                            <h4 className="text-sm font-bold text-white mb-4 uppercase tracking-[0.2em]">Neuer Tagebucheintrag</h4>
+                            <form onSubmit={handleAddDiaryLog} className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Titel</label>
+                                        <input 
+                                            type="text" 
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                                            placeholder="z.B. Fundament betoniert, Elektrik verlegt..."
+                                            value={newLogTitle}
+                                            onChange={e => setNewLogTitle(e.target.value)}
+                                            required
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Datum</label>
+                                        <input 
+                                            type="date" 
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                                            value={newLogDate}
+                                            onChange={e => setNewLogDate(e.target.value)}
+                                            required
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Kategorie</label>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                        {[
+                                            { key: 'green', label: 'Fortschritt', bg: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400', activeBg: 'bg-emerald-600 border-emerald-500 text-white shadow-lg shadow-emerald-500/20' },
+                                            { key: 'blue', label: 'Info', bg: 'bg-blue-500/10 border-blue-500/30 text-blue-400', activeBg: 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20' },
+                                            { key: 'yellow', label: 'Wichtig / Warnung', bg: 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400', activeBg: 'bg-yellow-600 border-yellow-500 text-black shadow-lg shadow-yellow-500/20' },
+                                            { key: 'red', label: 'Problem / Baustopp', bg: 'bg-red-500/10 border-red-500/30 text-red-400', activeBg: 'bg-red-600 border-red-500 text-white shadow-lg shadow-red-500/20' }
+                                        ].map(cat => (
+                                            <button
+                                                key={cat.key}
+                                                type="button"
+                                                onClick={() => setNewLogCategory(cat.key)}
+                                                className={`py-3 px-1 rounded-xl text-xs font-bold border transition-all ${
+                                                    newLogCategory === cat.key ? cat.activeBg : `${cat.bg} hover:bg-white/5`
+                                                }`}
+                                            >
+                                                {cat.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-3 bg-white/5 p-4 rounded-xl border border-white/5 select-none cursor-pointer hover:bg-white/10 transition-colors" onClick={() => setNewLogIsPinned(!newLogIsPinned)}>
+                                    <input 
+                                        type="checkbox"
+                                        checked={newLogIsPinned}
+                                        onChange={e => setNewLogIsPinned(e.target.checked)}
+                                        onClick={e => e.stopPropagation()}
+                                        className="w-4 h-4 rounded border-white/10 bg-white/5 text-blue-500 focus:ring-blue-500/50 focus:ring-offset-0 focus:outline-none"
+                                    />
+                                    <div>
+                                        <div className="text-xs font-bold text-white uppercase tracking-wider">Notiz anheften (Wichtig)</div>
+                                        <div className="text-[10px] text-gray-400 mt-0.5">Diese Notiz wird ganz oben im Tagebuch und auf der Projektübersicht angeheftet.</div>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Bericht / Beschreibung</label>
+                                    <textarea 
+                                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-4 text-white text-sm min-h-[120px] leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                                        placeholder="Beschreiben Sie hier im Detail die geleisteten Arbeiten, Zwischenfälle oder Abnahmen..."
+                                        value={newLogContent}
+                                        onChange={e => setNewLogContent(e.target.value)}
+                                        required
+                                    ></textarea>
+                                </div>
+
+                                {/* Onsite Photos Attachments */}
+                                <div>
+                                    <div className="flex justify-between items-center mb-2">
+                                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest">Fotos von der Baustelle ({newLogFiles.length})</label>
+                                        <button 
+                                            type="button"
+                                            onClick={() => logFileInputRef.current?.click()}
+                                            className="text-xs font-bold text-blue-400 hover:text-blue-300 transition-colors"
+                                        >
+                                            + Bilder hinzufügen
+                                        </button>
+                                    </div>
+                                    <input 
+                                        type="file" 
+                                        multiple 
+                                        ref={logFileInputRef} 
+                                        onChange={handleLogFileChange} 
+                                        accept="image/*" 
+                                        className="hidden" 
+                                    />
+                                    
+                                    <div className="flex flex-wrap gap-2">
+                                        {newLogFiles.map((file, i) => (
+                                            <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden border border-blue-500/30 shadow-lg animate-[scaleIn_0.2s_ease-out]">
+                                                <img src={URL.createObjectURL(file)} alt="" className="w-full h-full object-cover" />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeLogFile(i)}
+                                                    className="absolute top-0.5 right-0.5 bg-black/60 text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px] hover:bg-black/80 transition-colors"
+                                                >
+                                                    <i className="fa-solid fa-xmark"></i>
+                                                </button>
+                                            </div>
+                                        ))}
+                                        {newLogFiles.length === 0 && (
+                                            <p className="text-xs text-gray-600 italic">Keine Fotos ausgewählt.</p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {isSavingLog && (
+                                    <div className="space-y-2 bg-white/5 p-4 rounded-xl border border-white/5 animate-[fadeIn_0.3s_ease-out]">
+                                        <div className="flex justify-between text-xs font-bold text-gray-400">
+                                            <span className="flex items-center gap-2">
+                                                <i className="fa-solid fa-circle-notch animate-spin text-blue-400"></i>
+                                                Eintrag wird gespeichert...
+                                            </span>
+                                            <span className="text-blue-400 font-mono">{logUploadProgress}%</span>
+                                        </div>
+                                        <div className="w-full h-2 bg-black/40 rounded-full overflow-hidden border border-white/5">
+                                            <div 
+                                                className="h-full bg-gradient-to-r from-blue-500 to-indigo-400 transition-all duration-300 relative"
+                                                style={{ width: `${logUploadProgress}%` }}
+                                            >
+                                                <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="flex items-center gap-3 pt-2">
+                                    <button 
+                                        type="submit"
+                                        disabled={isSavingLog}
+                                        className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-6 py-3 rounded-xl text-sm transition-all shadow-lg shadow-blue-500/20 active:scale-95 hover:scale-[1.02] flex items-center gap-2 disabled:opacity-50"
+                                    >
+                                        {isSavingLog ? (
+                                            <>
+                                                <i className="fa-solid fa-circle-notch animate-spin text-xs"></i>
+                                                Speichern...
+                                            </>
+                                        ) : (
+                                            'Speichern'
+                                        )}
+                                    </button>
+                                    <button 
+                                        type="button"
+                                        onClick={() => setIsAddingLog(false)}
+                                        disabled={isSavingLog}
+                                        className="bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 font-bold px-6 py-3 rounded-xl text-sm transition-all hover:scale-[1.02] disabled:opacity-50"
+                                    >
+                                        Abbrechen
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    )}
+
+                    {loadingDiary ? (
+                        <div className="flex items-center justify-center py-20 text-gray-500 animate-pulse">
+                            <i className="fa-solid fa-circle-notch animate-spin text-2xl mr-3 text-blue-500"></i>
+                            <span>Lade Bautagebuch...</span>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {diaryLogs.length > 0 ? (
+                                diaryLogs.map(log => {
+                                    // Map color keys to CSS styles
+                                    const getCatColorClasses = (col) => {
+                                        switch (col) {
+                                            case 'green': return { border: 'border-l-emerald-500', badge: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400', label: 'Fortschritt' };
+                                            case 'yellow': return { border: 'border-l-yellow-500', badge: 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400', label: 'Wichtig' };
+                                            case 'red': return { border: 'border-l-red-500', badge: 'bg-red-500/10 border-red-500/20 text-red-400', label: 'Problem' };
+                                            default: return { border: 'border-l-blue-500', badge: 'bg-blue-500/10 border-blue-500/20 text-blue-400', label: 'Information' };
+                                        }
+                                    };
+                                    
+                                    const design = getCatColorClasses(log.color);
+                                    
+                                    return (
+                                        <div 
+                                            key={log.id} 
+                                            className={`glass-card p-6 rounded-2xl border border-white/10 border-l-4 ${design.border} ${log.isPinned ? 'border-amber-500/30 bg-amber-500/[0.02] shadow-[0_0_15px_rgba(245,158,11,0.05)]' : 'bg-white/5'} space-y-4 transition-all hover:bg-white/10 group`}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex flex-wrap items-center gap-3">
+                                                    {log.isPinned && (
+                                                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-lg border bg-amber-500/10 border-amber-500/20 text-amber-400 flex items-center gap-1 animate-pulse">
+                                                            <i className="fa-solid fa-thumbtack text-[8px]"></i> Angeheftet
+                                                        </span>
+                                                    )}
+                                                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-lg border ${design.badge}`}>
+                                                        {design.label}
+                                                    </span>
+                                                    <span className="text-xs text-gray-400 font-medium">
+                                                        {new Date(log.date).toLocaleDateString('de-DE')} {log.time || ''}
+                                                    </span>
+                                                    {log.user && (
+                                                        <span className="text-xs text-blue-400 font-bold flex items-center gap-1.5 pl-2 border-l border-white/10">
+                                                            <i className="fa-solid fa-user-pen text-[10px]"></i>
+                                                            {log.user.name}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                
+                                                <div className="flex items-center gap-2">
+                                                    <button 
+                                                        onClick={() => handleTogglePinDiaryLog(log.id, log.isPinned)}
+                                                        className={`p-1.5 rounded-lg transition-all ${log.isPinned ? 'text-amber-400 bg-amber-500/10 border border-amber-500/20' : 'text-gray-500 hover:text-amber-400 hover:bg-white/5 opacity-0 group-hover:opacity-100'}`}
+                                                        title={log.isPinned ? 'Notiz lösen' : 'Notiz anheften'}
+                                                    >
+                                                        <i className="fa-solid fa-thumbtack text-xs"></i>
+                                                    </button>
+                                                    
+                                                    {(canManageStages || log.user_id === currentUser.id) && (
+                                                        <button 
+                                                            onClick={() => handleDeleteDiaryLog(log.id)}
+                                                            className="text-gray-600 hover:text-red-400 transition-colors p-1.5 opacity-0 group-hover:opacity-100"
+                                                            title="Eintrag löschen"
+                                                        >
+                                                            <i className="fa-solid fa-trash-can text-sm"></i>
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <h4 className="text-lg font-black text-white">{log.title}</h4>
+                                                <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">{log.content}</p>
+                                            </div>
+
+                                            {/* Photo gallery inside log */}
+                                            {log.attachments?.length > 0 && (
+                                                <div className="flex flex-wrap gap-2 pt-2 border-t border-white/5">
+                                                    {log.attachments.map((att, attIdx) => (
+                                                        <div 
+                                                            key={att.id} 
+                                                            className="w-20 h-20 rounded-xl overflow-hidden border border-white/10 hover:border-blue-500/50 transition-all shadow-lg cursor-pointer"
+                                                            title="Bild in Vollbild öffnen"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                openMediaViewer(log.attachments, attIdx);
+                                                            }}
+                                                        >
+                                                            <img 
+                                                                src={getImageUrl(att.file_url || att.original_url)} 
+                                                                alt={att.file_name} 
+                                                                className="w-full h-full object-cover"
+                                                            />
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })
+                            ) : (
+                                <div className="text-center py-16 bg-white/5 border border-white/10 rounded-2xl">
+                                    <i className="fa-solid fa-book-open text-4xl text-gray-600 mb-4 opacity-30"></i>
+                                    <p className="text-gray-400">Keine Bautagebucheinträge für dieses Projekt vorhanden.</p>
+                                    <button
+                                        onClick={() => setIsAddingLog(true)}
+                                        className="mt-4 text-blue-400 hover:underline text-sm font-medium"
+                                    >
+                                        Ersten Eintrag jetzt erstellen
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
+
             <ProjectEditModal
                 isOpen={isEditModalOpen}
                 onClose={() => setIsEditModalOpen(false)}
@@ -1002,6 +1915,13 @@ const ProjectDetails = () => {
                     // Force a reload so the survey answers and all deep nested relational data refreshes correctly
                     window.location.reload();
                 }}
+            />
+
+            <MediaViewer 
+                isOpen={isMediaViewerOpen}
+                onClose={() => setIsMediaViewerOpen(false)}
+                items={mediaViewerItems}
+                initialIndex={mediaViewerIndex}
             />
         </div>
     );

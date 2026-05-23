@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 import socketService from '../../services/socket';
@@ -517,7 +517,9 @@ const EmailMessages = () => {
                                 )}
                             </button>
                         );
-                    })}
+                     })}
+
+                    {/* Bulk email link removed from menu as per privacy requirements */}
                 </div>
 
                 {/* Content Area */}

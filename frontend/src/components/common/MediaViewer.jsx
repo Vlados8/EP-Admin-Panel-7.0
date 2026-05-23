@@ -41,7 +41,9 @@ const MediaViewer = ({ isOpen, onClose, items = [], initialIndex = 0, onShare })
         if (!currentItem) return;
         
         try {
-            const fileUrl = getImageUrl(currentItem.file_url);
+            // Use original_url for downloads for best quality
+            const downloadUrl = currentItem.original_url || currentItem.file_url || currentItem.url;
+            const fileUrl = getImageUrl(downloadUrl);
             const response = await fetch(fileUrl);
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
@@ -54,13 +56,14 @@ const MediaViewer = ({ isOpen, onClose, items = [], initialIndex = 0, onShare })
             window.URL.revokeObjectURL(url);
         } catch (err) {
             console.error('Download error:', err);
-            window.open(getImageUrl(currentItem.file_url), '_blank');
+            window.open(getImageUrl(currentItem.original_url || currentItem.file_url), '_blank');
         }
     };
 
     const handleOpenInNewTab = (e) => {
         if (e) e.stopPropagation();
-        window.open(getImageUrl(currentItem.file_url), '_blank');
+        // Use original_url for new tab for best quality
+        window.open(getImageUrl(currentItem.original_url || currentItem.file_url), '_blank');
     };
 
     const internalShare = (e) => {
@@ -77,14 +80,13 @@ const MediaViewer = ({ isOpen, onClose, items = [], initialIndex = 0, onShare })
 
     const currentItem = items[currentIndex];
     
-    // DEBUG: Log the structure to help identify mismatches in structure
-    // console.log('MediaViewer currentItem:', currentItem);
-
     // Support both FileAsset (name, mime_type, size) and Attachment (file_name, content_type, file_size)
     const name = currentItem.name || currentItem.file_name || '';
     const type = currentItem.mime_type || currentItem.content_type || '';
     const size = currentItem.size || currentItem.file_size || 0;
-    const url = currentItem.file_url || currentItem.url || '';
+    const url = currentItem.file_url || currentItem.url || ''; // This is the 75% quality compressed version
+    const thumbUrl = currentItem.thumb_url || url; // This is the 50% quality thumbnail
+    const originalUrl = currentItem.original_url || url; // This is the original high-quality file
 
     const isImage = type.startsWith('image/') || 
                     name.match(/\.(jpg|jpeg|png|gif|webp|svg|avif)$/i) ||
@@ -173,7 +175,7 @@ const MediaViewer = ({ isOpen, onClose, items = [], initialIndex = 0, onShare })
                     {isImage ? (
                         <img 
                             crossOrigin="anonymous"
-                            src={getImageUrl(currentItem.file_url)} 
+                            src={getImageUrl(url)} 
                             alt={name}
                             className="max-w-full max-h-[85vh] object-contain shadow-2xl rounded-sm transition-transform duration-300"
                             style={{ transform: `scale(${zoom})` }}
@@ -254,7 +256,7 @@ const MediaViewer = ({ isOpen, onClose, items = [], initialIndex = 0, onShare })
                                 {isThumbImage ? (
                                     <img 
                                         crossOrigin="anonymous"
-                                        src={getImageUrl(item.file_url)} 
+                                        src={getImageUrl(item.thumb_url || item.file_url)} 
                                         alt="" 
                                         className="w-full h-full object-cover" 
                                     />

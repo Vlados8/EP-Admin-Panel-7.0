@@ -4,12 +4,19 @@ const path = require('path');
 const AppError = require('../../utils/appError');
 const { hasPermission } = require('../../utils/permissions');
 const { uploadToR2, deleteFromR2 } = require('../utils/storage');
+const sharp = require('sharp');
 
 // Get all notes, potentially filtered by date or month
 exports.getNotes = async (req, res, next) => {
     try {
         const whereClause = {};
-        whereClause.user_id = req.user.id;
+        
+        if (req.query.projectId) {
+            whereClause.project_id = req.query.projectId;
+            whereClause.showInDiary = true;
+        } else {
+            whereClause.user_id = req.user.id;
+        }
 
         const notes = await Note.findAll({
             where: whereClause,
@@ -46,7 +53,7 @@ exports.getNotes = async (req, res, next) => {
 // Create a new note
 exports.createNote = async (req, res, next) => {
     try {
-        const { title, content, date, time, color, project_id } = req.body;
+        const { title, content, date, time, color, project_id, showInDiary } = req.body;
 
         let user_id = req.user.id;
 
@@ -60,21 +67,45 @@ exports.createNote = async (req, res, next) => {
             date,
             time: time || null,
             color,
-            project_id: project_id || null,
-            user_id
+            project_id: (project_id === '' || project_id === 'null' || !project_id) ? null : project_id,
+            user_id,
+            isPinned: req.body.isPinned || false,
+            showInDiary: showInDiary === 'true' || showInDiary === true || false
         });
 
-        // Handle File Uploads: upload to R2
+        // Handle File Uploads: upload to R2 with tiered quality (Original, Compressed, Thumbnail)
         if (req.files && req.files.length > 0) {
             for (const file of req.files) {
                 try {
-                    const r2Key = `notes/${file.filename}`;
-                    const fileUrl = await uploadToR2(file.path, r2Key, file.mimetype);
+                    let fileUrl = null;
+                    let thumbUrl = null;
+                    let originalUrl = null;
+
+                    // 1. Upload Original File
+                    const originalR2Key = `notes/original_${file.filename}`;
+                    originalUrl = await uploadToR2(file.path, originalR2Key, file.mimetype);
+
+                    if (file.mimetype.startsWith('image/')) {
+                        // 2. Create Compressed Version (High resolution, 75% quality)
+                        const compressedPath = file.path + '_compressed.jpg';
+                        await sharp(file.path)
+                            .jpeg({ quality: 75, progressive: true })
+                            .toFile(compressedPath);
+                        
+                        const compressedR2Key = `notes/${file.filename}`;
+                        fileUrl = await uploadToR2(compressedPath, compressedR2Key, 'image/jpeg');
+                        if (fs.existsSync(compressedPath)) fs.unlinkSync(compressedPath);
+                    } else {
+                        // For non-images, fileUrl is the same as originalUrl
+                        fileUrl = originalUrl;
+                    }
 
                     await Attachment.create({
                         note_id: newNote.id,
                         file_name: file.originalname,
                         file_url: fileUrl,
+                        thumb_url: null, // No longer creating thumbnails
+                        original_url: originalUrl,
                         file_size: file.size,
                         content_type: file.mimetype
                     });
@@ -85,7 +116,6 @@ exports.createNote = async (req, res, next) => {
                 } catch (uploadErr) {
                     const errorMsg = uploadErr.message || 'Unknown R2 error';
                     console.error(`[NoteController] Failed to upload note attachment ${file.originalname} to R2:`, errorMsg);
-                    // Log more context to errors log if possible
                     if (process.env.ENABLE_FILE_LOGGING === 'true') {
                         const logger = require('../../utils/logger');
                         logger.error(`Note Attachment Upload Failure: ${file.originalname} | Error: ${errorMsg}`);
@@ -130,14 +160,31 @@ exports.deleteNote = async (req, res, next) => {
         // Delete File Attachments
         if (note.attachments && note.attachments.length > 0) {
             for (const att of note.attachments) {
-                if (att.file_url.startsWith('http')) {
+                if (att.file_url && att.file_url.startsWith('http')) {
                     // R2 File
+                    // 1. Delete compressed file (file_url)
                     try {
                         const urlObj = new URL(att.file_url);
                         const key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
                         await deleteFromR2(key);
-                    } catch (delErr) {
-                        console.error('Error deleting from R2:', delErr);
+                    } catch (err) { console.error('Error deleting file_url:', err); }
+
+                    // 2. Delete original file (original_url)
+                    if (att.original_url && att.original_url !== att.file_url) {
+                        try {
+                            const urlObj = new URL(att.original_url);
+                            const key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
+                            await deleteFromR2(key);
+                        } catch (err) { console.error('Error deleting original_url:', err); }
+                    }
+
+                    // 3. Delete thumbnail (thumb_url)
+                    if (att.thumb_url) {
+                        try {
+                            const urlObj = new URL(att.thumb_url);
+                            const key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
+                            await deleteFromR2(key);
+                        } catch (err) { console.error('Error deleting thumb_url:', err); }
                     }
                 } else {
                     // Local File
@@ -173,7 +220,7 @@ exports.updateNote = async (req, res, next) => {
             return next(new AppError('Keine Berechtigung zum Bearbeiten dieser Notiz', 403));
         }
 
-        const { isDone, title, content, color, date, time, project_id } = req.body;
+        const { isDone, title, content, color, date, time, project_id, isPinned, showInDiary } = req.body;
 
         if (isDone !== undefined) note.isDone = isDone;
         if (title !== undefined) note.title = title;
@@ -181,21 +228,48 @@ exports.updateNote = async (req, res, next) => {
         if (color !== undefined) note.color = color;
         if (date !== undefined) note.date = date;
         if (time !== undefined) note.time = time || null;
-        if (project_id !== undefined) note.project_id = project_id || null;
+        if (project_id !== undefined) {
+            note.project_id = (project_id === '' || project_id === 'null') ? null : project_id;
+        }
+        if (isPinned !== undefined) note.isPinned = isPinned;
+        if (showInDiary !== undefined) {
+            note.showInDiary = showInDiary === 'true' || showInDiary === true;
+        }
 
         await note.save();
 
-        // Handle New File Uploads in Update
+        // Handle New File Uploads in Update with tiered quality
         if (req.files && req.files.length > 0) {
             for (const file of req.files) {
                 try {
-                    const r2Key = `notes/${file.filename}`;
-                    const fileUrl = await uploadToR2(file.path, r2Key, file.mimetype);
+                    let fileUrl = null;
+                    let thumbUrl = null;
+                    let originalUrl = null;
+
+                    // 1. Upload Original File
+                    const originalR2Key = `notes/original_${file.filename}`;
+                    originalUrl = await uploadToR2(file.path, originalR2Key, file.mimetype);
+
+                    if (file.mimetype.startsWith('image/')) {
+                        // 2. Create Compressed Version
+                        const compressedPath = file.path + '_compressed.jpg';
+                        await sharp(file.path)
+                            .jpeg({ quality: 75, progressive: true })
+                            .toFile(compressedPath);
+                        
+                        const compressedR2Key = `notes/${file.filename}`;
+                        fileUrl = await uploadToR2(compressedPath, compressedR2Key, 'image/jpeg');
+                        if (fs.existsSync(compressedPath)) fs.unlinkSync(compressedPath);
+                    } else {
+                        fileUrl = originalUrl;
+                    }
 
                     await Attachment.create({
                         note_id: note.id,
                         file_name: file.originalname,
                         file_url: fileUrl,
+                        thumb_url: null, // No longer creating thumbnails
+                        original_url: originalUrl,
                         file_size: file.size,
                         content_type: file.mimetype
                     });

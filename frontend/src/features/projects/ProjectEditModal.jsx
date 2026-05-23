@@ -12,7 +12,8 @@ const ProjectEditModal = ({ isOpen, onClose, project, onProjectUpdated }) => {
         end_date: '',
         category_id: '',
         subcategory_id: '',
-        budget: ''
+        budget: '',
+        estimated_costs: ''
     });
     const [loading, setLoading] = useState(false);
     const [users, setUsers] = useState([]);
@@ -67,7 +68,8 @@ const ProjectEditModal = ({ isOpen, onClose, project, onProjectUpdated }) => {
                 end_date: project.end_date ? project.end_date.split('T')[0] : '',
                 category_id: project.category_id || '',
                 subcategory_id: project.subcategory_id || '',
-                budget: project.budget || ''
+                budget: project.budget || '',
+                estimated_costs: project.estimated_costs || ''
             });
 
             // Initialize assignments
@@ -246,11 +248,11 @@ const ProjectEditModal = ({ isOpen, onClose, project, onProjectUpdated }) => {
                             <select
                                 value={formData.status}
                                 onChange={e => setFormData({ ...formData, status: e.target.value })}
-                                className="w-full bg-[#0a101d] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors"
+                                className="w-full bg-[#0a101d] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors [&>option]:bg-slate-900"
                             >
-                                <option value="Aktiv">Aktiv</option>
-                                <option value="Pausiert">Pausiert</option>
-                                <option value="Abgeschlossen">Abgeschlossen</option>
+                                <option value="Aktiv" className="bg-slate-900 text-white">Aktiv</option>
+                                <option value="Pausiert" className="bg-slate-900 text-white">Pausiert</option>
+                                <option value="Abgeschlossen" className="bg-slate-900 text-white">Abgeschlossen</option>
                             </select>
                         </div>
 
@@ -259,11 +261,11 @@ const ProjectEditModal = ({ isOpen, onClose, project, onProjectUpdated }) => {
                             <select
                                 value={formData.category_id}
                                 onChange={e => setFormData({ ...formData, category_id: e.target.value, subcategory_id: '' })}
-                                className="w-full bg-[#0a101d] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors"
+                                className="w-full bg-[#0a101d] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors [&>option]:bg-slate-900"
                             >
-                                <option value="">-- Keine --</option>
+                                <option value="" className="bg-slate-900 text-white">-- Keine --</option>
                                 {categories.map(c => (
-                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                    <option key={c.id} value={c.id} className="bg-slate-900 text-white">{c.name}</option>
                                 ))}
                             </select>
                         </div>
@@ -273,12 +275,12 @@ const ProjectEditModal = ({ isOpen, onClose, project, onProjectUpdated }) => {
                             <select
                                 value={formData.subcategory_id}
                                 onChange={e => handleSubcategorySelect(categories.find(c => String(c.id) === String(formData.category_id))?.subcategories?.find(s => String(s.id) === e.target.value) || { id: e.target.value })}
-                                className="w-full bg-[#0a101d] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors"
+                                className="w-full bg-[#0a101d] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors [&>option]:bg-slate-900"
                                 disabled={!formData.category_id}
                             >
-                                <option value="">-- Keine --</option>
+                                <option value="" className="bg-slate-900 text-white">-- Keine --</option>
                                 {categories.find(c => String(c.id) === String(formData.category_id))?.subcategories?.map(s => (
-                                    <option key={s.id} value={s.id}>{s.name}</option>
+                                    <option key={s.id} value={s.id} className="bg-slate-900 text-white">{s.name}</option>
                                 ))}
                             </select>
                         </div>
@@ -314,11 +316,11 @@ const ProjectEditModal = ({ isOpen, onClose, project, onProjectUpdated }) => {
                                                 const selectedAns = currentQuestion.answers?.find(a => a.id === parseInt(e.target.value));
                                                 if (selectedAns) handleAnswerQuestion(currentQuestion, selectedAns.answer_text, selectedAns.id, selectedAns.next_question_id);
                                             }}
-                                            className="w-full bg-[#0a101d] border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-blue-500 transition-colors text-center"
+                                            className="w-full bg-[#0a101d] border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-blue-500 transition-colors text-center [&>option]:bg-slate-900"
                                         >
-                                            <option value="">-- Bitte wählen --</option>
+                                            <option value="" className="bg-slate-900 text-white">-- Bitte wählen --</option>
                                             {currentQuestion.answers?.map(ans => (
-                                                <option key={ans.id} value={ans.id}>{ans.answer_text}</option>
+                                                <option key={ans.id} value={ans.id} className="bg-slate-900 text-white">{ans.answer_text}</option>
                                             ))}
                                         </select>
                                     </div>
@@ -447,6 +449,35 @@ const ProjectEditModal = ({ isOpen, onClose, project, onProjectUpdated }) => {
                             />
                         </div>
 
+                        <div className="col-span-2 md:col-span-1">
+                            <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 block">Geschätzte Kosten (€)</label>
+                            <input
+                                type="number"
+                                step="0.01"
+                                value={formData.estimated_costs}
+                                onChange={e => setFormData({ ...formData, estimated_costs: e.target.value })}
+                                className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors"
+                                placeholder="0.00"
+                            />
+                        </div>
+
+                        {formData.budget && formData.estimated_costs && (
+                            <div className="col-span-2 bg-emerald-500/5 p-4 rounded-xl border border-emerald-500/10 flex items-center justify-between animate-[fadeInUp_0.3s_ease-out]">
+                                <div>
+                                    <div className="text-[10px] text-emerald-500/70 uppercase tracking-widest font-bold mb-0.5">Berechnete Marge</div>
+                                    <div className="text-base font-black text-emerald-400">
+                                        {new Number(formData.budget - formData.estimated_costs).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-0.5">Marge in %</div>
+                                    <div className="text-sm font-bold text-gray-300">
+                                        {Math.round(((formData.budget - formData.estimated_costs) / formData.budget) * 100)}%
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="col-span-2">
                             <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 block">Beschreibung</label>
                             <textarea
@@ -474,11 +505,11 @@ const ProjectEditModal = ({ isOpen, onClose, project, onProjectUpdated }) => {
                                             setTreeGL('');
                                             setTreeWorker('');
                                         }}
-                                        className="flex-1 bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
+                                        className="flex-1 bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:border-blue-500 [&>option]:bg-slate-900"
                                     >
-                                        <option value="">-- Person wählen --</option>
+                                        <option value="" className="bg-slate-900 text-white">-- Person wählen --</option>
                                         {users.filter(u => u.role?.name?.toLowerCase() === 'projektleiter').map(u => (
-                                            <option key={u.id} value={u.id}>{u.name}</option>
+                                            <option key={u.id} value={u.id} className="bg-slate-900 text-white">{u.name}</option>
                                         ))}
                                     </select>
                                     <button
@@ -512,109 +543,95 @@ const ProjectEditModal = ({ isOpen, onClose, project, onProjectUpdated }) => {
                             </div>
 
                             {/* Gruppenleiter */}
-                            {(assignedUsers.some(au => au.role === 'projektleiter') || treeTopUser) && (
-                                <div className="space-y-3 animate-[fadeIn_0.3s_ease-out]">
-                                    <label className="text-xs font-semibold text-gray-400 uppercase">Gruppenleiter</label>
-                                    <div className="flex gap-3">
-                                        <select
-                                            value={treeGL}
-                                            onChange={e => {
-                                                setTreeGL(e.target.value);
-                                                setTreeWorker('');
-                                            }}
-                                            className="flex-1 bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
-                                        >
-                                            <option value="">-- Person wählen --</option>
-                                            {users.filter(u => {
-                                                const isGL = u.role?.name?.toLowerCase() === 'gruppenleiter';
-                                                const reportsToAssignedPL = assignedUsers.some(au => au.role === 'projektleiter' && au.user_id === u.manager_id);
-                                                const reportsToSelectedPL = treeTopUser && u.manager_id === treeTopUser;
-                                                return isGL && (reportsToAssignedPL || reportsToSelectedPL);
-                                            }).map(u => (
-                                                <option key={u.id} value={u.id}>{u.name} {u.specialty ? `(${u.specialty})` : ''}</option>
-                                            ))}
-                                        </select>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                if (treeGL) {
-                                                    if (!assignedUsers.some(au => au.user_id === treeGL)) {
-                                                        setAssignedUsers([...assignedUsers, { user_id: treeGL, role: 'gruppenleiter' }]);
-                                                    }
-                                                    setTreeGL('');
+                            <div className="space-y-3 animate-[fadeIn_0.3s_ease-out]">
+                                <label className="text-xs font-semibold text-gray-400 uppercase">Gruppenleiter</label>
+                                <div className="flex gap-3">
+                                    <select
+                                        value={treeGL}
+                                        onChange={e => {
+                                            setTreeGL(e.target.value);
+                                            setTreeWorker('');
+                                        }}
+                                        className="flex-1 bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:border-blue-500 [&>option]:bg-slate-900"
+                                    >
+                                        <option value="" className="bg-slate-900 text-white">-- Person wählen --</option>
+                                        {users.filter(u => u.role?.name?.toLowerCase() === 'gruppenleiter').map(u => (
+                                            <option key={u.id} value={u.id} className="bg-slate-900 text-white">{u.name} {u.specialty ? `(${u.specialty})` : ''}</option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (treeGL) {
+                                                if (!assignedUsers.some(au => au.user_id === treeGL)) {
+                                                    setAssignedUsers([...assignedUsers, { user_id: treeGL, role: 'gruppenleiter' }]);
                                                 }
-                                            }}
-                                            className="bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 px-4 py-2 rounded-xl text-sm font-medium hover:bg-emerald-600/30 transition-all"
-                                        >
-                                            Hinzufügen
-                                        </button>
-                                    </div>
-                                    <div className="flex flex-wrap gap-2">
-                                        {assignedUsers.filter(au => au.role === 'gruppenleiter').map(au => {
-                                            const u = users.find(user => user.id === au.user_id);
-                                            return u && (
-                                                <div key={u.id} className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-1 flex items-center gap-2">
-                                                    <span className="text-xs text-emerald-300">{u.name}</span>
-                                                    <button type="button" onClick={() => setAssignedUsers(assignedUsers.filter(x => x.user_id !== u.id))} className="text-emerald-400 hover:text-red-400 transition-colors">
-                                                        <i className="fa-solid fa-xmark text-[10px]"></i>
-                                                    </button>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
+                                                setTreeGL('');
+                                            }
+                                        }}
+                                        className="bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 px-4 py-2 rounded-xl text-sm font-medium hover:bg-emerald-600/30 transition-all"
+                                    >
+                                        Hinzufügen
+                                    </button>
                                 </div>
-                            )}
+                                <div className="flex flex-wrap gap-2">
+                                    {assignedUsers.filter(au => au.role === 'gruppenleiter').map(au => {
+                                        const u = users.find(user => user.id === au.user_id);
+                                        return u && (
+                                            <div key={u.id} className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-1 flex items-center gap-2">
+                                                <span className="text-xs text-emerald-300">{u.name}</span>
+                                                <button type="button" onClick={() => setAssignedUsers(assignedUsers.filter(x => x.user_id !== u.id))} className="text-emerald-400 hover:text-red-400 transition-colors">
+                                                    <i className="fa-solid fa-xmark text-[10px]"></i>
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
 
                             {/* Worker */}
-                            {(assignedUsers.some(au => au.role === 'gruppenleiter') || treeGL) && (
-                                <div className="space-y-3 animate-[fadeIn_0.3s_ease-out]">
-                                    <label className="text-xs font-semibold text-gray-400 uppercase">Mitarbeiter (Worker)</label>
-                                    <div className="flex gap-3">
-                                        <select
-                                            value={treeWorker}
-                                            onChange={e => setTreeWorker(e.target.value)}
-                                            className="flex-1 bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
-                                        >
-                                            <option value="">-- Person wählen --</option>
-                                            {users.filter(u => {
-                                                const isWorker = u.role?.name?.toLowerCase() === 'worker';
-                                                const reportsToAssignedGL = assignedUsers.some(au => au.role === 'gruppenleiter' && au.user_id === u.manager_id);
-                                                const reportsToSelectedGL = treeGL && u.manager_id === treeGL;
-                                                return isWorker && (reportsToAssignedGL || reportsToSelectedGL);
-                                            }).map(u => (
-                                                <option key={u.id} value={u.id}>{u.name} {u.specialty ? `(${u.specialty})` : ''}</option>
-                                            ))}
-                                        </select>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                if (treeWorker) {
-                                                    if (!assignedUsers.some(au => au.user_id === treeWorker)) {
-                                                        setAssignedUsers([...assignedUsers, { user_id: treeWorker, role: 'worker' }]);
-                                                    }
-                                                    setTreeWorker('');
+                            <div className="space-y-3 animate-[fadeIn_0.3s_ease-out]">
+                                <label className="text-xs font-semibold text-gray-400 uppercase">Mitarbeiter (Worker)</label>
+                                <div className="flex gap-3">
+                                    <select
+                                        value={treeWorker}
+                                        onChange={e => setTreeWorker(e.target.value)}
+                                        className="flex-1 bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:border-blue-500 [&>option]:bg-slate-900"
+                                    >
+                                        <option value="" className="bg-slate-900 text-white">-- Person wählen --</option>
+                                        {users.filter(u => u.role?.name?.toLowerCase() === 'worker').map(u => (
+                                            <option key={u.id} value={u.id} className="bg-slate-900 text-white">{u.name} {u.specialty ? `(${u.specialty})` : ''}</option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (treeWorker) {
+                                                if (!assignedUsers.some(au => au.user_id === treeWorker)) {
+                                                    setAssignedUsers([...assignedUsers, { user_id: treeWorker, role: 'worker' }]);
                                                 }
-                                            }}
-                                            className="bg-amber-600/20 text-amber-400 border border-amber-500/30 px-4 py-2 rounded-xl text-sm font-medium hover:bg-amber-600/30 transition-all"
-                                        >
-                                            Hinzufügen
-                                        </button>
-                                    </div>
-                                    <div className="flex flex-wrap gap-2">
-                                        {assignedUsers.filter(au => au.role === 'worker').map(au => {
-                                            const u = users.find(user => user.id === au.user_id);
-                                            return u && (
-                                                <div key={u.id} className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-1 flex items-center gap-2">
-                                                    <span className="text-xs text-amber-300">{u.name}</span>
-                                                    <button type="button" onClick={() => setAssignedUsers(assignedUsers.filter(x => x.user_id !== u.id))} className="text-amber-400 hover:text-red-400 transition-colors">
-                                                        <i className="fa-solid fa-xmark text-[10px]"></i>
-                                                    </button>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
+                                                setTreeWorker('');
+                                            }
+                                        }}
+                                        className="bg-amber-600/20 text-amber-400 border border-amber-500/30 px-4 py-2 rounded-xl text-sm font-medium hover:bg-amber-600/30 transition-all"
+                                    >
+                                        Hinzufügen
+                                    </button>
                                 </div>
-                            )}
+                                <div className="flex flex-wrap gap-2">
+                                    {assignedUsers.filter(au => au.role === 'worker').map(au => {
+                                        const u = users.find(user => user.id === au.user_id);
+                                        return u && (
+                                            <div key={u.id} className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-1 flex items-center gap-2">
+                                                <span className="text-xs text-amber-300">{u.name}</span>
+                                                <button type="button" onClick={() => setAssignedUsers(assignedUsers.filter(x => x.user_id !== u.id))} className="text-amber-400 hover:text-red-400 transition-colors">
+                                                    <i className="fa-solid fa-xmark text-[10px]"></i>
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
 
                             {/* Subcontractors */}
                             <div className="space-y-3">

@@ -25,6 +25,11 @@ const Project = sequelize.define('Project', {
         allowNull: true,
         defaultValue: 0
     },
+    estimated_costs: {
+        type: DataTypes.DECIMAL(12, 2),
+        allowNull: true,
+        defaultValue: 0
+    },
     address: {
         type: DataTypes.STRING,
         allowNull: true

@@ -172,7 +172,8 @@ const Chat = () => {
     const [isSending, setIsSending] = useState(false);
     const [typingStatus, setTypingStatus] = useState({});
 
-    // New State for User Selection
+    // New State for User Selection and Profile
+    const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [isUserModalOpen, setIsUserModalOpen] = useState(false);
     const [allUsers, setAllUsers] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
@@ -1319,6 +1320,19 @@ const Chat = () => {
         }
     };
 
+    const handleLeaveGroup = async (convId) => {
+        if (!window.confirm('Bist du sicher, dass du diese Gruppe verlassen möchtest?')) return;
+        try {
+            await api.delete(`/chat/conversations/${convId}/leave`);
+            setIsProfileModalOpen(false);
+            setSelectedId(null);
+            fetchConversations();
+        } catch (error) {
+            console.error('Failed to leave group:', error);
+            alert('Fehler beim Verlassen der Gruppe');
+        }
+    };
+
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     };
@@ -1416,18 +1430,20 @@ const Chat = () => {
                                 >
                                     <i className="fa-solid fa-chevron-left"></i>
                                 </button>
-                                <img src={activeConversation.avatar} alt={activeConversation.name} className="w-10 h-10 shrink-0 rounded-xl border border-white/10 object-cover" />
-                                <div className="flex flex-col flex-1 min-w-0">
-                                    <h3 className="text-sm font-bold text-white truncate">{activeConversation.name}</h3>
-                                    {typingUsers[selectedId] && typingUsers[selectedId].length > 0 ? (
-                                        <p className="text-[10px] text-blue-400 animate-pulse font-medium truncate">
-                                            Schreibt...
-                                        </p>
-                                    ) : (
-                                        <p className="text-[10px] text-gray-500 font-medium truncate">
-                                            {formatLastSeen(activeConversation.lastSeenAt, activeConversation.online)}
-                                        </p>
-                                    )}
+                                <div className="flex items-center gap-2 cursor-pointer hover:bg-white/5 p-2 rounded-xl transition-colors" onClick={() => setIsProfileModalOpen(true)}>
+                                    <img src={activeConversation.avatar} alt={activeConversation.name} className="w-10 h-10 shrink-0 rounded-xl border border-white/10 object-cover" />
+                                    <div className="flex flex-col flex-1 min-w-0">
+                                        <h3 className="text-sm font-bold text-white truncate">{activeConversation.name}</h3>
+                                        {typingUsers[selectedId] && typingUsers[selectedId].length > 0 ? (
+                                            <p className="text-[10px] text-blue-400 animate-pulse font-medium truncate">
+                                                Schreibt...
+                                            </p>
+                                        ) : (
+                                            <p className="text-[10px] text-gray-500 font-medium truncate">
+                                                {formatLastSeen(activeConversation.lastSeenAt, activeConversation.online)}
+                                            </p>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 
@@ -2509,6 +2525,81 @@ const Chat = () => {
                                 <i className="fa-solid fa-phone animate-bounce"></i>
                                 Annehmen
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Profile Modal */}
+            {isProfileModalOpen && activeConversation && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsProfileModalOpen(false)}></div>
+                    <div className="relative bg-[#1a1c23] border border-white/10 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-[scaleIn_0.2s_ease-out] flex flex-col max-h-[80vh]">
+                        <div className="p-6 border-b border-white/10 flex items-center justify-between shrink-0">
+                            <h2 className="text-xl font-bold text-white">{activeConversation.isGroup ? 'Gruppeninfo' : 'Kontaktinfo'}</h2>
+                            <button onClick={() => setIsProfileModalOpen(false)} className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-all">
+                                <i className="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+
+                        <div className="p-6 shrink-0 flex flex-col items-center border-b border-white/10">
+                            <img src={activeConversation.avatar} alt={activeConversation.name} className="w-24 h-24 rounded-full border-4 border-white/10 object-cover mb-4" />
+                            <h3 className="text-2xl font-bold text-white">{activeConversation.name}</h3>
+                            <p className="text-sm text-blue-500 font-medium">
+                                {activeConversation.isGroup ? `${activeConversation.participants?.length || 0} Mitglieder` : (activeConversation.participants?.find(p => p.userId !== currentUser.id)?.user?.role?.name || 'Mitarbeiter')}
+                            </p>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+                            {activeConversation.isGroup ? (
+                                <div>
+                                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Mitglieder</h4>
+                                    <div className="space-y-3">
+                                        {activeConversation.participants?.map((p) => {
+                                            const isMe = p.userId === currentUser.id;
+                                            return (
+                                                <div key={p.userId} className="flex items-center gap-4 bg-white/5 p-3 rounded-2xl border border-white/5">
+                                                    <div className="w-10 h-10 rounded-xl bg-blue-600/20 text-blue-500 flex items-center justify-center font-bold border border-blue-500/20 shrink-0">
+                                                        {p.user?.name ? p.user.name.charAt(0) : 'U'}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <h5 className="font-bold text-white truncate">{p.user?.name || 'Unbekannt'} {isMe && '(Du)'}</h5>
+                                                        <p className="text-xs text-gray-400 truncate">{p.user?.role?.name || 'Mitarbeiter'}</p>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    <div className="mt-8">
+                                        <button 
+                                            onClick={() => handleLeaveGroup(activeConversation.id)}
+                                            className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-500 font-bold py-3 rounded-xl transition-all border border-red-500/20"
+                                        >
+                                            Gruppe verlassen
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    <div className="bg-white/5 p-4 rounded-2xl border border-white/5 flex items-center gap-4">
+                                        <div className="w-10 h-10 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
+                                            <i className="fa-solid fa-phone"></i>
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="text-xs text-gray-500">Telefon</p>
+                                            <p className="text-sm font-medium text-white truncate">{activeConversation.participants?.find(p => p.userId !== currentUser.id)?.user?.phone || 'Nicht hinterlegt'}</p>
+                                        </div>
+                                    </div>
+                                    <div className="bg-white/5 p-4 rounded-2xl border border-white/5 flex items-center gap-4">
+                                        <div className="w-10 h-10 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
+                                            <i className="fa-solid fa-envelope"></i>
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="text-xs text-gray-500">E-Mail</p>
+                                            <p className="text-sm font-medium text-white truncate">{activeConversation.participants?.find(p => p.userId !== currentUser.id)?.user?.email || 'Nicht hinterlegt'}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

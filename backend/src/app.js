@@ -363,6 +363,18 @@ if (require.main === module) {
                         await sequelize.query("ALTER TABLE attachments ADD COLUMN task_id INT NULL AFTER note_id");
                     }
 
+                    const [thumbUrlResults] = await sequelize.query("SHOW COLUMNS FROM attachments LIKE 'thumb_url'");
+                    if (thumbUrlResults.length === 0) {
+                        console.log('Adding missing thumb_url column to attachments...');
+                        await sequelize.query("ALTER TABLE attachments ADD COLUMN thumb_url VARCHAR(255) NULL AFTER file_url");
+                    }
+
+                    const [originalUrlResults] = await sequelize.query("SHOW COLUMNS FROM attachments LIKE 'original_url'");
+                    if (originalUrlResults.length === 0) {
+                        console.log('Adding missing original_url column to attachments...');
+                        await sequelize.query("ALTER TABLE attachments ADD COLUMN original_url VARCHAR(255) NULL AFTER thumb_url");
+                    }
+
                     if (projectFolderResults.length === 0) {
                         console.log('Creating project_folders table...');
                         await ProjectFolder.sync({ alter: true });

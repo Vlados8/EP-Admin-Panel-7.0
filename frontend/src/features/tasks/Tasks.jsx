@@ -27,6 +27,7 @@ const Tasks = () => {
     const [selectedFiles, setSelectedFiles] = useState([]);
     const [filePreviews, setFilePreviews] = useState([]);
     const [editingTask, setEditingTask] = useState(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Gallery State
     const [isGalleryOpen, setIsGalleryOpen] = useState(false);
@@ -133,6 +134,9 @@ const Tasks = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (isSubmitting) return;
+
+        setIsSubmitting(true);
         try {
             const data = new FormData();
             data.append('title', formData.title);
@@ -165,6 +169,8 @@ const Tasks = () => {
         } catch (error) {
             console.error('Error saving task:', error);
             alert('Fehler beim Speichern der Aufgabe');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -330,12 +336,12 @@ const Tasks = () => {
                                                     <div 
                                                         key={att.id} 
                                                         onClick={(e) => { e.stopPropagation(); openGallery(task.attachments, index); }}
-                                                        className="group relative flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg p-2 pr-3 hover:bg-white/10 transition-all max-w-full cursor-pointer"
+                                                        className="group relative flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg p-1 hover:bg-white/10 transition-all cursor-pointer"
                                                     >
-                                                        <div className="w-7 h-7 rounded bg-blue-500/20 text-blue-400 flex items-center justify-center flex-shrink-0">
-                                                            <i className={`fa-solid ${att.content_type?.startsWith('image/') ? 'fa-image' : att.content_type?.startsWith('video/') ? 'fa-video' : 'fa-file'}`}></i>
+                                                        <div className="w-8 h-8 rounded bg-blue-500/20 text-blue-400 flex items-center justify-center flex-shrink-0">
+                                                            <i className={`fa-solid ${att.content_type?.startsWith('image/') ? 'fa-image' : att.content_type?.startsWith('video/') ? 'fa-video' : 'fa-file'} text-xs`}></i>
                                                         </div>
-                                                        <span className="text-[11px] text-gray-300 truncate max-w-[100px]" title={att.file_name}>{att.file_name}</span>
+                                                        <span className="text-[10px] text-gray-300 truncate max-w-[80px] pr-2" title={att.file_name}>{att.file_name}</span>
                                                     </div>
                                                 ))}
                                             </div>
@@ -554,8 +560,19 @@ const Tasks = () => {
                                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 text-sm font-medium text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-colors">
                                     Abbrechen
                                 </button>
-                                <button type="submit" disabled={assignableUsers.length === 0} className="px-6 py-2.5 text-sm font-medium bg-blue-500 hover:bg-blue-600 disabled:opacity-50 disabled:hover:bg-blue-500 text-white rounded-xl transition-all shadow-[0_4px_15px_rgba(59,130,246,0.3)]">
-                                    Aufgabe speichern
+                                <button 
+                                    type="submit" 
+                                    disabled={isSubmitting || assignableUsers.length === 0} 
+                                    className="px-6 py-2.5 text-sm font-medium bg-blue-500 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl transition-all shadow-[0_4px_15px_rgba(59,130,246,0.3)] flex items-center gap-2"
+                                >
+                                    {isSubmitting ? (
+                                        <>
+                                            <i className="fa-solid fa-circle-notch fa-spin"></i>
+                                            Wird gespeichert...
+                                        </>
+                                    ) : (
+                                        'Aufgabe speichern'
+                                    )}
                                 </button>
                             </div>
                         </form>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import {
   Modal,
   PanResponder
 } from 'react-native';
+import { WebView } from 'react-native-webview';
 import { BlurView } from 'expo-blur';
 import ImageView from "react-native-image-viewing";
 import * as DocumentPicker from 'expo-document-picker';
@@ -43,6 +44,7 @@ import {
 } from '../api/projects';
 import { fetchRoles } from '../api/roles';
 import { fetchUsers } from '../api/users';
+import { fetchNotesByProjectId, createNote, deleteNote } from '../api/notes';
 import * as Clipboard from 'expo-clipboard';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
@@ -81,16 +83,41 @@ import {
   Check,
   Shield,
   HardHat,
-  Briefcase as BriefcaseIcon
+  Briefcase as BriefcaseIcon,
+  Image as ImageIcon,
+  Sun,
+  Cloud,
+  CloudRain,
+  CloudSnow,
+  CloudLightning,
+  CloudFog,
+  Car,
+  PieChart
 } from 'lucide-react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../context/AuthContext';
 
-import { serverDomain, frontendDomain } from '../api/client';
+import { serverDomain, frontendDomain, getFullUrl, apiClient } from '../api/client';
 
 const { width } = Dimensions.get('window');
+
+const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#6366F1'];
+const MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+
+const formatDate = (dateString: string) => {
+  if (!dateString) return '';
+  const d = new Date(dateString);
+  const day = (`0${d.getDate()}`).slice(-2);
+  const month = (`0${d.getMonth() + 1}`).slice(-2);
+  const year = d.getFullYear();
+  return `${day}.${month}.${year}`;
+};
+
+const getISODate = (date: Date = new Date()) => {
+  return date.toISOString().split('T')[0];
+};
 
 export default function ProjectDetailScreen() {
   const navigation = useNavigation<any>();
@@ -112,6 +139,22 @@ export default function ProjectDetailScreen() {
   const [viewerImages, setViewerImages] = useState<{ uri: string }[]>([]);
   const [currentViewerIndex, setCurrentViewerIndex] = useState(0);
 
+  // Stage progress & double click states
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isSavingStage, setIsSavingStage] = useState(false);
+
+  // Diary Tab States
+  const [isDiaryModalOpen, setIsDiaryModalOpen] = useState(false);
+  const [diaryTitle, setDiaryTitle] = useState('');
+  const [diaryContent, setDiaryContent] = useState('');
+  const [diaryColor, setDiaryColor] = useState(COLORS[0]);
+  const [diaryDate, setDiaryDate] = useState(getISODate());
+  const [showDiaryDatePicker, setShowDiaryDatePicker] = useState(false);
+  const [diaryTime, setDiaryTime] = useState('');
+  const [showDiaryTimePicker, setShowDiaryTimePicker] = useState(false);
+  const [diaryAttachments, setDiaryAttachments] = useState<ImagePicker.ImagePickerAsset[]>([]);
+  const [isSavingDiary, setIsSavingDiary] = useState(false);
+
   // Files Tab State
   const [currentPath, setCurrentPath] = useState('');
   const [isNewFolderModalOpen, setIsNewFolderModalOpen] = useState(false);
@@ -122,6 +165,7 @@ export default function ProjectDetailScreen() {
   const [isPublic, setIsPublic] = useState(false);
   const [shareToken, setShareToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [isBatchUploading, setIsBatchUploading] = useState(false);
 
   // Edit Project State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -142,6 +186,13 @@ export default function ProjectDetailScreen() {
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
 
+  // Geocoding, Routing & Weather Forecast states
+  const [routeInfo, setRouteInfo] = useState<{ distance: string; duration: number } | null>(null);
+  const [calculatingRoute, setCalculatingRoute] = useState(false);
+  const [projectCoords, setProjectCoords] = useState<{ lat: number; lon: number } | null>(null);
+  const [weatherForecast, setWeatherForecast] = useState<any[]>([]);
+  const [loadingWeather, setLoadingWeather] = useState(false);
+
   const modalPanResponder = React.useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -158,11 +209,27 @@ export default function ProjectDetailScreen() {
     queryFn: () => fetchProjectById(id),
   });
 
+  const { data: companyData } = useQuery({
+    queryKey: ['company-public'],
+    queryFn: async () => {
+      const res = await apiClient.get('/company/public');
+      return res.data?.data;
+    }
+  });
+
   const { data: stagesRes, isLoading: stagesLoading } = useQuery({
     queryKey: ['project-stages', id],
     queryFn: () => fetchProjectStages(id),
     enabled: activeTab === 'steps'
   });
+
+  const { data: diaryRes, isLoading: diaryLoading } = useQuery({
+    queryKey: ['project-diary', id],
+    queryFn: () => fetchNotesByProjectId(id),
+    enabled: activeTab === 'diary'
+  });
+
+  const diaryLogs = diaryRes?.data?.notes || [];
 
   const { data: categoriesRes } = useQuery({
     queryKey: ['categories'],
@@ -218,7 +285,11 @@ export default function ProjectDetailScreen() {
         } as any);
       });
 
-      return createProjectStage(formData);
+      return createProjectStage(formData, (progressEvent) => {
+        const total = progressEvent.total || 1;
+        const percentCompleted = Math.round((progressEvent.loaded * 100) / total);
+        setUploadProgress(percentCompleted);
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project-stages', id] });
@@ -227,6 +298,9 @@ export default function ProjectDetailScreen() {
     },
     onError: () => {
       Alert.alert('Fehler', 'Etappe konnte nicht erstellt werden.');
+    },
+    onSettled: () => {
+      setUploadProgress(0);
     }
   });
 
@@ -248,7 +322,11 @@ export default function ProjectDetailScreen() {
         formData.append('imagesToDelete', JSON.stringify(imageIdsToDelete));
       }
 
-      return updateProjectStage(stageId, formData);
+      return updateProjectStage(stageId, formData, (progressEvent) => {
+        const total = progressEvent.total || 1;
+        const percentCompleted = Math.round((progressEvent.loaded * 100) / total);
+        setUploadProgress(percentCompleted);
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project-stages', id] });
@@ -257,6 +335,31 @@ export default function ProjectDetailScreen() {
     },
     onError: () => {
       Alert.alert('Fehler', 'Etappe konnte nicht aktualisiert werden.');
+    },
+    onSettled: () => {
+      setUploadProgress(0);
+    }
+  });
+
+  const createDiaryLogMutation = useMutation({
+    mutationFn: (formData: FormData) => createNote(formData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project-diary', id] });
+      setIsDiaryModalOpen(false);
+      resetDiaryForm();
+    },
+    onError: () => {
+      Alert.alert('Fehler', 'Bautagebucheintrag konnte nicht erstellt werden.');
+    }
+  });
+
+  const deleteDiaryLogMutation = useMutation({
+    mutationFn: (logId: number) => deleteNote(logId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project-diary', id] });
+    },
+    onError: () => {
+      Alert.alert('Fehler', 'Eintrag konnte nicht gelöscht werden.');
     }
   });
 
@@ -295,15 +398,7 @@ export default function ProjectDetailScreen() {
     }
   });
 
-  const uploadFilesMutation = useMutation({
-    mutationFn: (formData: FormData) => uploadProjectFiles(id, formData),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['project-files', id, currentPath] });
-    },
-    onError: (err: any) => {
-      Alert.alert('Fehler', 'Dateien konnten nicht hochgeladen werden.');
-    }
-  });
+  // uploadFilesMutation removed - using sequential upload logic instead
 
   const { data: rolesRes } = useQuery({
     queryKey: ['roles'],
@@ -312,7 +407,7 @@ export default function ProjectDetailScreen() {
   });
 
   const managementRoleNames = ['Admin', 'Büro', 'Projektleiter', 'Gruppenleiter'];
-  const canManagePermissions = typeof user?.role === 'string' 
+  const canManagePermissions = typeof user?.role === 'string'
     ? managementRoleNames.includes(user.role)
     : managementRoleNames.includes((user?.role as any)?.name || '');
   const isManagement = canManagePermissions;
@@ -348,6 +443,143 @@ export default function ProjectDetailScreen() {
       Alert.alert('Fehler', err.response?.data?.error || 'Link konnte nicht aktiviert werden.');
     }
   });
+
+  // Haversine fallback formula for straight line distance
+  const haversineDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const toRad = (x: number) => (x * Math.PI) / 180;
+    const R = 6371; // Earth radius in km
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  const calculateDistance = async (fromAddr: string, toAddr: string) => {
+    try {
+      // 1. Geocode Company address
+      const fromRes = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(fromAddr)}&format=json&limit=1`,
+        { headers: { 'User-Agent': 'EP-Mobile-App-Geocoder' } }
+      );
+      const fromData = await fromRes.json();
+      if (!fromData || fromData.length === 0) return null;
+      const fromLat = parseFloat(fromData[0].lat);
+      const fromLon = parseFloat(fromData[0].lon);
+
+      // 2. Geocode Project address
+      const toRes = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(toAddr)}&format=json&limit=1`,
+        { headers: { 'User-Agent': 'EP-Mobile-App-Geocoder' } }
+      );
+      const toData = await toRes.json();
+      if (!toData || toData.length === 0) return null;
+      const toLat = parseFloat(toData[0].lat);
+      const toLon = parseFloat(toData[0].lon);
+
+      setProjectCoords({ lat: toLat, lon: toLon });
+
+      // 3. Get OSRM road distance
+      try {
+        const osrmRes = await fetch(
+          `https://router.project-osrm.org/route/v1/driving/${fromLon},${fromLat};${toLon},${toLat}?overview=false`
+        );
+        const osrmData = await osrmRes.json();
+        if (osrmData.code === 'Ok' && osrmData.routes && osrmData.routes.length > 0) {
+          const route = osrmData.routes[0];
+          const distanceKm = (route.distance / 1000).toFixed(1);
+          const durationMin = Math.round(route.duration / 60);
+          return { distance: distanceKm, duration: durationMin };
+        }
+      } catch (osrmErr) {
+        console.warn('OSRM router failed, using Haversine fallback:', osrmErr);
+      }
+
+      // Fallback
+      const distanceKm = haversineDistance(fromLat, fromLon, toLat, toLon).toFixed(1);
+      return { distance: distanceKm, duration: Math.round(parseFloat(distanceKm) * 1.2) };
+    } catch (err) {
+      console.error('Error calculating distance:', err);
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    if (projectRes?.address && companyData?.settings?.address) {
+      const fromAddr = `${companyData.settings.address}, ${companyData.settings.zipCity || ''}`;
+      const toAddr = projectRes.address;
+
+      setCalculatingRoute(true);
+      calculateDistance(fromAddr, toAddr).then((info) => {
+        setRouteInfo(info);
+        setCalculatingRoute(false);
+      });
+    } else if (projectRes?.data?.project?.address && companyData?.settings?.address) {
+      const fromAddr = `${companyData.settings.address}, ${companyData.settings.zipCity || ''}`;
+      const toAddr = projectRes.data.project.address;
+
+      setCalculatingRoute(true);
+      calculateDistance(fromAddr, toAddr).then((info) => {
+        setRouteInfo(info);
+        setCalculatingRoute(false);
+      });
+    }
+  }, [projectRes?.address, projectRes?.data?.project?.address, companyData?.settings?.address]);
+
+  useEffect(() => {
+    if (projectCoords) {
+      setLoadingWeather(true);
+      fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${projectCoords.lat}&longitude=${projectCoords.lon}&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto`
+      )
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && data.daily) {
+            const forecast = [];
+            for (let i = 0; i < 3; i++) {
+              forecast.push({
+                date: new Date(data.daily.time[i]).toLocaleDateString('de-DE', {
+                  weekday: 'short',
+                  day: '2-digit',
+                  month: '2-digit',
+                }),
+                code: data.daily.weathercode[i],
+                tempMax: Math.round(data.daily.temperature_2m_max[i]),
+                tempMin: Math.round(data.daily.temperature_2m_min[i]),
+              });
+            }
+            setWeatherForecast(forecast);
+          }
+          setLoadingWeather(false);
+        })
+        .catch((err) => {
+          console.error('Weather forecast fetch error:', err);
+          setLoadingWeather(false);
+        });
+    }
+  }, [projectCoords]);
+
+  const getWeatherDesc = (code: number) => {
+    if (code === 0) return 'Sonnig';
+    if ([1, 2, 3].includes(code)) return 'Leicht bewölkt';
+    if ([45, 48].includes(code)) return 'Nebel';
+    if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return 'Regen';
+    if ([71, 73, 75, 77, 85, 86].includes(code)) return 'Schnee';
+    if ([95, 96, 99].includes(code)) return 'Gewitter';
+    return 'Bewölkt';
+  };
+
+  const getWeatherIcon = (code: number, size = 16) => {
+    if (code === 0) return <Sun size={size} color="#F59E0B" />;
+    if ([1, 2, 3].includes(code)) return <Cloud size={size} color="#9CA3AF" />;
+    if ([45, 48].includes(code)) return <CloudFog size={size} color="#9CA3AF" />;
+    if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return <CloudRain size={size} color="#3B82F6" />;
+    if ([71, 73, 75, 77, 85, 86].includes(code)) return <CloudSnow size={size} color="#3B82F6" />;
+    if ([95, 96, 99].includes(code)) return <CloudLightning size={size} color="#8B5CF6" />;
+    return <Cloud size={size} color="#9CA3AF" />;
+  };
 
   // 2. Early return for loading
   if (itemsLoading) {
@@ -388,7 +620,7 @@ export default function ProjectDetailScreen() {
 
   const handleOpenViewer = (images: any[], index: number = 0) => {
     const formatted = images.map(img => ({
-      uri: img.uri || (img.path ? `${serverDomain}${img.path}` : img)
+      uri: getFullUrl(img.uri || img.path || img)
     }));
     setViewerImages(formatted);
     setCurrentViewerIndex(index);
@@ -529,13 +761,13 @@ export default function ProjectDetailScreen() {
     if (isImageFile(file.name)) {
       const allImages = files.filter((f: any) => !f.isDirectory && isImageFile(f.name));
       const initialIndex = allImages.findIndex((f: any) => f.name === file.name);
-      handleOpenViewer(allImages.map((f: any) => `${serverDomain}${f.url}`), initialIndex);
+      handleOpenViewer(allImages.map((f: any) => f.url), initialIndex);
       return;
     }
 
     try {
       const fileUri = `${FileSystem.cacheDirectory}${file.name}`;
-      const downloadUrl = `${serverDomain}${file.url}`;
+      const downloadUrl = getFullUrl(file.url);
 
       const { uri } = await FileSystem.downloadAsync(downloadUrl, fileUri);
       await Sharing.shareAsync(uri);
@@ -544,19 +776,45 @@ export default function ProjectDetailScreen() {
     }
   };
 
-  const executeFileUpload = (assets: any[]) => {
-    const formData = new FormData();
-    formData.append('path', currentPath);
+  const executeFileUpload = async (assets: any[]) => {
+    if (!assets || assets.length === 0) return;
 
-    assets.forEach(asset => {
-      formData.append('files', {
-        uri: asset.uri,
-        name: asset.name || asset.fileName || `upload_${Date.now()}.jpg`,
-        type: asset.mimeType || (asset.type === 'video' ? 'video/mp4' : 'image/jpeg')
-      } as any);
-    });
+    setIsBatchUploading(true);
+    const MAX_SIZE = 100 * 1024 * 1024; // 100MB
 
-    uploadFilesMutation.mutate(formData);
+    try {
+      for (const asset of assets) {
+        // Size validation
+        if (asset.size && asset.size > MAX_SIZE) {
+          Alert.alert('Fehler', `Datei "${asset.name || asset.fileName}" ist zu groß (Max 100MB).`);
+          continue;
+        }
+
+        const formData = new FormData();
+        formData.append('path', currentPath);
+        formData.append('files', {
+          uri: asset.uri,
+          name: asset.name || asset.fileName || `upload_${Date.now()}.jpg`,
+          type: asset.mimeType || (asset.type === 'video' ? 'video/mp4' : 'image/jpeg')
+        } as any);
+
+        console.log(`[UPLOAD] Starting for: ${asset.name || asset.fileName}`);
+        
+        try {
+          await uploadProjectFiles(id, formData);
+        } catch (err: any) {
+          console.error('[UPLOAD ERROR]', err);
+          const serverError = err.response?.data?.error || err.message || 'Upload fehlgeschlagen';
+          Alert.alert('Upload-Fehler', `Datei "${asset.name || asset.fileName}" konnte nicht hochgeladen werden:\n\n${serverError}`);
+          // We continue with other files even if one fails
+        }
+      }
+      
+      // Refresh list once at the end
+      queryClient.invalidateQueries({ queryKey: ['project-files', id, currentPath] });
+    } finally {
+      setIsBatchUploading(false);
+    }
   };
 
   const handleFileUpload = async () => {
@@ -599,7 +857,7 @@ export default function ProjectDetailScreen() {
   const handleOpenEditModal = () => {
     const p = projectRes?.data?.project || projectRes;
     if (!p) return;
-    
+
     setEditFormData({
       title: p.title || '',
       description: p.description || '',
@@ -634,7 +892,7 @@ export default function ProjectDetailScreen() {
       Alert.alert('Fehler', 'Bite geben Sie einen Titel ein.');
       return;
     }
-    
+
     updateProjectMutation.mutate({
       ...editFormData,
       assigned_users: assignedUsers,
@@ -642,7 +900,7 @@ export default function ProjectDetailScreen() {
     });
   };
 
-  const canEditProject = typeof user?.role === 'string' 
+  const canEditProject = typeof user?.role === 'string'
     ? ['Admin', 'Büro', 'Projektleiter'].includes(user.role)
     : ['Admin', 'Büro', 'Projektleiter'].includes((user?.role as any)?.name || '');
 
@@ -662,14 +920,19 @@ export default function ProjectDetailScreen() {
   };
 
   const handleSaveStage = () => {
-    if (!stageTitle.trim()) return;
+    if (!stageTitle.trim() || isSavingStage) return;
+    setIsSavingStage(true);
     if (editingStage) {
       updateStageDetailsMutation.mutate({
         stageId: editingStage.id,
         data: { title: stageTitle, description: stageDescription }
+      }, {
+        onSettled: () => setIsSavingStage(false)
       });
     } else {
-      createStageMutation.mutate({ title: stageTitle, description: stageDescription });
+      createStageMutation.mutate({ title: stageTitle, description: stageDescription }, {
+        onSettled: () => setIsSavingStage(false)
+      });
     }
   };
 
@@ -684,6 +947,169 @@ export default function ProjectDetailScreen() {
     );
   };
 
+  const resetDiaryForm = () => {
+    setDiaryTitle('');
+    setDiaryContent('');
+    setDiaryColor(COLORS[0]);
+    setDiaryDate(getISODate());
+    setDiaryAttachments([]);
+  };
+
+  const handlePickDiaryMedia = () => {
+    Alert.alert(
+      'Dateien auswählen',
+      'Wählen Sie eine Quelle',
+      [
+        {
+          text: 'Kamera', onPress: async () => {
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') return;
+            const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images', 'videos'], quality: 0.8 });
+            if (!result.canceled) setDiaryAttachments(prev => [...prev, ...result.assets]);
+          }
+        },
+        {
+          text: 'Galerie', onPress: async () => {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') return;
+            const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images', 'videos'], quality: 0.8, allowsMultipleSelection: true });
+            if (!result.canceled) setDiaryAttachments(prev => [...prev, ...result.assets]);
+          }
+        },
+        { text: 'Abbrechen', style: 'cancel' }
+      ]
+    );
+  };
+
+  const removeDiaryAttachment = (index: number) => {
+    setDiaryAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSaveDiaryLog = () => {
+    if (!diaryTitle.trim() || !diaryContent.trim() || isSavingDiary) return;
+    setIsSavingDiary(true);
+
+    const formData = new FormData();
+    formData.append('title', diaryTitle);
+    formData.append('content', diaryContent);
+    formData.append('color', diaryColor);
+    formData.append('date', diaryDate);
+    if (diaryTime) formData.append('time', diaryTime);
+    formData.append('project_id', String(id));
+    formData.append('showInDiary', 'true');
+
+    diaryAttachments.forEach((file: any, index) => {
+      formData.append('files', {
+        uri: file.uri,
+        name: file.fileName || `media_${index}.jpg`,
+        type: file.mimeType || (file.type === 'video' ? 'video/mp4' : 'image/jpeg'),
+      } as any);
+    });
+
+    createDiaryLogMutation.mutate(formData, {
+      onSettled: () => setIsSavingDiary(false)
+    });
+  };
+
+  const confirmDeleteDiaryLog = (logId: number) => {
+    Alert.alert(
+      'Eintrag löschen',
+      'Möchten Sie diesen Bautagebucheintrag wirklich löschen?',
+      [
+        { text: 'Abbrechen', style: 'cancel' },
+        { text: 'Löschen', style: 'destructive', onPress: () => deleteDiaryLogMutation.mutate(logId) }
+      ]
+    );
+  };
+
+  const renderDiaryTab = () => (
+    <View className="space-y-4 pb-20">
+      <View className="flex-row justify-between items-center mb-2 px-1">
+        <Text className="text-gray-500 font-bold uppercase tracking-widest text-[10px]">Bautagebuch</Text>
+        <TouchableOpacity
+          onPress={() => {
+            resetDiaryForm();
+            setIsDiaryModalOpen(true);
+          }}
+          className="bg-brand-blue/20 px-3 py-1.5 rounded-lg border border-brand-blue/30 flex-row items-center"
+        >
+          <Plus size={12} color="#3B82F6" className="mr-1.5" />
+          <Text className="text-brand-blue text-[10px] font-bold uppercase">Neuer Eintrag</Text>
+        </TouchableOpacity>
+      </View>
+
+      {diaryLoading ? (
+        <ActivityIndicator color="#3B82F6" className="my-10" />
+      ) : diaryLogs.length > 0 ? (
+        diaryLogs.map((log: any) => (
+          <GlassCard key={log.id} className="p-5 mb-4 border-l-4" style={{ borderLeftColor: log.color || '#3B82F6' }}>
+            <View className="flex-row justify-between items-start mb-2">
+              <View className="flex-1">
+                <Text selectable={true} className="text-white font-bold text-base mb-1">{log.title}</Text>
+                <View className="flex-row items-center">
+                  <Calendar size={10} color="#6B7280" />
+                  <Text className="text-gray-500 text-[10px] ml-1.5 font-bold">{formatDate(log.date)}</Text>
+                  {log.time && (
+                    <View className="flex-row items-center ml-3">
+                      <Clock size={10} color="#6B7280" />
+                      <Text className="text-gray-400 text-[10px] ml-1 font-bold">{log.time}</Text>
+                    </View>
+                  )}
+                  {log.user && (
+                    <View className="flex-row items-center ml-3">
+                      <User size={10} color="#6B7280" />
+                      <Text className="text-gray-400 text-[10px] ml-1 font-bold">{log.user.name}</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+              {log.user_id === user?.id && (
+                <TouchableOpacity onPress={() => confirmDeleteDiaryLog(log.id)} className="p-2 bg-white/5 rounded-lg">
+                  <Trash2 size={14} color="#EF4444" />
+                </TouchableOpacity>
+              )}
+            </View>
+            <Text selectable={true} className="text-gray-300 text-sm leading-relaxed mb-4">{log.content}</Text>
+            
+            {log.attachments && log.attachments.length > 0 && (
+              <View className="mt-2">
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
+                  {log.attachments.map((att: any, i: number) => {
+                    const isImg = /\.(jpg|jpeg|png|gif|webp)$/i.test(att.file_url || att.fileUrl || '');
+                    return (
+                      <TouchableOpacity
+                        key={att.id}
+                        onPress={() => {
+                          if (isImg) {
+                            handleOpenViewer(log.attachments.map((a: any) => a.file_url || a.fileUrl), i);
+                          } else {
+                            Linking.openURL(getFullUrl(att.file_url || att.fileUrl)).catch(() => {
+                              Alert.alert('Fehler', 'Datei konnte nicht geöffnet werden');
+                            });
+                          }
+                        }}
+                        className="mr-3 border border-white/5 rounded-lg p-2 flex-row items-center bg-black/20"
+                      >
+                        <ImageIcon size={14} color="#6B7280" />
+                        <Text className="text-gray-300 text-xs font-bold ml-2 w-24" numberOfLines={1}>
+                          {att.file_name || 'Anhang'}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
+          </GlassCard>
+        ))
+      ) : (
+        <GlassCard className="p-10 items-center">
+          <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest text-center">Keine Bautagebucheinträge vorhanden</Text>
+        </GlassCard>
+      )}
+    </View>
+  );
+
   const TabButton = ({ label, id, icon: Icon }: any) => (
     <TouchableOpacity
       onPress={() => setActiveTab(id)}
@@ -697,221 +1123,350 @@ export default function ProjectDetailScreen() {
   );
 
   // 4. Content Render functions (not components to avoid re-mounting)
-  const renderInfoTab = () => (
-    <View className="space-y-6 pb-20">
-      {/* Progress Section */}
-      <GlassCard className="p-6">
-        <View className="flex-row justify-between items-center mb-4">
-          <Text className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Fortschritt</Text>
-          <Text className="text-white font-black text-xl">{progress}%</Text>
-        </View>
-        <View className="w-full h-3 bg-black/40 rounded-full overflow-hidden border border-white/5">
-          <LinearGradient
-            colors={['#3B82F6', '#60A5FA']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={{ width: `${progress}%`, height: '100%', borderRadius: 6 }}
-          />
-        </View>
-      </GlassCard>
+  const renderInfoTab = () => {
+    const budget = parseFloat(project?.budget || 0);
+    const estimatedCosts = project?.estimated_costs !== undefined && project?.estimated_costs !== null
+      ? parseFloat(project.estimated_costs)
+      : budget * 0.65;
+    const profitMargin = budget - estimatedCosts;
 
-      {/* Description */}
-      <View>
-        <Text className="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-3 ml-1">Beschreibung</Text>
+    const costPercent = budget > 0 ? Math.round((estimatedCosts / budget) * 100) : 65;
+    const marginPercent = budget > 0 ? Math.round((profitMargin / budget) * 100) : 35;
+
+    const formatCurrency = (val: number) => {
+      return val.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+    };
+
+    return (
+      <View className="space-y-6 pb-20">
+        {/* Progress Section */}
+        <GlassCard className="p-6">
+          <View className="flex-row justify-between items-center mb-4">
+            <Text className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Fortschritt</Text>
+            <Text className="text-white font-black text-xl">{progress}%</Text>
+          </View>
+          <View className="w-full h-3 bg-black/40 rounded-full overflow-hidden border border-white/5">
+            <LinearGradient
+              colors={['#3B82F6', '#60A5FA']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={{ width: `${progress}%`, height: '100%', borderRadius: 6 }}
+            />
+          </View>
+        </GlassCard>
+
+        {/* Financial Widget */}
         <GlassCard className="p-5">
-          <Text className="text-gray-300 text-sm leading-relaxed">
-            {project?.description || 'Keine Beschreibung hinterlegt.'}
-          </Text>
-        </GlassCard>
-      </View>
-
-      {/* Details Grid */}
-      <View className="flex-row flex-wrap justify-between">
-        <GlassCard className="w-[48%] p-4 mb-4">
-          <View className="flex-row items-center mb-2">
-            <MapPin size={12} color="#3B82F6" />
-            <Text className="text-gray-500 font-bold uppercase tracking-widest text-[9px] ml-1.5">Standort</Text>
+          <View className="flex-row items-center mb-4 pb-3 border-b border-white/5">
+            <PieChart size={16} color="#3B82F6" className="mr-2" />
+            <Text className="text-white font-bold text-sm">Finanzübersicht & Marge</Text>
           </View>
-          <Text className="text-white text-xs font-bold">{project?.address || 'N/A'}</Text>
-        </GlassCard>
-
-        <GlassCard className="w-[48%] p-4 mb-4">
-          <View className="flex-row items-center mb-2">
-            <Calendar size={12} color="#3B82F6" />
-            <Text className="text-gray-500 font-bold uppercase tracking-widest text-[9px] ml-1.5">Startdatum</Text>
-          </View>
-          <Text className="text-white text-xs font-bold">
-            {project?.start_date ? new Date(project.start_date).toLocaleDateString('de-DE') : 'N/A'}
-          </Text>
-        </GlassCard>
-      </View>
-
-      {/* Client Information */}
-      <View>
-        <Text className="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-3 ml-1">Kundeninformationen</Text>
-        <GlassCard className="p-5">
-          <View className="flex-row items-center mb-4">
-            <View className="w-10 h-10 rounded-xl bg-blue-500/20 items-center justify-center border border-blue-500/30">
-              <Building size={20} color="#3B82F6" />
+          <View className="space-y-4">
+            <View className="flex-row justify-between items-center">
+              <Text className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Gesamtbudget</Text>
+              <Text className="text-white font-black text-base">{formatCurrency(budget)}</Text>
             </View>
-            <View className="ml-4 flex-1">
-              <Text className="text-white font-bold text-base">{project?.client?.company_name || project?.client?.name || 'Unbekannter Kunde'}</Text>
-              <Text className="text-gray-500 text-xs">{project?.client?.industry || 'Kunde'}</Text>
+            <View className="w-full h-3 bg-white/5 rounded-full overflow-hidden border border-white/10 p-[2px] flex flex-row">
+              <View style={{ width: `${costPercent}%` }} className="h-full bg-amber-500 rounded-full" />
+              <View style={{ width: `${marginPercent}%` }} className="h-full bg-emerald-500 rounded-full" />
             </View>
-          </View>
 
-          {(project?.client?.phone || project?.client?.email) && (
-            <View className="pt-3 border-t border-white/5 space-y-2">
-              {project.client.phone && (
-                <TouchableOpacity
-                  onPress={() => Linking.openURL(`tel:${project.client.phone}`)}
-                  className="flex-row items-center"
-                >
-                  <Phone size={12} color="#3B82F6" className="mr-2" />
-                  <Text className="text-blue-400 text-xs font-medium">{project.client.phone}</Text>
-                </TouchableOpacity>
-              )}
-              {project.client.email && (
-                <TouchableOpacity
-                  onPress={() => navigation.navigate('Main', { screen: 'E-Mail', params: { initialRecipient: project.client.email, initialSubject: `Projekt: ${project.title}` } })}
-                  className="flex-row items-center"
-                >
-                  <Mail size={12} color="#3B82F6" className="mr-2" />
-                  <Text className="text-blue-400 text-xs font-medium">{project.client.email}</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
-        </GlassCard>
-      </View>
-
-      {/* Classification & Category */}
-      {(project?.category || project?.subcategory) && (
-        <View>
-          <Text className="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-3 ml-1">Klassifizierung</Text>
-          <GlassCard className="p-5 flex-row">
-            {project?.category && (
-              <View className="flex-1 border-r border-white/5 pr-4">
-                <Text className="text-gray-500 text-[9px] uppercase font-bold mb-1">Kategorie</Text>
-                <View className="flex-row items-center">
-                  <View className="w-6 h-6 rounded bg-blue-500/10 items-center justify-center mr-2">
-                    <Target size={12} color="#3B82F6" />
-                  </View>
-                  <Text className="text-white text-xs font-bold" numberOfLines={1}>{project.category.name}</Text>
-                </View>
+            <View className="flex-row justify-between mt-2">
+              <View className="bg-white/5 p-4 rounded-xl border border-white/5 w-[48%]">
+                <Text className="text-gray-500 text-[9px] font-bold uppercase tracking-wider mb-1">Kosten ({costPercent}%)</Text>
+                <Text className="text-amber-400 font-black text-sm">{formatCurrency(estimatedCosts)}</Text>
               </View>
-            )}
-            {project?.subcategory && (
-              <View className="flex-1 pl-4">
-                <Text className="text-gray-500 text-[9px] uppercase font-bold mb-1">Unterkategorie</Text>
-                <View className="flex-row items-center">
-                  <View className="w-6 h-6 rounded bg-purple-500/10 items-center justify-center mr-2">
-                    <BriefcaseIcon size={12} color="#A855F7" />
-                  </View>
-                  <Text className="text-white text-xs font-bold" numberOfLines={1}>{project.subcategory.name}</Text>
-                </View>
+              <View className={`p-4 rounded-xl border w-[48%] ${profitMargin >= 0 ? 'bg-emerald-500/5 border-emerald-500/10' : 'bg-red-500/5 border-red-500/10'}`}>
+                <Text className={`text-[9px] font-bold uppercase tracking-wider mb-1 ${profitMargin >= 0 ? 'text-emerald-500/70' : 'text-red-500/70'}`}>Marge ({marginPercent}%)</Text>
+                <Text className={`font-black text-sm ${profitMargin >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{formatCurrency(profitMargin)}</Text>
               </View>
-            )}
-          </GlassCard>
-        </View>
-      )}
-
-      {/* Answers Section */}
-      {project?.answers?.length > 0 && (
-        <View>
-          <Text className="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-3 ml-1">Zusatzinformationen</Text>
-          <View className="space-y-3">
-            {project.answers.map((ans: any) => (
-              <GlassCard key={ans.id} className="p-4 bg-black/30 border-white/5">
-                <Text className="text-gray-500 text-[9px] font-bold uppercase mb-1">{ans.question?.question_text || 'Info'}</Text>
-                <Text className="text-white text-xs font-bold">
-                  {ans.custom_value || ans.answer?.answer_text || '-'}
-                </Text>
-              </GlassCard>
-            ))}
+            </View>
           </View>
-        </View>
-      )}
+        </GlassCard>
 
-      {/* Team Section */}
-      {project?.assigned_personnel?.length > 0 && (
-        <View>
-          <Text className="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-3 ml-1">Team</Text>
+        {/* Weather Forecast Widget */}
+        {weatherForecast && weatherForecast.length > 0 ? (
           <GlassCard className="p-5">
-            <View className="space-y-4">
-              {project.assigned_personnel.map((ap: any, idx: number) => (
-                <View key={idx} className="flex-row items-center justify-between mb-4 last:mb-0">
-                  <View className="flex-row items-center flex-1">
-                    <View className="w-8 h-8 rounded-full bg-blue-500/20 items-center justify-center border border-blue-500/30">
-                      <Text className="text-blue-400 text-[10px] font-bold">
-                        {ap.user?.name?.split(' ').map((n: any) => n[0]).join('').toUpperCase()}
-                      </Text>
-                    </View>
-                    <View className="ml-3 flex-1">
-                      <Text className="text-white text-sm font-bold" numberOfLines={1}>{ap.user?.name}</Text>
-                      <Text className="text-gray-500 text-[10px] uppercase font-bold tracking-widest">{ap.role}</Text>
-                    </View>
-                  </View>
-                  <ChevronRight size={14} color="#4B5563" />
+            <View className="flex-row items-center mb-4 pb-3 border-b border-white/5">
+              <Sun size={16} color="#F59E0B" className="mr-2" />
+              <Text className="text-white font-bold text-sm">3-Tage-Wettervorhersage</Text>
+            </View>
+            <View className="flex-row justify-between">
+              {weatherForecast.map((day, index) => (
+                <View key={index} className="bg-white/5 p-3 rounded-xl border border-white/5 items-center w-[30%]">
+                  <Text className="text-gray-400 text-[9px] font-bold uppercase mb-2">{day.date}</Text>
+                  {getWeatherIcon(day.code, 20)}
+                  <Text className="text-white text-xs font-black mt-2">{day.tempMax}°C</Text>
+                  <Text className="text-gray-500 text-[9px] font-bold mt-0.5">{day.tempMin}°C</Text>
+                  <Text className="text-gray-400 text-[8px] font-bold mt-1 text-center" numberOfLines={1}>
+                    {getWeatherDesc(day.code)}
+                  </Text>
                 </View>
               ))}
             </View>
           </GlassCard>
-        </View>
-      )}
+        ) : null}
 
-      {/* Subcontractors Section */}
-      {project?.assigned_subcontractors?.length > 0 && (
+        {/* Description */}
         <View>
-          <Text className="text-amber-400 font-bold uppercase tracking-widest text-[10px] mb-3 ml-1">Nachunternehmer</Text>
-          <View className="space-y-3">
-            {project.assigned_subcontractors.map((as: any) => (
-              <GlassCard key={as.id} className="p-4 border-amber-500/10">
-                <View className="flex-row items-center justify-between mb-3">
-                  <View className="flex-1">
-                    <Text className="text-white font-bold text-sm">{as.subcontractor?.name}</Text>
-                    <Text className="text-gray-500 text-[9px] uppercase font-bold tracking-wider mt-0.5">{as.subcontractor?.trade}</Text>
-                  </View>
-                  <View className="w-8 h-8 rounded-lg bg-amber-500/10 items-center justify-center border border-amber-500/20">
-                    <HardHat size={16} color="#F59E0B" />
+          <Text className="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-3 ml-1">Beschreibung</Text>
+          <GlassCard className="p-5">
+            <Text className="text-gray-300 text-sm leading-relaxed">
+              {project?.description || 'Keine Beschreibung hinterlegt.'}
+            </Text>
+          </GlassCard>
+        </View>
+
+        {/* Details Grid */}
+        <View>
+          <View className="flex-row flex-wrap justify-between">
+            <GlassCard className="w-full p-4 mb-4">
+              <View className="flex-row items-center mb-2">
+                <MapPin size={12} color="#3B82F6" />
+                <Text className="text-gray-500 font-bold uppercase tracking-widest text-[9px] ml-1.5">Standort</Text>
+              </View>
+              <Text selectable={true} className="text-white text-xs font-bold">{project?.address || 'N/A'}</Text>
+            </GlassCard>
+
+            <GlassCard className="w-[48%] p-4 mb-4">
+              <View className="flex-row items-center mb-2">
+                <Calendar size={12} color="#3B82F6" />
+                <Text className="text-gray-500 font-bold uppercase tracking-widest text-[9px] ml-1.5">Startdatum</Text>
+              </View>
+              <Text className="text-white text-xs font-bold">
+                {project?.start_date ? new Date(project.start_date).toLocaleDateString('de-DE') : 'N/A'}
+              </Text>
+            </GlassCard>
+
+            <GlassCard className="w-[48%] p-4 mb-4">
+              <View className="flex-row items-center mb-2">
+                <Calendar size={12} color="#10B981" />
+                <Text className="text-gray-500 font-bold uppercase tracking-widest text-[9px] ml-1.5">Enddatum</Text>
+              </View>
+              <Text className="text-white text-xs font-bold">
+                {project?.end_date ? new Date(project.end_date).toLocaleDateString('de-DE') : 'N/A'}
+              </Text>
+            </GlassCard>
+          </View>
+
+          {calculatingRoute && (
+            <View className="flex-row items-center justify-center p-3 bg-white/5 border border-white/10 rounded-xl mb-4">
+              <ActivityIndicator size="small" color="#3B82F6" className="mr-2.5" />
+              <Text className="text-gray-400 text-xs font-bold uppercase tracking-widest">Berechne Anfahrtsweg...</Text>
+            </View>
+          )}
+
+          {routeInfo && (
+            <View className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl flex-row items-center mb-4">
+              <View className="w-8 h-8 rounded-lg bg-blue-500/20 items-center justify-center mr-3">
+                <Car size={16} color="#3B82F6" />
+              </View>
+              <View className="flex-1">
+                <Text className="font-bold text-white text-xs">{routeInfo.distance} km Anfahrtsweg</Text>
+                <Text className="text-[9px] text-gray-400">ca. {routeInfo.duration} Min. Fahrtzeit vom Firmensitz</Text>
+              </View>
+            </View>
+          )}
+
+          {project?.address ? (
+            <View className="w-full h-48 rounded-2xl overflow-hidden border border-white/10 mb-4 bg-black/20">
+              <WebView
+                originWhitelist={['*']}
+                javaScriptEnabled={true}
+                domStorageEnabled={true}
+                source={{
+                  html: `
+                    <!DOCTYPE html>
+                    <html>
+                      <head>
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+                        <style>
+                          html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
+                          iframe { border: 0; width: 100%; height: 100%; }
+                        </style>
+                      </head>
+                      <body>
+                        <iframe
+                          src="https://maps.google.com/maps?q=${encodeURIComponent(project.address)}&t=&z=14&ie=UTF8&iwloc=&output=embed"
+                          allowfullscreen
+                        ></iframe>
+                      </body>
+                    </html>
+                  `
+                }}
+                style={{ flex: 1, backgroundColor: 'transparent', opacity: 0.8 }}
+              />
+            </View>
+          ) : null}
+        </View>
+
+        {/* Client Information */}
+        <View>
+          <Text className="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-3 ml-1">Kundeninformationen</Text>
+          <GlassCard className="p-5">
+            <View className="flex-row items-center mb-4">
+              <View className="w-10 h-10 rounded-xl bg-blue-500/20 items-center justify-center border border-blue-500/30">
+                <Building size={20} color="#3B82F6" />
+              </View>
+              <View className="ml-4 flex-1">
+                <Text className="text-white font-bold text-base">{project?.client?.company_name || project?.client?.name || 'Unbekannter Kunde'}</Text>
+                <Text className="text-gray-500 text-xs">{project?.client?.industry || 'Kunde'}</Text>
+              </View>
+            </View>
+
+            {(project?.client?.phone || project?.client?.email) && (
+              <View className="pt-3 border-t border-white/5 space-y-2">
+                {project.client.phone && (
+                  <TouchableOpacity
+                    onPress={() => Linking.openURL(`tel:${project.client.phone}`)}
+                    className="flex-row items-center"
+                  >
+                    <Phone size={12} color="#3B82F6" className="mr-2" />
+                    <Text className="text-blue-400 text-xs font-medium">{project.client.phone}</Text>
+                  </TouchableOpacity>
+                )}
+                {project.client.email && (
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate('Main', { screen: 'E-Mail', params: { initialRecipient: project.client.email, initialSubject: `Projekt: ${project.title}` } })}
+                    className="flex-row items-center"
+                  >
+                    <Mail size={12} color="#3B82F6" className="mr-2" />
+                    <Text className="text-blue-400 text-xs font-medium">{project.client.email}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+          </GlassCard>
+        </View>
+
+        {/* Classification & Category */}
+        {(project?.category || project?.subcategory) && (
+          <View>
+            <Text className="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-3 ml-1">Klassifizierung</Text>
+            <GlassCard className="p-5 flex-row">
+              {project?.category && (
+                <View className="flex-1 border-r border-white/5 pr-4">
+                  <Text className="text-gray-500 text-[9px] uppercase font-bold mb-1">Kategorie</Text>
+                  <View className="flex-row items-center">
+                    <View className="w-6 h-6 rounded bg-blue-500/10 items-center justify-center mr-2">
+                      <Target size={12} color="#3B82F6" />
+                    </View>
+                    <Text className="text-white text-xs font-bold" numberOfLines={1}>{project.category.name}</Text>
                   </View>
                 </View>
-
-                {(as.subcontractor?.contact_person || as.subcontractor?.phone || as.subcontractor?.email) && (
-                  <View className="pt-3 border-t border-white/5 space-y-2">
-                    {as.subcontractor.contact_person && (
-                      <View className="flex-row items-center">
-                        <User size={12} color="#6B7280" className="mr-2" />
-                        <Text className="text-gray-300 text-xs">{as.subcontractor.contact_person}</Text>
-                      </View>
-                    )}
-                    {as.subcontractor.phone && (
-                      <TouchableOpacity 
-                        onPress={() => Linking.openURL(`tel:${as.subcontractor.phone}`)}
-                        className="flex-row items-center"
-                      >
-                        <Phone size={12} color="#3B82F6" className="mr-2" />
-                        <Text className="text-blue-400 text-xs font-medium">{as.subcontractor.phone}</Text>
-                      </TouchableOpacity>
-                    )}
-                    {as.subcontractor.email && (
-                      <TouchableOpacity 
-                        onPress={() => navigation.navigate('Main', { screen: 'E-Mail', params: { initialRecipient: as.subcontractor.email, initialSubject: `Projekt: ${project.title}` } })}
-                        className="flex-row items-center"
-                      >
-                        <Mail size={12} color="#3B82F6" className="mr-2" />
-                        <Text className="text-blue-400 text-xs font-medium">{as.subcontractor.email}</Text>
-                      </TouchableOpacity>
-                    )}
+              )}
+              {project?.subcategory && (
+                <View className="flex-1 pl-4">
+                  <Text className="text-gray-500 text-[9px] uppercase font-bold mb-1">Unterkategorie</Text>
+                  <View className="flex-row items-center">
+                    <View className="w-6 h-6 rounded bg-purple-500/10 items-center justify-center mr-2">
+                      <BriefcaseIcon size={12} color="#A855F7" />
+                    </View>
+                    <Text className="text-white text-xs font-bold" numberOfLines={1}>{project.subcategory.name}</Text>
                   </View>
-                )}
-              </GlassCard>
-            ))}
+                </View>
+              )}
+            </GlassCard>
           </View>
-        </View>
-      )}
-    </View>
-  );
+        )}
+
+        {/* Answers Section */}
+        {project?.answers?.length > 0 && (
+          <View>
+            <Text className="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-3 ml-1">Zusatzinformationen</Text>
+            <View className="space-y-3">
+              {project.answers.map((ans: any) => (
+                <GlassCard key={ans.id} className="p-4 bg-black/30 border-white/5">
+                  <Text className="text-gray-500 text-[9px] font-bold uppercase mb-1">{ans.question?.question_text || 'Info'}</Text>
+                  <Text className="text-white text-xs font-bold">
+                    {ans.custom_value || ans.answer?.answer_text || '-'}
+                  </Text>
+                </GlassCard>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Team Section */}
+        {project?.assigned_personnel?.length > 0 && (
+          <View>
+            <Text className="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-3 ml-1">Team</Text>
+            <GlassCard className="p-5">
+              <View className="space-y-4">
+                {project.assigned_personnel.map((ap: any, idx: number) => (
+                  <View key={idx} className="flex-row items-center justify-between mb-4 last:mb-0">
+                    <View className="flex-row items-center flex-1">
+                      <View className="w-8 h-8 rounded-full bg-blue-500/20 items-center justify-center border border-blue-500/30">
+                        <Text className="text-blue-400 text-[10px] font-bold">
+                          {ap.user?.name?.split(' ').map((n: any) => n[0]).join('').toUpperCase()}
+                        </Text>
+                      </View>
+                      <View className="ml-3 flex-1">
+                        <Text className="text-white text-sm font-bold" numberOfLines={1}>{ap.user?.name}</Text>
+                        <Text className="text-gray-500 text-[10px] uppercase font-bold tracking-widest">{ap.role}</Text>
+                      </View>
+                    </View>
+                    <ChevronRight size={14} color="#4B5563" />
+                  </View>
+                ))}
+              </View>
+            </GlassCard>
+          </View>
+        )}
+
+        {/* Subcontractors Section */}
+        {project?.assigned_subcontractors?.length > 0 && (
+          <View>
+            <Text className="text-amber-400 font-bold uppercase tracking-widest text-[10px] mb-3 ml-1">Nachunternehmer</Text>
+            <View className="space-y-3">
+              {project.assigned_subcontractors.map((as: any) => (
+                <GlassCard key={as.id} className="p-4 border-amber-500/10">
+                  <View className="flex-row items-center justify-between mb-3">
+                    <View className="flex-1">
+                      <Text className="text-white font-bold text-sm">{as.subcontractor?.name}</Text>
+                      <Text className="text-gray-500 text-[9px] uppercase font-bold tracking-wider mt-0.5">{as.subcontractor?.trade}</Text>
+                    </View>
+                    <View className="w-8 h-8 rounded-lg bg-amber-500/10 items-center justify-center border border-amber-500/20">
+                      <HardHat size={16} color="#F59E0B" />
+                    </View>
+                  </View>
+
+                  {(as.subcontractor?.contact_person || as.subcontractor?.phone || as.subcontractor?.email) && (
+                    <View className="pt-3 border-t border-white/5 space-y-2">
+                      {as.subcontractor.contact_person && (
+                        <View className="flex-row items-center">
+                          <User size={12} color="#6B7280" className="mr-2" />
+                          <Text className="text-gray-300 text-xs">{as.subcontractor.contact_person}</Text>
+                        </View>
+                      )}
+                      {as.subcontractor.phone && (
+                        <TouchableOpacity
+                          onPress={() => Linking.openURL(`tel:${as.subcontractor.phone}`)}
+                          className="flex-row items-center"
+                        >
+                          <Phone size={12} color="#3B82F6" className="mr-2" />
+                          <Text className="text-blue-400 text-xs font-medium">{as.subcontractor.phone}</Text>
+                        </TouchableOpacity>
+                      )}
+                      {as.subcontractor.email && (
+                        <TouchableOpacity
+                          onPress={() => navigation.navigate('Main', { screen: 'E-Mail', params: { initialRecipient: as.subcontractor.email, initialSubject: `Projekt: ${project.title}` } })}
+                          className="flex-row items-center"
+                        >
+                          <Mail size={12} color="#3B82F6" className="mr-2" />
+                          <Text className="text-blue-400 text-xs font-medium">{as.subcontractor.email}</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  )}
+                </GlassCard>
+              ))}
+            </View>
+          </View>
+        )}
+      </View>
+    );
+  };
 
   const renderStepsTab = () => (
     <View className="space-y-4 pb-20">
@@ -957,13 +1512,12 @@ export default function ProjectDetailScreen() {
             {/* Stage Image Preview */}
             {stage.images && stage.images.length > 0 && (
               <TouchableOpacity
-                onPress={() => handleOpenViewer(stage.images.map((img: any) => `${serverDomain}${img.path}`))}
+                onPress={() => handleOpenViewer(stage.images, 0)}
                 className="ml-4 relative"
               >
-                <Image
-                  source={{ uri: `${serverDomain}${stage.images[0].path}` }}
-                  className="w-12 h-12 rounded-lg border border-white/10"
-                />
+                <View className="w-12 h-12 rounded-lg border border-white/10 bg-white/5 justify-center items-center">
+                  <ImageIcon size={20} color="#6B7280" />
+                </View>
                 {stage.images.length > 1 && (
                   <View className="absolute -bottom-1 -right-1 bg-brand-blue w-5 h-5 rounded-full items-center justify-center border border-black">
                     <Text className="text-white text-[8px] font-bold">+{stage.images.length - 1}</Text>
@@ -1023,6 +1577,15 @@ export default function ProjectDetailScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {isBatchUploading && (
+        <GlassCard className="p-4 border-blue-500/30 bg-blue-500/5 mb-4 flex-row items-center">
+          <ActivityIndicator color="#3B82F6" size="small" className="mr-3" />
+          <Text className="text-blue-400 font-bold text-[10px] uppercase tracking-widest flex-1">
+            Dateien werden hochgeladen... Bitte warten
+          </Text>
+        </GlassCard>
+      )}
 
       {filesLoading ? (
         <ActivityIndicator color="#3B82F6" className="my-10" />
@@ -1101,7 +1664,7 @@ export default function ProjectDetailScreen() {
     <ScreenLayout padding={false}>
       <View className="h-64 relative">
         <ImageBackground
-          source={project?.main_image ? { uri: `${serverDomain}${project.main_image}` } : undefined}
+          source={project?.main_image ? { uri: getFullUrl(project.main_image) } : undefined}
           className="w-full h-full bg-black/40"
           resizeMode="cover"
         >
@@ -1116,7 +1679,7 @@ export default function ProjectDetailScreen() {
             >
               <ChevronLeft size={24} color="white" />
             </TouchableOpacity>
-            
+
             <View className="flex-row items-center">
               {canEditProject && (
                 <TouchableOpacity
@@ -1148,15 +1711,24 @@ export default function ProjectDetailScreen() {
       </View>
 
       {/* Tabs */}
-      <View className="px-6 flex-row items-center border-b border-white/5 mb-6">
-        <TabButton label="Info" id="info" icon={Briefcase} />
-        <TabButton label="Steps" id="steps" icon={CheckSquare} />
-        <TabButton label="Files" id="files" icon={FileText} />
+      <View className="border-b border-white/5 mb-6">
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 4 }}
+          className="flex-row"
+        >
+          <TabButton label="Info" id="info" icon={Briefcase} />
+          <TabButton label="Bautagebuch" id="diary" icon={Clock} />
+          <TabButton label="Steps" id="steps" icon={CheckSquare} />
+          <TabButton label="Files" id="files" icon={FileText} />
+        </ScrollView>
       </View>
 
       {/* Content */}
       <View className="px-6">
         {activeTab === 'info' && renderInfoTab()}
+        {activeTab === 'diary' && renderDiaryTab()}
         {activeTab === 'steps' && renderStepsTab()}
         {activeTab === 'files' && renderFilesTab()}
       </View>
@@ -1241,7 +1813,7 @@ export default function ProjectDetailScreen() {
                       <View key={`existing-${img.id}`} className="mr-3 relative">
                         <TouchableOpacity onPress={() => handleOpenViewer(existingImages.map(ei => ei.path), i)}>
                           <Image
-                            source={{ uri: `${serverDomain}${img.path}` }}
+                            source={{ uri: getFullUrl(img.path) }}
                             className="w-20 h-20 rounded-xl border border-white/10"
                             style={{ width: 80, height: 80 }}
                           />
@@ -1279,6 +1851,19 @@ export default function ProjectDetailScreen() {
                 )}
               </View>
 
+              {/* Upload Progress Bar */}
+              {uploadProgress > 0 && (
+                <View className="mb-5 px-1">
+                  <View className="flex-row justify-between items-center mb-1.5">
+                    <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">Dateiupload läuft...</Text>
+                    <Text className="text-white font-black text-xs">{uploadProgress}%</Text>
+                  </View>
+                  <View className="w-full h-1.5 bg-black/40 rounded-full overflow-hidden border border-white/5">
+                    <View style={{ width: `${uploadProgress}%` }} className="h-full bg-brand-blue" />
+                  </View>
+                </View>
+              )}
+
               <View className="h-10" />
             </ScrollView>
 
@@ -1293,10 +1878,10 @@ export default function ProjectDetailScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleSaveStage}
-                disabled={createStageMutation.isPending || updateStageDetailsMutation.isPending}
+                disabled={createStageMutation.isPending || updateStageDetailsMutation.isPending || isSavingStage}
                 className="bg-brand-blue flex-1 py-4 rounded-xl items-center shadow-lg shadow-blue-500/30 border border-brand-blue"
               >
-                {(createStageMutation.isPending || updateStageDetailsMutation.isPending) ? (
+                {(createStageMutation.isPending || updateStageDetailsMutation.isPending || isSavingStage) ? (
                   <ActivityIndicator color="white" size="small" />
                 ) : (
                   <Text className="text-white font-bold text-sm tracking-widest">
@@ -1306,6 +1891,162 @@ export default function ProjectDetailScreen() {
               </TouchableOpacity>
             </View>
 
+          </GlassCard>
+        </BlurView>
+      </Modal>
+
+      {/* Diary Modal (Add) */}
+      <Modal
+        visible={isDiaryModalOpen}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsDiaryModalOpen(false)}
+      >
+        <BlurView intensity={80} tint="dark" className="flex-1 justify-end">
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={Keyboard.dismiss}
+            className="flex-1"
+          />
+          <GlassCard className="p-6 rounded-t-[40px] border-t border-white/10 bg-black/60 rounded-b-none" style={{ height: '85%' }}>
+            <View className="w-full pb-6 items-center">
+              <View className="w-12 h-1.5 bg-white/10 rounded-full" />
+            </View>
+
+            <View className="flex-row justify-between items-center mb-6">
+              <Text className="text-white text-xl font-bold uppercase tracking-widest">Neuer Tagebucheintrag</Text>
+              <TouchableOpacity onPress={() => setIsDiaryModalOpen(false)}>
+                <Text className="text-gray-500 font-bold uppercase text-xs tracking-widest">Abbrechen</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} className="flex-1">
+              {/* Title Input */}
+              <View className="mb-5">
+                <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Titel</Text>
+                <GlassCard className="p-0 overflow-hidden bg-black/40 border border-white/5">
+                  <TextInput
+                    value={diaryTitle}
+                    onChangeText={setDiaryTitle}
+                    placeholder="z.B. Wetter/Vorkommnisse"
+                    placeholderTextColor="#4B5563"
+                    className="p-4 text-white font-bold"
+                  />
+                </GlassCard>
+              </View>
+
+              {/* Date Input */}
+              <View className="mb-5">
+                <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Datum</Text>
+                <TouchableOpacity onPress={() => setShowDiaryDatePicker(true)}>
+                  <GlassCard className="p-4 bg-black/40 border border-white/5 flex-row items-center justify-between">
+                    <Calendar size={16} color="#6B7280" />
+                    <Text className="text-white font-bold">{formatDate(diaryDate)}</Text>
+                  </GlassCard>
+                </TouchableOpacity>
+                {showDiaryDatePicker && (
+                  <DateTimePicker
+                    value={new Date(diaryDate)}
+                    mode="date"
+                    display="default"
+                    onChange={(event, selected) => {
+                      setShowDiaryDatePicker(false);
+                      if (selected) setDiaryDate(getISODate(selected));
+                    }}
+                  />
+                )}
+              </View>
+
+              {/* Color Selector */}
+              <View className="mb-5">
+                <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Kategorie / Farbe</Text>
+                <GlassCard className="p-4 bg-black/40 border border-white/5 flex-row items-center justify-between">
+                  <ImageIcon size={16} color={diaryColor} />
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} className="ml-2">
+                    {COLORS.map((c) => (
+                      <TouchableOpacity
+                        key={c}
+                        onPress={() => setDiaryColor(c)}
+                        className={`w-6 h-6 rounded-full mx-1 items-center justify-center ${diaryColor === c ? 'border border-white scale-110' : ''}`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </ScrollView>
+                </GlassCard>
+              </View>
+
+              {/* Description Input */}
+              <View className="mb-5">
+                <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Inhalt</Text>
+                <GlassCard className="p-0 overflow-hidden bg-black/40 border border-white/5">
+                  <TextInput
+                    value={diaryContent}
+                    onChangeText={setDiaryContent}
+                    placeholder="Details zum Eintrag..."
+                    placeholderTextColor="#4B5563"
+                    className="p-4 text-white text-sm"
+                    multiline
+                    numberOfLines={6}
+                    textAlignVertical="top"
+                  />
+                </GlassCard>
+              </View>
+
+              {/* Media Upload Section */}
+              <View className="mb-5">
+                <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Anhänge</Text>
+                <TouchableOpacity onPress={handlePickDiaryMedia} activeOpacity={0.8} className="mb-4">
+                  <GlassCard className="p-6 bg-black/40 border border-dashed border-white/20 items-center justify-center">
+                    <UploadCloud size={32} color="#6B7280" className="mb-2" />
+                    <Text className="text-gray-400 font-bold text-xs uppercase tracking-widest">Dateien auswählen</Text>
+                  </GlassCard>
+                </TouchableOpacity>
+
+                {diaryAttachments.length > 0 && (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
+                    {diaryAttachments.map((file, i) => (
+                      <View key={i} className="mr-3 relative">
+                        {file.type === 'video' ? (
+                          <View className="w-20 h-20 rounded-xl bg-gray-800 justify-center items-center border border-white/10">
+                            <Text className="text-white font-bold text-xs">VIDEO</Text>
+                          </View>
+                        ) : (
+                          <Image source={{ uri: file.uri }} className="w-20 h-20 rounded-xl border border-white/10" style={{ width: 80, height: 80 }} />
+                        )}
+                        <TouchableOpacity
+                          onPress={() => removeDiaryAttachment(i)}
+                          className="absolute -top-2 -right-2 bg-[#1A1A1A] w-6 h-6 rounded-full items-center justify-center border border-white/20"
+                        >
+                          <Text className="text-white font-bold text-[10px]">X</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </ScrollView>
+                )}
+              </View>
+
+              <View className="h-10" />
+            </ScrollView>
+
+            <View className="flex-row justify-between pt-4 border-t border-white/5">
+              <TouchableOpacity
+                onPress={() => setIsDiaryModalOpen(false)}
+                className="bg-white/5 flex-1 py-4 rounded-xl items-center mr-2 border border-white/10"
+              >
+                <Text className="text-white font-bold text-sm tracking-widest">Abbrechen</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleSaveDiaryLog}
+                disabled={createDiaryLogMutation.isPending || isSavingDiary}
+                className="bg-brand-blue flex-1 py-4 rounded-xl items-center shadow-lg shadow-blue-500/30 border border-brand-blue"
+              >
+                {(createDiaryLogMutation.isPending || isSavingDiary) ? (
+                  <ActivityIndicator color="white" size="small" />
+                ) : (
+                  <Text className="text-white font-bold text-sm tracking-widest">Speichern</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </GlassCard>
         </BlurView>
       </Modal>
@@ -1394,9 +2135,8 @@ export default function ProjectDetailScreen() {
                     key={role.id}
                     onPress={() => !isBypass && toggleRole(role.id)}
                     activeOpacity={isBypass ? 1 : 0.7}
-                    className={`flex-row items-center justify-between p-4 rounded-xl mb-2 border ${
-                      isSelected ? 'bg-blue-500/10 border-blue-500/30' : 'bg-white/5 border-white/5'
-                    }`}
+                    className={`flex-row items-center justify-between p-4 rounded-xl mb-2 border ${isSelected ? 'bg-blue-500/10 border-blue-500/30' : 'bg-white/5 border-white/5'
+                      }`}
                   >
                     <View className="flex-row items-center">
                       <User size={18} color={isSelected ? "#3B82F6" : "#4B5563"} className="mr-3" />
@@ -1407,8 +2147,7 @@ export default function ProjectDetailScreen() {
                     {isBypass ? (
                       <Lock size={16} color="#4B5563" />
                     ) : (
-                      <View className={`w-6 h-6 rounded-md border-2 items-center justify-center ${
-                        isSelected ? 'bg-brand-blue border-brand-blue' : 'border-white/20'
+                      <View className={`w-6 h-6 rounded-md border-2 items-center justify-center ${isSelected ? 'bg-brand-blue border-brand-blue' : 'border-white/20'
                         }`}
                       >
                         {isSelected && <Check size={16} color="white" />}
@@ -1430,16 +2169,14 @@ export default function ProjectDetailScreen() {
                 onPress={() => togglePublicMutation.mutate({ path: currentPath, name: selectedFolder?.name })}
                 activeOpacity={0.8}
                 disabled={togglePublicMutation.isPending}
-                className={`w-14 h-8 rounded-full justify-center px-1 ${
-                  isPublic ? 'bg-brand-blue' : 'bg-white/10'
-                }`}
+                className={`w-14 h-8 rounded-full justify-center px-1 ${isPublic ? 'bg-brand-blue' : 'bg-white/10'
+                  }`}
               >
                 {togglePublicMutation.isPending ? (
                   <ActivityIndicator color="white" size="small" />
                 ) : (
-                  <View className={`w-6 h-6 rounded-full bg-white shadow-sm ${
-                    isPublic ? 'self-end' : 'self-start'
-                  }`} />
+                  <View className={`w-6 h-6 rounded-full bg-white shadow-sm ${isPublic ? 'self-end' : 'self-start'
+                    }`} />
                 )}
               </TouchableOpacity>
             </View>
@@ -1491,10 +2228,10 @@ export default function ProjectDetailScreen() {
       {/* Project Edit Modal */}
       <Modal visible={isEditModalOpen} animationType="slide" transparent onRequestClose={() => setIsEditModalOpen(false)}>
         <BlurView intensity={80} tint="dark" className="flex-1 justify-end">
-          <TouchableOpacity 
-             activeOpacity={1} 
-             onPress={Keyboard.dismiss} 
-             className="flex-1"
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={Keyboard.dismiss}
+            className="flex-1"
           />
           <GlassCard className="p-6 rounded-t-[40px] border-t border-white/10 bg-black/60" style={{ height: '85%' }}>
             <View {...modalPanResponder.panHandlers} className="w-full pb-6 items-center">
@@ -1570,9 +2307,9 @@ export default function ProjectDetailScreen() {
 
                 {/* Visual Progress Bar */}
                 <View className="mt-[-12px]">
-                   <View className="h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
-                      <View style={{ width: `${editFormData.progress}%` }} className="h-full bg-brand-blue" />
-                   </View>
+                  <View className="h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
+                    <View style={{ width: `${editFormData.progress}%` }} className="h-full bg-brand-blue" />
+                  </View>
                 </View>
 
                 {/* Category & Subcategory */}
@@ -1697,55 +2434,55 @@ export default function ProjectDetailScreen() {
 
                 {/* Team Assignment */}
                 <View className="pt-4 mt-4 border-t border-white/5">
-                   <View className="flex-row items-center mb-6">
-                      <View className="w-1 h-6 bg-brand-blue rounded-full mr-3" />
-                      <Text className="text-white font-bold uppercase tracking-widest text-sm">Team & Besetzung</Text>
-                   </View>
+                  <View className="flex-row items-center mb-6">
+                    <View className="w-1 h-6 bg-brand-blue rounded-full mr-3" />
+                    <Text className="text-white font-bold uppercase tracking-widest text-sm">Team & Besetzung</Text>
+                  </View>
 
-                   {/* PL / GL / Workers */}
-                   {['Projektleiter', 'Gruppenleiter', 'Worker'].map((roleName) => (
-                     <View key={roleName} className="mb-6">
-                        <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">{roleName}</Text>
-                        <GlassCard className="p-2 bg-black/40 border border-white/5">
-                           <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
-                              {(allUsersRes || []).filter((u: any) => u.role?.name === roleName).map((u: any) => {
-                                const roleId = roleName.toLowerCase() as any;
-                                const isAssigned = assignedUsers.some(au => au.user_id === u.id && au.role === roleId);
-                                return (
-                                  <TouchableOpacity
-                                    key={u.id}
-                                    onPress={() => handleTogglePersonnel(u.id, roleId)}
-                                    className={`px-3 py-2 rounded-lg mr-2 border flex-row items-center ${isAssigned ? 'bg-brand-blue border-brand-blue' : 'bg-white/5 border-white/5'}`}
-                                  >
-                                    <User size={12} color={isAssigned ? 'white' : '#6B7280'} className="mr-1.5" />
-                                    <Text className={`text-[10px] font-bold ${isAssigned ? 'text-white' : 'text-gray-400'}`}>{u.name}</Text>
-                                  </TouchableOpacity>
-                                );
-                              })}
-                           </ScrollView>
-                        </GlassCard>
-                     </View>
-                   ))}
+                  {/* PL / GL / Workers */}
+                  {['Projektleiter', 'Gruppenleiter', 'Worker'].map((roleName) => (
+                    <View key={roleName} className="mb-6">
+                      <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">{roleName}</Text>
+                      <GlassCard className="p-2 bg-black/40 border border-white/5">
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
+                          {(allUsersRes || []).filter((u: any) => u.role?.name?.toLowerCase() === roleName.toLowerCase()).map((u: any) => {
+                            const roleId = roleName.toLowerCase() as any;
+                            const isAssigned = assignedUsers.some(au => au.user_id === u.id && au.role === roleId);
+                            return (
+                              <TouchableOpacity
+                                key={u.id}
+                                onPress={() => handleTogglePersonnel(u.id, roleId)}
+                                className={`px-3 py-2 rounded-lg mr-2 border flex-row items-center ${isAssigned ? 'bg-brand-blue border-brand-blue' : 'bg-white/5 border-white/5'}`}
+                              >
+                                <User size={12} color={isAssigned ? 'white' : '#6B7280'} className="mr-1.5" />
+                                <Text className={`text-[10px] font-bold ${isAssigned ? 'text-white' : 'text-gray-400'}`}>{u.name}</Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </ScrollView>
+                      </GlassCard>
+                    </View>
+                  ))}
 
-                   {/* Subcontractors */}
-                   <View className="mb-6">
-                      <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Nachunternehmer</Text>
-                      <View className="flex-row flex-wrap">
-                        {(subcontractorsRes?.data?.subcontractors || []).map((sub: any) => {
-                          const isAssigned = assignedSubcontractors.includes(sub.id);
-                          return (
-                            <TouchableOpacity
-                              key={sub.id}
-                              onPress={() => setAssignedSubcontractors(prev => prev.includes(sub.id) ? prev.filter(sid => sid !== sub.id) : [...prev, sub.id])}
-                              className={`w-[48%] p-3 rounded-xl mb-2 border ${isAssigned ? 'bg-brand-blue/20 border-brand-blue' : 'bg-black/40 border-white/5'} ${assignedSubcontractors.indexOf(sub.id) % 2 === 0 ? 'mr-[4%]' : ''}`}
-                            >
-                              <Text className={`text-xs font-bold text-center ${isAssigned ? 'text-brand-blue' : 'text-gray-400'}`}>{sub.name}</Text>
-                              <Text className="text-[10px] text-center text-gray-600 font-bold uppercase tracking-tighter mt-1">{sub.trade}</Text>
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </View>
-                   </View>
+                  {/* Subcontractors */}
+                  <View className="mb-6">
+                    <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Nachunternehmer</Text>
+                    <View className="flex-row flex-wrap">
+                      {(subcontractorsRes?.data?.subcontractors || []).map((sub: any) => {
+                        const isAssigned = assignedSubcontractors.includes(sub.id);
+                        return (
+                          <TouchableOpacity
+                            key={sub.id}
+                            onPress={() => setAssignedSubcontractors(prev => prev.includes(sub.id) ? prev.filter(sid => sid !== sub.id) : [...prev, sub.id])}
+                            className={`w-[48%] p-3 rounded-xl mb-2 border ${isAssigned ? 'bg-brand-blue/20 border-brand-blue' : 'bg-black/40 border-white/5'} ${assignedSubcontractors.indexOf(sub.id) % 2 === 0 ? 'mr-[4%]' : ''}`}
+                          >
+                            <Text className={`text-xs font-bold text-center ${isAssigned ? 'text-brand-blue' : 'text-gray-400'}`}>{sub.name}</Text>
+                            <Text className="text-[10px] text-center text-gray-600 font-bold uppercase tracking-tighter mt-1">{sub.trade}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
                 </View>
               </View>
             </ScrollView>

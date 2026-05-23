@@ -35,6 +35,15 @@ const Note = sequelize.define('Note', {
     isDone: {
         type: DataTypes.BOOLEAN,
         defaultValue: false
+    },
+    isPinned: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false
+    },
+    showInDiary: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        allowNull: false
     }
 }, {
     tableName: 'notes',

@@ -14,6 +14,7 @@ router.get('/conversations', ChatController.getConversations);
 router.get('/unread-count', ChatController.getTotalUnreadCount);
 router.post('/conversations/direct', ChatController.getOrCreateDirectChat);
 router.post('/conversations/group', ChatController.createGroup);
+router.delete('/conversations/:conversationId/leave', ChatController.leaveGroup);
 
 // Messages
 router.get('/conversations/:conversationId/messages', ChatController.getMessages);

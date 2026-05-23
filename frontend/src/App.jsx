@@ -30,6 +30,7 @@ import FileManager from './features/files/FileManager';
 import TimeTerminal from './features/timetracking/TimeTerminal';
 import TimeLogs from './features/timetracking/TimeLogs';
 import TimeSettings from './features/timetracking/TimeSettings';
+import BulkEmail from './features/emails/BulkEmail';
 
 import { useEffect } from 'react';
 import socketService from './services/socket';
@@ -48,6 +49,15 @@ const RequireAuth = ({ children }) => {
     }, [isAuthenticated, user]);
 
     if (!isAuthenticated) return <Navigate to="/login" replace />;
+    return children;
+};
+
+const RequireAdmin = ({ children }) => {
+    const { user } = useSelector((state) => state.auth);
+    const roleName = typeof user?.role === 'string' ? user.role : (user?.role?.name || '');
+    if (roleName.toLowerCase() !== 'admin') {
+        return <Navigate to="/dashboard" replace />;
+    }
     return children;
 };
 
@@ -96,6 +106,7 @@ function App() {
                     <Route path="telefon/einstellungen" element={<PhoneSettingsPage />} />
                     <Route path="settings/ip-system" element={<TelephonyInstructionsPage />} />
                     <Route path="email-messages" element={<EmailMessages />} />
+                    <Route path="email-bulk" element={<RequireAdmin><BulkEmail /></RequireAdmin>} />
                     <Route path="settings">
                         <Route path="email-accounts" element={<Emails />} />
                         <Route path="storage" element={<StorageManagement />} />

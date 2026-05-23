@@ -1,5 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSelector } from 'react-redux';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+    Image as ImageIcon,
+    FileText,
+    File,
+    FileVideo,
+    FileAudio,
+    FileArchive,
+    Loader2,
+    CheckCircle2,
+    AlertCircle,
+    X,
+    ChevronDown,
+    ChevronUp
+} from 'lucide-react';
 import api from '../../services/api';
 import MediaViewer from '../../components/common/MediaViewer';
 import FolderPermissionsModal from './components/FolderPermissionsModal';
@@ -13,11 +28,16 @@ const ProjectFileManager = ({ project }) => {
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef(null);
 
+    // Upload Queue State
+    const [uploadQueue, setUploadQueue] = useState([]); // { id, fileName, progress, status, error }
+    const [isUploadPanelOpen, setIsUploadPanelOpen] = useState(false);
+    const [isUploadPanelMinimized, setIsUploadPanelMinimized] = useState(false);
+
     // Auth & Permissions
     const { user } = useSelector(state => state.auth);
     const userRole = user?.role?.name || user?.role; // Fallback for safety
     const isManagement = ['Admin', 'Büro', 'Projektleiter', 'Gruppenleiter'].includes(userRole);
-    
+
     // Workers can create, but not delete, folders. They can only delete their own files.
     // Management can do everything.
     const canManagePermissions = isManagement;
@@ -27,7 +47,7 @@ const ProjectFileManager = ({ project }) => {
     const [isGalleryOpen, setIsGalleryOpen] = useState(false);
     const [galleryItems, setGalleryItems] = useState([]);
     const [galleryIndex, setGalleryIndex] = useState(0);
-    
+
     // Permissions Modal State
     const [isPermissionsModalOpen, setIsPermissionsModalOpen] = useState(false);
     const [selectedFolderForPermissions, setSelectedFolderForPermissions] = useState(null);
@@ -43,11 +63,11 @@ const ProjectFileManager = ({ project }) => {
                 file_size: item.size,
                 content_type: isImage(item.name) ? 'image/jpeg' : (item.name.match(/\.(mp4|webm|mov)$/i) ? 'video/mp4' : 'application/octet-stream')
             }));
-        
+
         // Find the index of the current item in the filtered list
         const currentItem = allFiles[currentItemIdx];
         const newIdx = filesOnly.findIndex(f => f.file_name === currentItem.name);
-        
+
         setGalleryItems(filesOnly);
         setGalleryIndex(newIdx !== -1 ? newIdx : 0);
         setIsGalleryOpen(true);
@@ -79,6 +99,70 @@ const ProjectFileManager = ({ project }) => {
         fetchFiles(currentPath);
     }, [projectId, currentPath]);
 
+    // Refresh content when an upload completes
+    useEffect(() => {
+        const hasUploading = uploadQueue.some(u => u.status === 'uploading');
+        if (!hasUploading && uploadQueue.length > 0 && uploadQueue.some(u => u.status === 'completed')) {
+            fetchFiles();
+        }
+    }, [uploadQueue.map(u => u.status).join(',')]);
+
+    const startSingleUpload = async (file) => {
+        const uploadId = Math.random().toString(36).substring(7);
+        const newUpload = {
+            id: uploadId,
+            fileName: file.name,
+            progress: 0,
+            status: 'uploading',
+            error: null
+        };
+
+        setUploadQueue(prev => [...prev, newUpload]);
+
+        // Client-side size check (100MB)
+        const MAX_SIZE = 100 * 1024 * 1024;
+        if (file.size > MAX_SIZE) {
+            setUploadQueue(prev => prev.map(item =>
+                item.id === uploadId ? { ...item, status: 'error', error: 'Datei ist zu groß (Max 100MB)' } : item
+            ));
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('files', file);
+        formData.append('path', currentPath);
+
+        console.log(`[UPLOAD DEBUG] Sending file: ${file.name}, Path: ${currentPath}, Size: ${file.size} bytes`);
+
+        try {
+            const res = await api.post(`/projects/${projectId}/files/upload`, formData, {
+                onUploadProgress: (progressEvent) => {
+                    const total = progressEvent.total || file.size;
+                    const percentCompleted = Math.round((progressEvent.loaded * 100) / total);
+                    setUploadQueue(prev => prev.map(item =>
+                        item.id === uploadId ? { ...item, progress: percentCompleted } : item
+                    ));
+                }
+            });
+
+            if (res.status === 201 || res.data?.status === 'success') {
+                setUploadQueue(prev => prev.map(item =>
+                    item.id === uploadId ? { ...item, status: 'completed', progress: 100 } : item
+                ));
+                fetchFiles();
+            }
+        } catch (err) {
+            console.error(`[UPLOAD ERROR] Failed for ${file.name}:`, err);
+            if (err.response) {
+                console.error(`[UPLOAD ERROR] Server Response Data:`, err.response.data);
+            }
+            const errorMsg = err.response?.data?.error || err.message || 'Upload fehlgeschlagen';
+            setUploadQueue(prev => prev.map(item =>
+                item.id === uploadId ? { ...item, status: 'error', error: errorMsg } : item
+            ));
+        }
+    };
+
     const handleCreateFolder = async () => {
         const folderName = window.prompt('Name des neuen Ordners:');
         if (!folderName || !folderName.trim()) return;
@@ -98,41 +182,31 @@ const ProjectFileManager = ({ project }) => {
     };
 
     const handleFileUpload = async (e) => {
-        const files = Array.from(e.target.files);
-        if (files.length === 0) return;
+        const selectedFiles = Array.from(e.target.files);
+        if (selectedFiles.length === 0) return;
 
-        setIsUploading(true);
-        const formData = new FormData();
-        formData.append('path', currentPath);
-        files.forEach(file => {
-            formData.append('files', file);
+        setIsUploadPanelOpen(true);
+        setIsUploadPanelMinimized(false);
+
+        selectedFiles.forEach(file => {
+            startSingleUpload(file);
         });
 
-        try {
-            const res = await api.post(`/projects/${projectId}/files/upload`, formData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
-            });
-            if (res.data?.status === 'success') {
-                fetchFiles();
-            }
-        } catch (error) {
-            console.error('Error uploading files:', error);
-            alert(error.response?.data?.error || 'Fehler beim Hochladen der Dateien');
-        } finally {
-            setIsUploading(false);
-            if (fileInputRef.current) fileInputRef.current.value = '';
-        }
+        if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
-    const handleDelete = async (itemName, isDirectory, physicalName) => {
+    const handleDelete = async (item) => {
+        const itemName = item.name;
+        const isDirectory = item.isDirectory;
+        const physicalName = item.physicalName;
         const confirmMsg = isDirectory
             ? `Möchten Sie den Ordner "${itemName}" und alle darin enthaltenen Dateien wirklich löschen?`
-            : `Möchten Sie die Datei "${itemName}" действительно löschen?`;
+            : `Möchten Sie die Datei "${itemName}" wirklich löschen?`;
 
         if (!window.confirm(confirmMsg)) return;
 
         const effectiveName = physicalName || itemName;
-        const itemPath = currentPath ? `${currentPath}/${effectiveName}` : effectiveName;
+        const itemPath = item.path || (currentPath ? `${currentPath}/${effectiveName}` : effectiveName);
 
         try {
             const res = await api.delete(`/projects/${projectId}/files`, {
@@ -176,7 +250,7 @@ const ProjectFileManager = ({ project }) => {
     const getDisplayName = (item, path) => {
         // If the backend provided a name (displayName), use it.
         if (item.name) return item.name;
-        
+
         const name = item.physicalName || item.name;
         if (path === '' && name === 'stages') return 'Etappen (Bauschritte)';
         if (path === 'stages') {
@@ -191,7 +265,7 @@ const ProjectFileManager = ({ project }) => {
 
     const handleDownload = async (item, e) => {
         e.stopPropagation();
-        const itemPath = currentPath ? `${currentPath}/${item.name}` : item.name;
+        const itemPath = item.path || (currentPath ? `${currentPath}/${item.name}` : item.name);
         try {
             const res = await api.get(`/projects/${projectId}/files/download`, {
                 params: { path: itemPath },
@@ -268,14 +342,9 @@ const ProjectFileManager = ({ project }) => {
 
                             <button
                                 onClick={() => fileInputRef.current?.click()}
-                                disabled={isUploading}
-                                className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-4 py-2 rounded-xl border border-blue-500/50 text-sm font-medium transition-colors shadow-[0_0_15px_rgba(37,99,235,0.3)] flex items-center gap-2"
+                                className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl border border-blue-500/50 text-sm font-medium transition-colors shadow-[0_0_15px_rgba(37,99,235,0.3)] flex items-center gap-2"
                             >
-                                {isUploading ? (
-                                    <><i className="fa-solid fa-circle-notch fa-spin"></i> Lädt...</>
-                                ) : (
-                                    <><i className="fa-solid fa-cloud-arrow-up"></i> Hochladen</>
-                                )}
+                                <i className="fa-solid fa-cloud-arrow-up"></i> Hochladen
                             </button>
                             <input
                                 type="file"
@@ -318,7 +387,7 @@ const ProjectFileManager = ({ project }) => {
                         {items.map((item, idx) => {
                             const displayName = getDisplayName(item, currentPath);
                             const isSpecialFolder = currentPath === '' && (item.physicalName === 'stages' || item.name === 'stages');
-                            
+
                             // RBAC check:
                             let canDelete = false;
                             if (isManagement) {
@@ -333,7 +402,7 @@ const ProjectFileManager = ({ project }) => {
                                     {/* Delete Button - Appears on Hover */}
                                     {canDelete && canManageFiles && (
                                         <button
-                                            onClick={(e) => { e.stopPropagation(); handleDelete(item.name, item.isDirectory, item.physicalName); }}
+                                            onClick={(e) => { e.stopPropagation(); handleDelete(item); }}
                                             className="absolute top-2 right-2 w-6 h-6 rounded-md bg-red-500/80 text-white flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500 z-10 shadow-lg"
                                             title="Löschen"
                                         >
@@ -405,7 +474,7 @@ const ProjectFileManager = ({ project }) => {
                 )}
             </div>
             {/* Media Gallery Viewer */}
-            <MediaViewer 
+            <MediaViewer
                 isOpen={isGalleryOpen}
                 onClose={() => setIsGalleryOpen(false)}
                 items={galleryItems}
@@ -413,7 +482,7 @@ const ProjectFileManager = ({ project }) => {
             />
             {/* Folder Permissions Modal */}
             {selectedFolderForPermissions && (
-                <FolderPermissionsModal 
+                <FolderPermissionsModal
                     isOpen={isPermissionsModalOpen}
                     onClose={() => setIsPermissionsModalOpen(false)}
                     folder={selectedFolderForPermissions}
@@ -421,7 +490,124 @@ const ProjectFileManager = ({ project }) => {
                     onUpdate={() => fetchFiles(currentPath)}
                 />
             )}
+            {/* Global Upload Panel */}
+            <AnimatePresence>
+                {isUploadPanelOpen && (
+                    <UploadPanel
+                        queue={uploadQueue}
+                        isMinimized={isUploadPanelMinimized}
+                        onToggleMinimize={() => setIsUploadPanelMinimized(!isUploadPanelMinimized)}
+                        onClose={() => {
+                            setIsUploadPanelOpen(false);
+                            setUploadQueue([]);
+                        }}
+                        onClearCompleted={() => setUploadQueue(prev => prev.filter(u => u.status === 'uploading'))}
+                    />
+                )}
+            </AnimatePresence>
         </div>
+    );
+};
+
+const UploadPanel = ({ queue, isMinimized, onToggleMinimize, onClose, onClearCompleted }) => {
+    const uploadingCount = queue.filter(u => u.status === 'uploading').length;
+    const completedCount = queue.filter(u => u.status === 'completed').length;
+    const errorCount = queue.filter(u => u.status === 'error').length;
+
+    const getFileIcon = (name) => {
+        const ext = name.split('.').pop().toLowerCase();
+        if (['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp'].includes(ext)) return <ImageIcon className="w-4 h-4 text-emerald-400" />;
+        if (['mp4', 'mov', 'avi', 'webm'].includes(ext)) return <FileVideo className="w-4 h-4 text-blue-400" />;
+        if (['mp3', 'wav', 'ogg'].includes(ext)) return <FileAudio className="w-4 h-4 text-purple-400" />;
+        if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return <FileArchive className="w-4 h-4 text-orange-400" />;
+        if (['pdf', 'doc', 'docx', 'txt'].includes(ext)) return <FileText className="w-4 h-4 text-red-400" />;
+        return <File className="w-4 h-4 text-gray-400" />;
+    };
+
+    return (
+        <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            className={`fixed bottom-8 right-8 w-80 bg-[#151518] border border-white/10 rounded-2xl shadow-2xl z-[150] overflow-hidden backdrop-blur-xl flex flex-col transition-all duration-300 ${isMinimized ? 'h-14' : 'h-[400px]'}`}
+        >
+            {/* Header */}
+            <div className="p-4 bg-white/5 border-b border-white/10 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    {uploadingCount > 0 ? (
+                        <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
+                    ) : (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                    )}
+                    <span className="text-sm font-bold text-white">
+                        {uploadingCount > 0 ? `Lädt ${uploadingCount} Datei${uploadingCount > 1 ? 'en' : ''} hoch` : 'Uploads abgeschlossen'}
+                    </span>
+                </div>
+                <div className="flex items-center gap-1">
+                    <button onClick={onToggleMinimize} className="p-1 text-white/40 hover:text-white transition-colors">
+                        {isMinimized ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    </button>
+                    <button onClick={onClose} className="p-1 text-white/40 hover:text-white transition-colors">
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+            </div>
+
+            {/* Body */}
+            {!isMinimized && (
+                <>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
+                        {queue.map((item) => (
+                            <div key={item.id} className="space-y-2">
+                                <div className="flex items-center justify-between gap-3">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        {getFileIcon(item.fileName)}
+                                        <span className="text-xs text-white font-medium truncate" title={item.fileName}>
+                                            {item.fileName}
+                                        </span>
+                                    </div>
+                                    <div className="shrink-0">
+                                        {item.status === 'uploading' && (
+                                            <span className="text-[10px] font-mono text-blue-400">{item.progress}%</span>
+                                        )}
+                                        {item.status === 'completed' && (
+                                            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                                        )}
+                                        {item.status === 'error' && (
+                                            <AlertCircle className="w-4 h-4 text-red-500" title={item.error} />
+                                        )}
+                                    </div>
+                                </div>
+                                {item.status === 'uploading' && (
+                                    <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                                        <motion.div
+                                            initial={{ width: 0 }}
+                                            animate={{ width: `${item.progress}%` }}
+                                            className="h-full bg-blue-500"
+                                        />
+                                    </div>
+                                )}
+                                {item.status === 'error' && (
+                                    <p className="text-[9px] text-red-400 truncate">{item.error}</p>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Footer */}
+                    {(completedCount > 0 || errorCount > 0) && (
+                        <div className="p-3 bg-white/5 border-t border-white/10 flex justify-center">
+                            <button
+                                onClick={onClearCompleted}
+                                className="text-[10px] font-bold text-white/40 hover:text-white uppercase tracking-widest transition-colors"
+                            >
+                                Liste leeren
+                            </button>
+                        </div>
+                    )}
+                </>
+            )}
+        </motion.div>
     );
 };
 

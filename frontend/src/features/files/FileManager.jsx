@@ -26,7 +26,14 @@ import {
     Share2,
     Copy,
     Check,
-    Globe
+    Globe,
+    FileVideo,
+    FileAudio,
+    FileArchive,
+    AlertCircle,
+    ChevronDown,
+    ChevronUp,
+    CheckCircle2
 } from 'lucide-react';
 import api from '../../services/api';
 import { useSelector } from 'react-redux';
@@ -45,8 +52,12 @@ const FileManager = () => {
     const [files, setFiles] = useState([]);
     const [folders, setFolders] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [uploading, setUploading] = useState(false);
     const [storageStats, setStorageStats] = useState({ used: 0, limit: 2.0 });
+    
+    // Upload Queue State
+    const [uploadQueue, setUploadQueue] = useState([]); // { id, fileName, progress, status, error }
+    const [isUploadPanelOpen, setIsUploadPanelOpen] = useState(false);
+    const [isUploadPanelMinimized, setIsUploadPanelMinimized] = useState(false);
     
     // UI State
     const [isNewFolderModalOpen, setIsNewFolderModalOpen] = useState(false);
@@ -92,32 +103,70 @@ const FileManager = () => {
         fetchContent();
     }, [currentFolderId, activeSection]);
 
-    const handleUpload = async (e) => {
-        const selectedFiles = e.target.files;
-        if (!selectedFiles.length) return;
+    // Refresh content when an upload completes
+    useEffect(() => {
+        const hasUploading = uploadQueue.some(u => u.status === 'uploading');
+        if (!hasUploading && uploadQueue.length > 0 && uploadQueue.some(u => u.status === 'completed')) {
+            fetchContent();
+        }
+    }, [uploadQueue.map(u => u.status).join(',')]);
+
+    const startSingleUpload = async (file) => {
+        const uploadId = Math.random().toString(36).substring(7);
+        const newUpload = {
+            id: uploadId,
+            fileName: file.name,
+            progress: 0,
+            status: 'uploading',
+            error: null
+        };
+
+        setUploadQueue(prev => [...prev, newUpload]);
 
         const formData = new FormData();
-        for (let i = 0; i < selectedFiles.length; i++) {
-            formData.append('files', selectedFiles[i]);
-        }
+        formData.append('files', file);
         formData.append('is_public', activeSection === 'public');
         if (currentFolderId !== 'root') {
             formData.append('folder_id', currentFolderId);
         }
 
         try {
-            setUploading(true);
             await api.post('/files/upload', formData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
+                headers: { 'Content-Type': 'multipart/form-data' },
+                onUploadProgress: (progressEvent) => {
+                    const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                    setUploadQueue(prev => prev.map(item => 
+                        item.id === uploadId ? { ...item, progress: percentCompleted } : item
+                    ));
+                }
             });
-            toast.success('Hochgeladen');
-            fetchContent();
+
+            setUploadQueue(prev => prev.map(item => 
+                item.id === uploadId ? { ...item, status: 'completed', progress: 100 } : item
+            ));
         } catch (err) {
-            console.error('Upload error:', err);
-            toast.error(err.response?.data?.message || 'Fehler beim Hochladen');
-        } finally {
-            setUploading(false);
+            console.error('Upload error for file:', file.name, err);
+            const errorMsg = err.response?.data?.message || 'Fehler beim Hochladen';
+            setUploadQueue(prev => prev.map(item => 
+                item.id === uploadId ? { ...item, status: 'error', error: errorMsg } : item
+            ));
         }
+    };
+
+    const handleUpload = async (e) => {
+        const selectedFiles = Array.from(e.target.files);
+        if (!selectedFiles.length) return;
+
+        setIsUploadPanelOpen(true);
+        setIsUploadPanelMinimized(false);
+        
+        // Process each file
+        selectedFiles.forEach(file => {
+            startSingleUpload(file);
+        });
+
+        // Clear input
+        e.target.value = '';
     };
 
     const handleCreateFolder = async (e) => {
@@ -157,7 +206,7 @@ const FileManager = () => {
             setFolders(prev => prev.filter(f => f.id !== folderId));
             toast.success('Ordner gelöscht');
         } catch (err) {
-            toast.error('Fehler beim Löschen');
+            toast.error('Ошибка при удалении');
         }
     };
 
@@ -274,9 +323,9 @@ const FileManager = () => {
                         Neuer Ordner
                     </button>
                     <label className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl shadow-lg shadow-blue-600/20 transition-all duration-300 cursor-pointer">
-                        {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
-                        {uploading ? 'Lädt...' : 'Hochladen'}
-                        <input type="file" multiple className="hidden" onChange={handleUpload} disabled={uploading} />
+                        <Upload className="w-5 h-5" />
+                        Hochladen
+                        <input type="file" multiple className="hidden" onChange={handleUpload} />
                     </label>
                 </div>
             </div>
@@ -467,6 +516,22 @@ const FileManager = () => {
                     share_token: item.share_token 
                 })}
             />
+
+            {/* Global Upload Panel */}
+            <AnimatePresence>
+                {isUploadPanelOpen && (
+                    <UploadPanel 
+                        queue={uploadQueue} 
+                        isMinimized={isUploadPanelMinimized}
+                        onToggleMinimize={() => setIsUploadPanelMinimized(!isUploadPanelMinimized)}
+                        onClose={() => {
+                            setIsUploadPanelOpen(false);
+                            setUploadQueue([]);
+                        }}
+                        onClearCompleted={() => setUploadQueue(prev => prev.filter(u => u.status === 'uploading'))}
+                    />
+                )}
+            </AnimatePresence>
         </div>
     );
 };
@@ -684,6 +749,109 @@ const FileItem = ({ file, mode, onClick, onDelete, onToggleFavorite, onShare, is
                 </div>
             </div>
         </div>
+    );
+};
+
+const UploadPanel = ({ queue, isMinimized, onToggleMinimize, onClose, onClearCompleted }) => {
+    const uploadingCount = queue.filter(u => u.status === 'uploading').length;
+    const completedCount = queue.filter(u => u.status === 'completed').length;
+    const errorCount = queue.filter(u => u.status === 'error').length;
+    const totalCount = queue.length;
+
+    const getFileIcon = (name) => {
+        const ext = name.split('.').pop().toLowerCase();
+        if (['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp'].includes(ext)) return <ImageIcon className="w-4 h-4 text-emerald-400" />;
+        if (['mp4', 'mov', 'avi', 'webm'].includes(ext)) return <FileVideo className="w-4 h-4 text-blue-400" />;
+        if (['mp3', 'wav', 'ogg'].includes(ext)) return <FileAudio className="w-4 h-4 text-purple-400" />;
+        if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return <FileArchive className="w-4 h-4 text-orange-400" />;
+        if (['pdf', 'doc', 'docx', 'txt'].includes(ext)) return <FileText className="w-4 h-4 text-red-400" />;
+        return <File className="w-4 h-4 text-gray-400" />;
+    };
+
+    return (
+        <motion.div 
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            className={`fixed bottom-8 right-8 w-80 bg-[#151518] border border-white/10 rounded-2xl shadow-2xl z-[150] overflow-hidden backdrop-blur-xl flex flex-col transition-all duration-300 ${isMinimized ? 'h-14' : 'h-[400px]'}`}
+        >
+            {/* Header */}
+            <div className="p-4 bg-white/5 border-b border-white/10 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    {uploadingCount > 0 ? (
+                        <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
+                    ) : (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                    )}
+                    <span className="text-sm font-bold text-white">
+                        {uploadingCount > 0 ? `Lädt ${uploadingCount} Datei${uploadingCount > 1 ? 'en' : ''} hoch` : 'Uploads abgeschlossen'}
+                    </span>
+                </div>
+                <div className="flex items-center gap-1">
+                    <button onClick={onToggleMinimize} className="p-1 text-white/40 hover:text-white transition-colors">
+                        {isMinimized ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    </button>
+                    <button onClick={onClose} className="p-1 text-white/40 hover:text-white transition-colors">
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+            </div>
+
+            {/* Body */}
+            {!isMinimized && (
+                <>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
+                        {queue.map((item) => (
+                            <div key={item.id} className="space-y-2">
+                                <div className="flex items-center justify-between gap-3">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        {getFileIcon(item.fileName)}
+                                        <span className="text-xs text-white font-medium truncate" title={item.fileName}>
+                                            {item.fileName}
+                                        </span>
+                                    </div>
+                                    <div className="shrink-0">
+                                        {item.status === 'uploading' && (
+                                            <span className="text-[10px] font-mono text-blue-400">{item.progress}%</span>
+                                        )}
+                                        {item.status === 'completed' && (
+                                            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                                        )}
+                                        {item.status === 'error' && (
+                                            <AlertCircle className="w-4 h-4 text-red-500" title={item.error} />
+                                        )}
+                                    </div>
+                                </div>
+                                {item.status === 'uploading' && (
+                                    <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                                        <motion.div 
+                                            initial={{ width: 0 }}
+                                            animate={{ width: `${item.progress}%` }}
+                                            className="h-full bg-blue-500"
+                                        />
+                                    </div>
+                                )}
+                                {item.status === 'error' && (
+                                    <p className="text-[9px] text-red-400 truncate">{item.error}</p>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Footer */}
+                    {(completedCount > 0 || errorCount > 0) && (
+                        <div className="p-3 bg-white/5 border-t border-white/10 flex justify-center">
+                            <button 
+                                onClick={onClearCompleted}
+                                className="text-[10px] font-bold text-white/40 hover:text-white uppercase tracking-widest transition-colors"
+                            >
+                                Liste leeren
+                            </button>
+                        </div>
+                    )}
+                </>
+            )}
+        </motion.div>
     );
 };
 

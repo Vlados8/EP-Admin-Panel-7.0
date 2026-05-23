@@ -10,6 +10,11 @@ export const markEmailAsRead = async (id: number) => {
     return data.data.message;
 };
 
+export const fetchEmailById = async (id: number) => {
+    const { data } = await apiClient.get(`/emails/messages/${id}`);
+    return data.data.message; // Adjust if backend structure differs
+};
+
 export const deleteEmailMessage = async (id: number) => {
     await apiClient.delete(`/emails/messages/${id}`);
 };

@@ -51,7 +51,8 @@ import {
   ExternalLink,
   X,
   Share2,
-  Copy
+  Copy,
+  Image as ImageIcon
 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 
@@ -338,7 +339,11 @@ export default function TasksScreen() {
     );
   };
 
-  const openAttachment = (url: string, fileName: string) => {
+  const openAttachment = (att: any) => {
+    if (!att) return;
+    const url = att.original_url || att.originalUrl || att.file_url || att.fileUrl;
+    const fileName = att.file_name || att.fileName;
+    
     if (!url) return;
     const fullUrl = url.startsWith('http') ? url : `${serverDomain}${url}`;
     
@@ -480,11 +485,15 @@ export default function TasksScreen() {
             <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2">ANHÄNGE</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
               {task.attachments.map((att: any) => {
-                const imgUri = att.file_url ? (att.file_url.startsWith('http') ? att.file_url : `${serverDomain}${att.file_url}`) : null;
+                const url = att.file_url || att.fileUrl;
+                const thumbUrl = att.thumb_url || att.thumbUrl;
+                // Use thumbUrl for icon preview, fallback to fileUrl
+                const displayUrl = thumbUrl || url;
+                const imgUri = displayUrl ? (displayUrl.startsWith('http') ? displayUrl : `${serverDomain}${displayUrl}`) : null;
                 return (
                   <TouchableOpacity 
                      key={att.id} 
-                     onPress={() => openAttachment(att.file_url, att.file_name)}
+                     onPress={() => openAttachment(att)}
                      activeOpacity={0.7}
                      className="mr-2 border border-white/5 rounded-lg p-2 flex-row items-center bg-black/20"
                   >
@@ -493,13 +502,18 @@ export default function TasksScreen() {
                          <Text className="text-white text-[8px] font-bold">VID</Text>
                       </View>
                     ) : (
-                      <Image source={imgUri ? { uri: imgUri } : undefined} className="w-8 h-8 rounded" />
+                      <View className="w-8 h-8 rounded bg-white/5 justify-center items-center">
+                        <ImageIcon size={16} color="#6B7280" />
+                      </View>
                     )}
                     <View className="ml-2 w-24 flex-row items-center justify-between">
                       <Text className="text-gray-300 text-xs font-bold flex-1 mr-1" numberOfLines={1}>
                         {att.file_name}
                       </Text>
-                      <TouchableOpacity onPress={() => downloadFile(att.file_url, att.file_name)}>
+                      <TouchableOpacity onPress={() => {
+                        const downloadUrl = att.original_url || att.originalUrl || att.file_url || att.fileUrl;
+                        downloadFile(downloadUrl, att.file_name);
+                      }}>
                          <Download size={12} color="#6B7280" />
                       </TouchableOpacity>
                     </View>

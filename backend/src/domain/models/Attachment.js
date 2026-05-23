@@ -31,6 +31,14 @@ const Attachment = sequelize.define('Attachment', {
         type: DataTypes.STRING,
         allowNull: false
     },
+    thumb_url: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    original_url: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
     file_size: {
         type: DataTypes.INTEGER,
         allowNull: true

@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const FormData = require('form-data');
 const Mailgun = require('mailgun.js');
 const { EmailAccount, Email, Attachment, Company, User, Client } = require('../../domain/models');
-const { emitToCompany } = require('../websocket');
+const { emitToCompany, getIO } = require('../websocket');
 const AppError = require('../../utils/appError');
 const { hasPermission } = require('../../utils/permissions');
 const { uploadToR2, deleteFromR2 } = require('../utils/storage');
@@ -856,6 +856,219 @@ exports.deleteMessage = async (req, res, next) => {
             data: null
         });
     } catch (err) {
+        next(err);
+    }
+};
+
+/**
+ * Send bulk emails via Mailgun
+ */
+exports.sendBulkEmail = async (req, res, next) => {
+    try {
+        const { from, recipients, subject, text, html, delay } = req.body;
+        const company_id = req.user.company_id;
+        const userId = req.user.id;
+        const delaySeconds = parseInt(delay, 10) || 0;
+
+        if (!from || !recipients || !recipients.length) {
+            return next(new AppError('Sender und Empfänger sind erforderlich.', 400));
+        }
+
+        if (!mg) {
+            return next(new AppError('Mailgun is not configured.', 500));
+        }
+
+        const domain = process.env.MAILGUN_DOMAIN;
+        if (!domain) {
+            return next(new AppError('MAILGUN_DOMAIN is not configured.', 500));
+        }
+
+        // --- Handle Sender Name ---
+        let senderName = '';
+        const account = await EmailAccount.findOne({
+            where: { email: from, company_id },
+            include: [{ model: User, as: 'assigned_user', attributes: ['name'] }]
+        });
+
+        if (!account) {
+            return next(new AppError(`Absender-Konto (${from}) nicht gefunden.`, 404));
+        }
+
+        if (account.is_shared) {
+            senderName = account.display_name || '';
+        } else if (account.assigned_user) {
+            senderName = account.assigned_user.name || '';
+        }
+
+        const fromHeader = senderName ? `"${senderName.replace(/"/g, '')}" <${from}>` : from;
+
+        // --- Branding ---
+        const company = await Company.findByPk(company_id);
+        const settings = company?.settings || {};
+        const frontendUrl = process.env.FRONTEND_URL || 'https://www.empire-premium-bau.de';
+
+        const rawContent = html || (text ? text.replace(/\n/g, '<br>') : '');
+        const finalHtml = wrapInMonochromeTemplate(rawContent, subject, senderName || settings.firmName || 'Empire Premium Bau GmbH', settings, frontendUrl);
+
+        const recipientList = [...new Set(Array.isArray(recipients) ? recipients : recipients.split(/[\n,;]/).map(e => e.trim()).filter(e => e))];
+        console.log(`[BulkEmail] Starting background job from ${from} to ${recipientList.length} recipients. Delay: ${delaySeconds}s`);
+
+        const jobId = 'bulk_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+
+        // Prepare attachments data to persist outside HTTP request lifetime
+        const attachmentData = [];
+        if (req.files && req.files.length > 0) {
+            for (const file of req.files) {
+                attachmentData.push({
+                    path: file.path,
+                    filename: file.originalname,
+                    mimetype: file.mimetype,
+                    size: file.size
+                });
+            }
+        }
+
+        // Send instant response with jobId so browser does not freeze/timeout
+        res.status(200).json({
+            status: 'success',
+            data: {
+                message: 'Massen-E-Mail-Versand im Hintergrund gestartet.',
+                jobId,
+                total: recipientList.length
+            }
+        });
+
+        // Background worker loop
+        (async () => {
+            const results = {
+                success: [],
+                failed: []
+            };
+            const total = recipientList.length;
+            let current = 0;
+
+            // Notify initial progress
+            try {
+                const io = getIO();
+                io.to(`user_${userId}`).emit('bulk_email_progress', {
+                    jobId,
+                    status: 'started',
+                    current: 0,
+                    total,
+                    successCount: 0,
+                    failedCount: 0,
+                    results
+                });
+            } catch (err) {
+                console.error('[Bulk background] Initial socket notify error:', err.message);
+            }
+
+            for (const to of recipientList) {
+                current++;
+                try {
+                    const messageData = {
+                        from: fromHeader,
+                        to: [to],
+                        subject,
+                        text: text || '',
+                        html: finalHtml
+                    };
+
+                    if (attachmentData.length > 0) {
+                        messageData.attachment = attachmentData.map(file => ({
+                            data: fs.createReadStream(file.path),
+                            filename: file.filename
+                        }));
+                    }
+
+                    // Identity Lookup
+                    let recipientName = extractName(to);
+                    const client = await Client.findOne({
+                        where: { email: to, company_id }
+                    });
+                    if (client) recipientName = client.name;
+
+                    const mgResult = await mg.messages.create(domain, messageData);
+
+                    // Save to DB
+                    const savedEmail = await Email.create({
+                        mailgun_id: mgResult.id,
+                        sender: fromHeader,
+                        sender_name: senderName || 'Empire Premium Bau GmbH',
+                        sender_email: from,
+                        recipient: to,
+                        recipient_name: recipientName,
+                        recipient_email: to,
+                        client_id: client ? client.id : null,
+                        subject,
+                        body_html: html || null,
+                        body_plain: text || null,
+                        company_id,
+                        received_at: new Date(),
+                        is_read: true,
+                        direction: 'outbound'
+                    });
+
+                    // Attachments in DB
+                    for (const file of attachmentData) {
+                        try {
+                            const r2Key = `emails/${path.basename(file.path)}`;
+                            const fileUrl = await uploadToR2(file.path, r2Key, file.mimetype);
+
+                            await Attachment.create({
+                                email_id: savedEmail.id,
+                                file_name: file.filename,
+                                file_url: fileUrl,
+                                file_size: file.size,
+                                content_type: file.mimetype
+                            });
+                        } catch (uploadErr) {
+                            console.error(`[Bulk background] Failed to upload attachment ${file.filename} to R2:`, uploadErr);
+                        }
+                    }
+
+                    results.success.push({ to, id: savedEmail.id });
+                } catch (err) {
+                    console.error(`[Bulk background] Error sending to ${to}:`, err);
+                    results.failed.push({ to, error: err.message });
+                }
+
+                // Notify progress
+                try {
+                    const io = getIO();
+                    io.to(`user_${userId}`).emit('bulk_email_progress', {
+                        jobId,
+                        status: current === total ? 'completed' : 'sending',
+                        current,
+                        total,
+                        successCount: results.success.length,
+                        failedCount: results.failed.length,
+                        results
+                    });
+                } catch (err) {
+                    console.error('[Bulk background] Socket update notify error:', err.message);
+                }
+
+                // Apply throttling delay
+                if (delaySeconds > 0 && current < total) {
+                    await new Promise(resolve => setTimeout(resolve, delaySeconds * 1000));
+                }
+            }
+
+            // Clean up temporary local files after the entire job is done
+            for (const file of attachmentData) {
+                try {
+                    if (fs.existsSync(file.path)) {
+                        fs.unlinkSync(file.path);
+                    }
+                } catch (cleanupErr) {
+                    console.error(`[Bulk background] Local file cleanup error for ${file.filename}:`, cleanupErr.message);
+                }
+            }
+        })();
+
+    } catch (err) {
+        console.error('[Bulk] General Error:', err);
         next(err);
     }
 };

@@ -45,7 +45,8 @@ import {
   Download,
   Share2,
   Copy,
-  CheckCircle
+  CheckCircle,
+  Check
 } from 'lucide-react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { serverDomain } from '../api/client';
@@ -61,6 +62,9 @@ export default function EmailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<'INBOX' | 'SENT'>('INBOX');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedAccountEmail, setSelectedAccountEmail] = useState('');
+  const [isAccountSelectorOpen, setIsAccountSelectorOpen] = useState(false);
+  const [isSenderDropdownOpen, setIsSenderDropdownOpen] = useState(false);
 
   // Handle incoming params for new email
   useEffect(() => {
@@ -102,12 +106,26 @@ export default function EmailScreen() {
   
   const filteredMessages = allMessages
     .filter((m: any) => {
+      if (!m) return false;
       const matchMode = viewMode === 'INBOX' ? m.direction === 'inbound' : m.direction === 'outbound';
+      
+      let matchAccount = true;
+      if (selectedAccountEmail) {
+        const cleanSelected = selectedAccountEmail.toLowerCase().trim();
+        if (viewMode === 'INBOX') {
+          const recEmail = (m.recipient_email || m.recipient || '').toLowerCase().trim();
+          matchAccount = recEmail.includes(cleanSelected);
+        } else {
+          const sndEmail = (m.sender_email || m.sender || '').toLowerCase().trim();
+          matchAccount = sndEmail.includes(cleanSelected);
+        }
+      }
+
       const matchSearch = !searchQuery || 
         m.subject?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         m.sender_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         m.recipient_name?.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchMode && matchSearch;
+      return matchMode && matchAccount && matchSearch;
     });
 
   const hasAccounts = accounts && accounts.length > 0;
@@ -236,6 +254,7 @@ export default function EmailScreen() {
   }
 
   const EmailItem = ({ email }: any) => {
+    if (!email) return null;
     const isUnread = email.direction === 'inbound' && !email.is_read;
     const name = email.direction === 'inbound' 
       ? (email.sender_name || email.sender_email) 
@@ -322,6 +341,52 @@ export default function EmailScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Account Switcher Button */}
+      {hasAccounts && (
+        <View className="mb-6">
+          <TouchableOpacity 
+            onPress={() => setIsAccountSelectorOpen(true)}
+            activeOpacity={0.8}
+          >
+            <GlassCard className="p-4 flex-row justify-between items-center border border-white/10 bg-black/30">
+              <View className="flex-row items-center">
+                <View className="w-8 h-8 rounded-full bg-brand-blue/10 items-center justify-center mr-3">
+                  <Mail size={16} color="#3B82F6" />
+                </View>
+                <View>
+                  <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">
+                    Aktives Postfach
+                  </Text>
+                  <Text className="text-white font-bold text-sm mt-0.5">
+                    {selectedAccountEmail === '' 
+                      ? 'Alle Konten' 
+                      : (accounts.find((acc: any) => acc.email === selectedAccountEmail)?.display_name || selectedAccountEmail)}
+                  </Text>
+                </View>
+              </View>
+              <View className="flex-row items-center">
+                {(() => {
+                  const activeAcc = accounts.find((acc: any) => acc.email === selectedAccountEmail);
+                  const totalUnread = selectedAccountEmail === '' 
+                    ? accounts.reduce((acc: number, curr: any) => acc + (curr.unread_count || 0), 0)
+                    : (activeAcc?.unread_count || 0);
+                  
+                  if (totalUnread > 0) {
+                    return (
+                      <View className="bg-brand-blue px-2.5 py-1 rounded-full mr-3 shadow-lg shadow-blue-500/20">
+                        <Text className="text-white text-[10px] font-black">{totalUnread} Neu</Text>
+                      </View>
+                    );
+                  }
+                  return null;
+                })()}
+                <ChevronRight size={16} color="#6B7280" style={{ transform: [{ rotate: '90deg' }] }} />
+              </View>
+            </GlassCard>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Search Bar */}
       <GlassCard className="p-3 mb-6 flex-row items-center border border-white/5">
         <Search size={18} color="#4B5563" className="mr-3 ml-1" />
@@ -398,9 +463,37 @@ export default function EmailScreen() {
               {hasAccounts && (
                  <View className="mb-5">
                     <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Absender</Text>
-                    <GlassCard className="p-4 bg-black/40 border border-white/5">
-                       <Text className="text-brand-blue font-bold">{formData.from}</Text>
-                    </GlassCard>
+                    <TouchableOpacity onPress={() => setIsSenderDropdownOpen(!isSenderDropdownOpen)}>
+                      <GlassCard className="p-4 bg-black/40 border border-white/5 flex-row justify-between items-center">
+                         <Text className="text-brand-blue font-bold">{formData.from}</Text>
+                         <ChevronRight size={14} color="#3B82F6" style={{ transform: [{ rotate: isSenderDropdownOpen ? '90deg' : '0deg' }] }} />
+                      </GlassCard>
+                    </TouchableOpacity>
+                    
+                    {isSenderDropdownOpen && (
+                      <View className="mt-2 rounded-2xl border border-white/10 bg-black/80 overflow-hidden">
+                        {(accounts || []).map((acc: any) => {
+                          if (!acc) return null;
+                          const isSelected = formData.from === acc.email;
+                          return (
+                            <TouchableOpacity
+                              key={acc.id}
+                              onPress={() => {
+                                setFormData(prev => ({ ...prev, from: acc.email }));
+                                setIsSenderDropdownOpen(false);
+                              }}
+                              className={`p-4 border-b border-white/5 flex-row items-center justify-between ${isSelected ? 'bg-brand-blue/10' : ''}`}
+                            >
+                              <View>
+                                <Text className="text-white font-bold text-xs">{acc.display_name || acc.email}</Text>
+                                {acc.display_name && <Text className="text-gray-500 text-[10px] mt-0.5">{acc.email}</Text>}
+                              </View>
+                              {isSelected && <Check size={14} color="#3B82F6" />}
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    )}
                  </View>
               )}
 
@@ -626,6 +719,93 @@ export default function EmailScreen() {
            </View>
         )}
       />
+
+      {/* Account Selector Bottom Sheet */}
+      <Modal
+        visible={isAccountSelectorOpen}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsAccountSelectorOpen(false)}
+      >
+        <BlurView intensity={90} tint="dark" className="flex-1 justify-end">
+          <TouchableOpacity 
+             activeOpacity={1} 
+             onPress={() => setIsAccountSelectorOpen(false)} 
+             className="flex-1"
+          />
+          <GlassCard className="p-6 rounded-t-[40px] border-t border-white/10 bg-black/80" style={{ maxHeight: '70%' }}>
+            <View className="w-full pb-6 items-center">
+               <View className="w-12 h-1.5 bg-white/10 rounded-full" />
+            </View>
+            <View className="flex-row justify-between items-center mb-6">
+              <Text className="text-white text-base font-bold uppercase tracking-widest">
+                Postfach auswählen
+              </Text>
+              <TouchableOpacity onPress={() => setIsAccountSelectorOpen(false)}>
+                <Text className="text-gray-500 font-bold uppercase text-xs tracking-widest">Schließen</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Option: Alle Konten */}
+              <TouchableOpacity
+                onPress={() => {
+                  setSelectedAccountEmail('');
+                  setIsAccountSelectorOpen(false);
+                }}
+                className={`p-4 rounded-2xl mb-3 border flex-row items-center justify-between ${selectedAccountEmail === '' ? 'border-brand-blue bg-brand-blue/10' : 'border-white/5 bg-white/5'}`}
+              >
+                <View className="flex-row items-center">
+                  <View className="w-8 h-8 rounded-full bg-brand-blue/20 items-center justify-center mr-3">
+                    <Mail size={16} color="#3B82F6" />
+                  </View>
+                  <View>
+                    <Text className="text-white font-bold text-sm">Alle Konten</Text>
+                    <Text className="text-gray-500 text-xs mt-0.5">Sämtliche verknüpfte E-Mail-Postfächer</Text>
+                  </View>
+                </View>
+                {selectedAccountEmail === '' && <Check size={16} color="#3B82F6" />}
+              </TouchableOpacity>
+
+              {/* Individual Accounts */}
+              {(accounts || []).map((acc: any) => {
+                if (!acc) return null;
+                const isSelected = selectedAccountEmail === acc.email;
+                const count = acc.unread_count || 0;
+                return (
+                  <TouchableOpacity
+                    key={acc.id}
+                    onPress={() => {
+                      setSelectedAccountEmail(acc.email);
+                      setIsAccountSelectorOpen(false);
+                    }}
+                    className={`p-4 rounded-2xl mb-3 border flex-row items-center justify-between ${isSelected ? 'border-brand-blue bg-brand-blue/10' : 'border-white/5 bg-white/5'}`}
+                  >
+                    <View className="flex-row items-center">
+                      <View className="w-8 h-8 rounded-full bg-blue-500/20 items-center justify-center mr-3">
+                        <Text className="text-blue-400 text-xs font-bold">{acc.display_name ? acc.display_name[0].toUpperCase() : 'E'}</Text>
+                      </View>
+                      <View>
+                        <Text className="text-white font-bold text-sm">{acc.display_name || acc.email}</Text>
+                        {acc.display_name && <Text className="text-gray-500 text-xs mt-0.5">{acc.email}</Text>}
+                      </View>
+                    </View>
+                    
+                    <View className="flex-row items-center">
+                      {count > 0 && (
+                        <View className="bg-brand-blue px-2 py-0.5 rounded-md mr-3">
+                          <Text className="text-white text-[8px] font-black">{count}</Text>
+                        </View>
+                      )}
+                      {isSelected && <Check size={16} color="#3B82F6" />}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </GlassCard>
+        </BlurView>
+      </Modal>
     </ScreenLayout>
   );
 }

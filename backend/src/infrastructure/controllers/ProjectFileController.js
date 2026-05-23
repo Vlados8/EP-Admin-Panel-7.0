@@ -2,14 +2,20 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const { Op } = require('sequelize');
-const { ProjectFolder, ProjectFile, Role, Project, User, ProjectImage, ProjectStageImage } = require('../../domain/models');
+const { ProjectFolder, ProjectFile, Role, Project, User, ProjectImage, ProjectStageImage, ProjectStage } = require('../../domain/models');
 const { uploadToR2, deleteFromR2, listFromR2 } = require('../utils/storage');
 
 // Base uploads directory
 const UPLOADS_DIR = path.join(__dirname, '../../../../uploads/projects');
 
 // Temporary storage for incoming uploads before moving them
-const upload = multer({ dest: path.join(__dirname, '../../../../uploads/temp/') });
+const upload = multer({ 
+    dest: path.join(__dirname, '../../../../uploads/temp/'),
+    limits: {
+        fileSize: 100 * 1024 * 1024, // 100MB per file
+        files: 20 // Max 20 files at once
+    }
+});
 
 const { fixEncoding, getSafeStorageName } = require('../../utils/fileUtils');
 
@@ -21,9 +27,9 @@ const getSecurePath = (projectId, requestedPath) => {
     // but we can normalize the path for prefixing.
     const normalizedPath = (requestedPath || '').replace(/\\/g, '/').replace(/^\//, '').replace(/\/$/, '');
 
-    return { 
-        projectDir: String(projectId), 
-        targetPath: normalizedPath 
+    return {
+        projectDir: String(projectId),
+        targetPath: normalizedPath
     };
 };
 
@@ -81,13 +87,13 @@ exports.listFiles = async (req, res) => {
             console.log(`[STAGES] Handling stages for subPath: "${subPath}"`);
             try {
                 const stages = await ProjectStageImage.findAll({
-                    include: [{ 
-                        model: ProjectStage, 
+                    include: [{
+                        model: ProjectStage,
                         as: 'stage',
                         where: { project_id: id }
                     }]
                 });
-                
+
                 if (subPath.startsWith('stages')) {
                     stages.forEach(si => {
                         const physicalName = path.basename(si.path);
@@ -139,7 +145,7 @@ exports.listFiles = async (req, res) => {
 
         // 2. R2 DISCOVERY (Scan R2 for folders/files)
         const r2Prefix = normalizePath(`projects/${id}/${subPath}`);
-        
+
         let r2Items = { CommonPrefixes: [], Contents: [] };
         try {
             r2Items = await listFromR2(r2Prefix, '/');
@@ -152,14 +158,16 @@ exports.listFiles = async (req, res) => {
             r2Items.CommonPrefixes.forEach(cp => {
                 const fullPrefix = cp.Prefix;
                 const folderName = fullPrefix.split('/').filter(Boolean).pop();
-                
+
                 // Map internal 'gallery' to 'Galerie' for display
                 const displayName = folderName === 'gallery' ? 'Galerie' : (folderName === 'stages' ? 'Etappen' : folderName);
 
                 if (!itemMap.has(folderName)) {
+                    const fullFolderPath = subPath ? (subPath.endsWith('/') ? subPath + folderName : subPath + '/' + folderName) : folderName;
                     itemMap.set(folderName, {
                         name: displayName,
                         physicalName: folderName,
+                        path: fullFolderPath,
                         isDirectory: true,
                         size: 0,
                         source: 'r2'
@@ -175,10 +183,14 @@ exports.listFiles = async (req, res) => {
                 if (!fileName || obj.Key.endsWith('/')) return;
 
                 // Update existing item if found (from gallery/virtual) or create new
+                const fullFilePath = subPath ? (subPath.endsWith('/') ? subPath + fileName : subPath + '/' + fileName) : fileName;
+
+                // Update existing item if found (from gallery/virtual) or create new
                 if (itemMap.has(fileName)) {
                     const existing = itemMap.get(fileName);
                     itemMap.set(fileName, {
                         ...existing,
+                        path: fullFilePath,
                         size: obj.Size,
                         updatedAt: obj.LastModified,
                         url: existing.url || `${process.env.R2_PUBLIC_URL}/${obj.Key}`
@@ -187,6 +199,7 @@ exports.listFiles = async (req, res) => {
                     itemMap.set(fileName, {
                         name: fileName,
                         physicalName: fileName,
+                        path: fullFilePath,
                         isDirectory: false,
                         size: obj.Size,
                         updatedAt: obj.LastModified,
@@ -200,10 +213,13 @@ exports.listFiles = async (req, res) => {
         // 4. MERGE WITH DB (DB takes precedence for metadata/permissions)
         folderRecords.forEach(r => {
             const displayName = r.name === 'gallery' ? 'Galerie' : (r.name === 'stages' ? 'Etappen' : fixEncoding(r.name));
+            const itemPath = r.path ? (r.path.endsWith('/') ? r.path + r.name : r.path + '/' + r.name) : r.name;
+            
             itemMap.set(r.name, {
                 id: r.id,
                 name: displayName,
                 physicalName: r.name,
+                path: itemPath,
                 isDirectory: true,
                 size: 0,
                 createdAt: r.createdAt,
@@ -231,10 +247,13 @@ exports.listFiles = async (req, res) => {
                 }
             }
 
+            const itemPath = r.path ? (r.path.endsWith('/') ? r.path + r.name : r.path + '/' + r.name) : r.name;
+
             itemMap.set(physicalName, {
                 id: r.id,
                 name: fixEncoding(r.name),
                 physicalName: physicalName,
+                path: itemPath,
                 isDirectory: false,
                 size: r.size || 0,
                 createdAt: r.createdAt,
@@ -260,8 +279,8 @@ exports.listFiles = async (req, res) => {
 
                 const allowedRoles = Array.isArray(item.permissions.allowed_role_ids)
                     ? item.permissions.allowed_role_ids
-                    : (typeof item.permissions.allowed_role_ids === 'string' 
-                        ? JSON.parse(item.permissions.allowed_role_ids) 
+                    : (typeof item.permissions.allowed_role_ids === 'string'
+                        ? JSON.parse(item.permissions.allowed_role_ids)
                         : []);
 
                 return userRole && allowedRoles.includes(userRole.id);
@@ -299,7 +318,7 @@ exports.createFolder = async (req, res) => {
         // We no longer call ensureProjectDir or fs.mkdirSync for local paths.
         // For R2, folders dont need to be 'created' physically, but we check if we already have a record
         // to prevent logical duplicates if necessary.
-        
+
         const existingFolder = await ProjectFolder.findOne({
             where: { project_id: id, path: folderPath || '', name: name.trim() }
         });
@@ -335,11 +354,15 @@ exports.uploadFiles = async (req, res) => {
         const { id } = req.params;
         const uploadPath = req.body.path || '';
 
+        console.log(`[UPLOAD] Starting for Project: ${id}, Path: "${uploadPath}" (${req.files ? req.files.length : 0} files)`);
+
         if (!req.files || req.files.length === 0) {
+            console.error('[UPLOAD ERROR] No files found in request');
             return res.status(400).json({ error: 'No files uploaded' });
         }
 
-        const { targetPath } = getSecurePath(id, uploadPath);
+        // Validate path
+        getSecurePath(id, uploadPath);
 
         // Try to find the parent folder ID if we are uploading to a subpath
         let folderId = null;
@@ -356,41 +379,67 @@ exports.uploadFiles = async (req, res) => {
         const uploadedFiles = [];
 
         for (const file of req.files) {
-            // Fix encoding: multer/busboy misinterprets UTF-8 as Latin-1
             let originalName = fixEncoding(file.originalname);
-            let storageName = getSafeStorageName(originalName);
-            // In R2, we don't need to check local filesystem for name collisions the same way,
-            // but we can append a timestamp to be safe if desired.
+            let nameToStore = originalName;
+            let fileRecord = null;
+            let fileUrl = '';
             
-            // Upload to R2 directly from Multer's temp path
-            let fileUrl;
+            const ext = path.extname(originalName);
+            const baseName = path.basename(originalName, ext);
+            let counter = 1;
+
+            // Step 1: Reserve the name in DB (Handles race conditions)
+            while (!fileRecord) {
+                try {
+                    let storageName = getSafeStorageName(nameToStore);
+                    const r2Key = `projects/${id}/${uploadPath ? uploadPath + '/' : ''}${storageName}`;
+                    fileUrl = `${process.env.R2_PUBLIC_URL}/${r2Key}`;
+
+                    fileRecord = await ProjectFile.create({
+                        project_id: id,
+                        folder_id: folderId,
+                        name: nameToStore,
+                        path: uploadPath || '',
+                        size: file.size,
+                        mime_type: file.mimetype,
+                        file_url: fileUrl,
+                        created_by_id: req.user.id
+                    });
+                } catch (err) {
+                    if (err.name === 'SequelizeUniqueConstraintError') {
+                        // Collision! Try next name
+                        nameToStore = `${baseName} (${counter})${ext}`;
+                        counter++;
+                    } else {
+                        // Real error
+                        throw err;
+                    }
+                }
+            }
+            
+            console.log(`[UPLOAD] Reserved name: "${nameToStore}" (URL: ${fileUrl})`);
+
+            // Step 2: Upload to R2
             try {
-                const r2Key = `projects/${id}/${uploadPath ? uploadPath + '/' : ''}${storageName}`;
-                fileUrl = await uploadToR2(file.path, r2Key, file.mimetype);
+                const urlObj = new URL(fileUrl);
+                const r2Key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
                 
+                await uploadToR2(file.path, r2Key, file.mimetype);
+
                 // Cleanup temp file
                 if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+                
+                uploadedFiles.push({
+                    id: fileRecord.id,
+                    name: nameToStore,
+                    url: fileUrl
+                });
             } catch (uploadError) {
-                console.error('R2 upload failed:', uploadError);
-                fileUrl = `/uploads/projects/${relativePath}`; // Fallback if local move somehow happened
+                console.error(`[UPLOAD ERROR] R2 upload failed for ${nameToStore}, rolling back DB:`, uploadError);
+                // Rollback DB reservation
+                if (fileRecord) await fileRecord.destroy();
+                throw new Error(`Upload failed for ${nameToStore}: ${uploadError.message}`);
             }
-
-            // Save to DB
-            await ProjectFile.create({
-                project_id: id,
-                folder_id: folderId,
-                name: originalName,
-                path: uploadPath || '',
-                size: file.size,
-                mime_type: file.mimetype,
-                file_url: fileUrl,
-                created_by_id: req.user.id
-            });
-
-            uploadedFiles.push({
-                name: originalName,
-                url: fileUrl
-            });
         }
 
         res.status(201).json({
@@ -399,15 +448,33 @@ exports.uploadFiles = async (req, res) => {
             data: uploadedFiles
         });
     } catch (error) {
-        // Cleanup temp files on error
+        // Cleanup ALL temp files on error if they still exist
         if (req.files) {
             req.files.forEach(file => {
-                if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+                try {
+                    if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+                } catch (e) {
+                    console.error('[CLEANUP ERROR]:', e.message);
+                }
             });
         }
 
-        console.error('Error uploading files:', error);
-        res.status(400).json({ error: error.message || 'Server error uploading files' });
+        console.error('[UPLOAD CRITICAL ERROR]:', error);
+        
+        // Check for specific database errors
+        let errorMessage = error.message || 'Server error uploading files';
+        let details = null;
+
+        if (error.name === 'SequelizeUniqueConstraintError') {
+            errorMessage = 'A file with this name already exists in this folder.';
+            details = 'Duplicate name';
+        }
+
+        res.status(400).json({ 
+            error: errorMessage,
+            details: details,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
     }
 };
 
@@ -423,10 +490,10 @@ exports.deleteItem = async (req, res) => {
 
         const name = path.basename(itemPath);
         const parentRelativePath = path.dirname(itemPath) === '.' ? '' : path.dirname(itemPath);
-        
+
         // 1. Check if it's a known folder in DB
-        const folderRecord = await ProjectFolder.findOne({ 
-            where: { project_id: id, path: parentRelativePath, name: name } 
+        const folderRecord = await ProjectFolder.findOne({
+            where: { project_id: id, path: parentRelativePath, name: name }
         });
 
         if (folderRecord) {
@@ -449,7 +516,7 @@ exports.deleteItem = async (req, res) => {
                     } catch (err) { console.error('R2 nested delete error:', err); }
                 }
             }
-            
+
             // Delete DB records
             await ProjectFile.destroy({ where: { project_id: id, path: { [Op.like]: `${itemPath}%` } } });
             await folderRecord.destroy();
@@ -462,8 +529,8 @@ exports.deleteItem = async (req, res) => {
         } else {
             // 2. FILE DELETION
             const fileRecord = await ProjectFile.findOne({
-                where: { 
-                    project_id: id, 
+                where: {
+                    project_id: id,
                     [Op.or]: [
                         { [Op.and]: [{ path: parentRelativePath }, { name: name }] },
                         { file_url: { [Op.like]: `%/${name}` } }
@@ -485,8 +552,17 @@ exports.deleteItem = async (req, res) => {
                         } catch (err) { console.error('R2 delete error:', err); }
                     }
                     await fileRecord.destroy();
+                } else if (isManagement) {
+                    // Fallback for orphaned files in R2 (Discovery items)
+                    try {
+                        const r2Key = `projects/${id}/${itemPath}`;
+                        await deleteFromR2(r2Key);
+                        console.log(`[CLEANUP] Deleted orphaned R2 object: ${r2Key}`);
+                    } catch (err) {
+                        console.warn(`[CLEANUP] R2 orphan delete failed (might not exist): ${err.message}`);
+                    }
                 }
-                
+
                 // Physical cleanup (Legacy fallback)
                 const { targetPath } = getSecurePath(id, itemPath);
                 if (fs.existsSync(targetPath)) {
@@ -524,6 +600,16 @@ exports.downloadFile = async (req, res) => {
 
         if (fileRecord && fileRecord.file_url && fileRecord.file_url.startsWith('http')) {
             return res.redirect(fileRecord.file_url);
+        }
+
+        // 1.5. Fallback to R2 (for discovered/orphaned files)
+        const r2Key = `projects/${id}/${itemPath}`;
+        try {
+            // We can't easily check for existence without another R2 call, 
+            // but we can just redirect and let R2/Browser handle it.
+            return res.redirect(`${process.env.R2_PUBLIC_URL}/${r2Key}`);
+        } catch (e) {
+            console.warn('R2 Redirect fallback failed:', e.message);
         }
 
         // 2. Fallback to standard disk lookup (Legacy)

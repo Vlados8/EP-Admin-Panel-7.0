@@ -46,7 +46,8 @@ import {
   Share2,
   X,
   Copy,
-  ExternalLink
+  ExternalLink,
+  Image as ImageIcon
 } from 'lucide-react-native';
 import { MonthCalendar } from '../components/MonthCalendar';
 import { useNavigation } from '@react-navigation/native';
@@ -74,6 +75,7 @@ interface NoteForm {
   date: string;
   time: string;
   project_id: string | number;
+  showInDiary: boolean;
 }
 
 export default function NotesScreen() {
@@ -94,6 +96,7 @@ export default function NotesScreen() {
     date: getISODate(),
     time: '',
     project_id: '',
+    showInDiary: false,
   });
   const [attachments, setAttachments] = useState<ImagePicker.ImagePickerAsset[]>([]);
 
@@ -188,6 +191,7 @@ export default function NotesScreen() {
         date: note.date ? note.date.split('T')[0] : getISODate(),
         time: note.time || '',
         project_id: note.project_id || '',
+        showInDiary: note.showInDiary || false,
       });
     } else {
       setEditingNote(null);
@@ -198,6 +202,7 @@ export default function NotesScreen() {
         date: getISODate(),
         time: '',
         project_id: '',
+        showInDiary: false,
       });
     }
     setAttachments([]);
@@ -278,6 +283,7 @@ export default function NotesScreen() {
     data.append('date', formData.date);
     if (formData.time) data.append('time', formData.time);
     if (formData.project_id) data.append('project_id', formData.project_id.toString());
+    data.append('showInDiary', formData.showInDiary ? 'true' : 'false');
 
     attachments.forEach((file: any, index) => {
       data.append('files', {
@@ -311,7 +317,11 @@ export default function NotesScreen() {
     updateMutation.mutate({ id: note.id, data });
   };
 
-  const openAttachment = (url: string, fileName: string) => {
+  const openAttachment = (att: any) => {
+    if (!att) return;
+    const url = att.originalUrl || att.original_url || att.fileUrl || att.file_url;
+    const fileName = att.fileName || att.file_name;
+    
     if (!url) return;
     const fullUrl = url.startsWith('http') ? url : `${serverDomain}${url}`;
     
@@ -451,13 +461,16 @@ export default function NotesScreen() {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
               {note.attachments.map((att: any) => {
                 const url = att.fileUrl || att.file_url;
+                const thumbUrl = att.thumbUrl || att.thumb_url;
                 const name = att.fileName || att.file_name;
                 const type = att.fileType || att.content_type;
-                const fullUrl = url ? (url.startsWith('http') ? url : `${serverDomain}${url}`) : '';
+                // Use thumbUrl for the small icon preview, fallback to fileUrl
+                const displayUrl = thumbUrl || url;
+                const fullUrl = displayUrl ? (displayUrl.startsWith('http') ? displayUrl : `${serverDomain}${displayUrl}`) : '';
                 return (
                   <TouchableOpacity 
                      key={att.id} 
-                     onPress={() => openAttachment(url, name)}
+                     onPress={() => openAttachment(att)}
                      activeOpacity={0.7}
                      className="mr-2 border border-white/5 rounded-lg p-2 flex-row items-center bg-black/20"
                   >
@@ -466,11 +479,16 @@ export default function NotesScreen() {
                          <Text className="text-white text-[8px] font-bold">VID</Text>
                       </View>
                     ) : (
-                      <Image source={fullUrl ? { uri: fullUrl } : undefined} className="w-8 h-8 rounded" />
+                      <View className="w-8 h-8 rounded bg-white/5 justify-center items-center">
+                        <ImageIcon size={16} color="#6B7280" />
+                      </View>
                     )}
                     <View className="ml-2 w-24 flex-row items-center justify-between">
                       <Text className="text-gray-300 text-xs font-bold flex-1 mr-1" numberOfLines={1}>{name}</Text>
-                      <TouchableOpacity onPress={() => downloadFile(url, name)}>
+                      <TouchableOpacity onPress={() => {
+                        const downloadUrl = att.originalUrl || att.original_url || att.fileUrl || att.file_url;
+                        downloadFile(downloadUrl, name);
+                      }}>
                          <Download size={12} color="#6B7280" />
                       </TouchableOpacity>
                     </View>
@@ -650,7 +668,7 @@ export default function NotesScreen() {
                 <GlassCard className="p-3 bg-black/40 border border-white/5">
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
                     <TouchableOpacity
-                      onPress={() => setFormData({ ...formData, project_id: '' })}
+                      onPress={() => setFormData({ ...formData, project_id: '', showInDiary: false })}
                       className={`px-3 py-2 rounded-lg mr-2 border flex-row items-center ${formData.project_id === '' ? 'bg-white/10 border-white/20' : 'bg-transparent border-transparent'}`}
                     >
                       <Briefcase size={14} color={formData.project_id === '' ? '#fff' : '#6B7280'} className="mr-2" />
@@ -670,6 +688,23 @@ export default function NotesScreen() {
                   </ScrollView>
                 </GlassCard>
               </View>
+
+              {/* Show In Diary Switch */}
+              {formData.project_id ? (
+                <View className="mb-5 flex-row justify-between items-center bg-black/40 border border-white/5 p-4 rounded-xl">
+                  <View className="flex-1 mr-4">
+                    <Text className="text-white font-bold text-sm">Im Bautagebuch anzeigen</Text>
+                    <Text className="text-gray-500 text-[10px] mt-1">Soll dieser Eintrag im öffentlichen Bautagebuch des Projekts erscheinen?</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setFormData({ ...formData, showInDiary: !formData.showInDiary })}
+                    activeOpacity={0.8}
+                    className={`w-12 h-6 rounded-full justify-center px-0.5 ${formData.showInDiary ? 'bg-brand-blue' : 'bg-white/10'}`}
+                  >
+                    <View className={`w-5 h-5 rounded-full bg-white shadow-sm ${formData.showInDiary ? 'self-end' : 'self-start'}`} />
+                  </TouchableOpacity>
+                </View>
+              ) : null}
 
               {/* Content Input */}
               <View className="mb-5">
