@@ -28,6 +28,7 @@ const Tasks = () => {
     const [selectedFiles, setSelectedFiles] = useState([]);
     const [filePreviews, setFilePreviews] = useState([]);
     const [editingTask, setEditingTask] = useState(null);
+    const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Gallery State
@@ -478,6 +479,7 @@ const Tasks = () => {
         filePreviews.forEach(p => URL.revokeObjectURL(p.url));
         setFilePreviews([]);
         setEditingTask(null);
+        setIsStatusDropdownOpen(false);
     };
 
     const handleOpenModal = (task = null) => {
@@ -933,24 +935,46 @@ const Tasks = () => {
                                 {/* Detail properties */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     {/* Status */}
-                                    <div className="bg-white/5 border border-white/10 rounded-xl p-3 flex items-center gap-3 relative group">
+                                    <div className="bg-white/5 border border-white/10 rounded-xl p-3 flex items-center gap-3 relative">
                                         <div className={`w-8 h-8 rounded-lg ${getStatusIconAndColor(editingTask.status).bg} flex items-center justify-center flex-shrink-0`}>
                                             <i className={`fa-solid ${getStatusIconAndColor(editingTask.status).icon} ${getStatusIconAndColor(editingTask.status).color} text-sm`}></i>
                                         </div>
-                                        <div className="flex-1 pr-4 relative">
+                                        <div className="flex-1 min-w-0 relative">
                                             <p className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">Status (Klicken zum Ändern)</p>
-                                            <select
-                                                value={editingTask.status}
-                                                onChange={(e) => handleStatusChange(editingTask, e.target.value)}
-                                                className="bg-transparent border-none text-white text-xs font-black mt-0.5 focus:outline-none cursor-pointer appearance-none w-full [&>option]:bg-gray-900"
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
+                                                className="w-full text-left bg-transparent border-none text-white text-xs font-black mt-0.5 focus:outline-none cursor-pointer flex justify-between items-center pr-2"
                                             >
-                                                <option value="In Arbeit">In Arbeit</option>
-                                                <option value="Warten">Warten</option>
-                                                <option value="Erledigt">Erledigt</option>
-                                            </select>
-                                            <div className="absolute right-0 top-[60%] -translate-y-1/2 pointer-events-none text-gray-500 text-[10px]">
-                                                <i className="fa-solid fa-chevron-down"></i>
-                                            </div>
+                                                <span>{editingTask.status}</span>
+                                                <i className={`fa-solid fa-chevron-down text-gray-500 text-[10px] transition-transform duration-200 ${isStatusDropdownOpen ? 'rotate-180' : ''}`}></i>
+                                            </button>
+
+                                            {isStatusDropdownOpen && (
+                                                <div className="absolute left-0 right-0 top-full mt-2 z-50 glass-card bg-[#121212]/95 border border-white/10 rounded-xl p-1.5 shadow-2xl animate-[fadeIn_0.15s_ease-out]">
+                                                    {['In Arbeit', 'Warten', 'Erledigt'].map((st) => {
+                                                        const isSelected = editingTask.status === st;
+                                                        const statusUI = getStatusIconAndColor(st);
+                                                        return (
+                                                            <button
+                                                                key={st}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    handleStatusChange(editingTask, st);
+                                                                    setIsStatusDropdownOpen(false);
+                                                                }}
+                                                                className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2.5 mb-0.5 last:mb-0 hover:bg-white/5 ${
+                                                                    isSelected ? 'text-blue-400 bg-blue-500/10' : 'text-gray-300'
+                                                                }`}
+                                                            >
+                                                                <i className={`fa-solid ${statusUI.icon} ${statusUI.color} text-[10px]`}></i>
+                                                                <span>{st}</span>
+                                                                {isSelected && <i className="fa-solid fa-check ml-auto text-blue-400 text-[10px]"></i>}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 

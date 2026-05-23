@@ -52,7 +52,8 @@ import {
   X,
   Share2,
   Copy,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Check
 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 
@@ -132,6 +133,7 @@ export default function TasksScreen() {
   const [calendarTab, setCalendarTab] = useState<'month' | 'week'>('month');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedTimelineUserId, setSelectedTimelineUserId] = useState<string | number>('all');
+  const [isTimelineUserSelectorOpen, setIsTimelineUserSelectorOpen] = useState(false);
   const [selectedCalendarDay, setSelectedCalendarDay] = useState<string>(formatDateString(new Date()));
   const [selectedWeekDay, setSelectedWeekDay] = useState<string>(formatDateString(new Date()));
   const [now, setNow] = useState(new Date());
@@ -1047,35 +1049,31 @@ export default function TasksScreen() {
           {/* Wochenplan Selector Dropdown for Employees */}
           {calendarTab === 'week' && (
             <View className="mb-2">
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row py-1">
-                <TouchableOpacity
-                  onPress={() => setSelectedTimelineUserId('all')}
-                  className={`px-3 py-2 rounded-xl mr-2 border ${
-                    selectedTimelineUserId === 'all' 
-                      ? 'bg-brand-blue border-brand-blue' 
-                      : 'bg-white/5 border-white/5'
-                  }`}
-                >
-                  <Text className={`text-[10px] font-bold ${selectedTimelineUserId === 'all' ? 'text-white' : 'text-gray-400'}`}>
-                    Alle Mitarbeiter
-                  </Text>
-                </TouchableOpacity>
-                {usersList.map((u: any) => (
-                  <TouchableOpacity
-                    key={u.id}
-                    onPress={() => setSelectedTimelineUserId(u.id)}
-                    className={`px-3 py-2 rounded-xl mr-2 border ${
-                      selectedTimelineUserId === u.id 
-                        ? 'bg-brand-blue border-brand-blue' 
-                        : 'bg-white/5 border-white/5'
-                    }`}
-                  >
-                    <Text className={`text-[10px] font-bold ${selectedTimelineUserId === u.id ? 'text-white' : 'text-gray-400'}`}>
-                      {u.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+              <TouchableOpacity 
+                onPress={() => setIsTimelineUserSelectorOpen(true)}
+                activeOpacity={0.8}
+              >
+                <GlassCard className="p-4 flex-row justify-between items-center border border-white/10 bg-black/30">
+                  <View className="flex-row items-center">
+                    <View className="w-8 h-8 rounded-full bg-brand-blue/10 items-center justify-center mr-3">
+                      <User size={16} color="#3B82F6" />
+                    </View>
+                    <View>
+                      <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">
+                        Aktiver Mitarbeiter
+                      </Text>
+                      <Text className="text-white font-bold text-sm mt-0.5">
+                        {selectedTimelineUserId === 'all' 
+                          ? 'Alle Mitarbeiter' 
+                          : (usersList.find((u: any) => u.id === selectedTimelineUserId)?.name || 'Mitarbeiter')}
+                      </Text>
+                    </View>
+                  </View>
+                  <View className="flex-row items-center">
+                    <ChevronRight size={16} color="#6B7280" style={{ transform: [{ rotate: '90deg' }] }} />
+                  </View>
+                </GlassCard>
+              </TouchableOpacity>
             </View>
           )}
         </View>
@@ -1535,6 +1533,87 @@ export default function TasksScreen() {
            </View>
         )}
       />
+
+      {/* Employee Selector Bottom Sheet */}
+      <Modal
+        visible={isTimelineUserSelectorOpen}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsTimelineUserSelectorOpen(false)}
+      >
+        <BlurView intensity={90} tint="dark" className="flex-1 justify-end">
+          <TouchableOpacity 
+             activeOpacity={1} 
+             onPress={() => setIsTimelineUserSelectorOpen(false)} 
+             className="flex-1"
+          />
+          <GlassCard className="p-6 rounded-t-[40px] border-t border-white/10 bg-black/80" style={{ maxHeight: '70%' }}>
+            <View className="w-full pb-6 items-center">
+               <View className="w-12 h-1.5 bg-white/10 rounded-full" />
+            </View>
+            <View className="flex-row justify-between items-center mb-6">
+              <Text className="text-white text-base font-bold uppercase tracking-widest">
+                Mitarbeiter auswählen
+              </Text>
+              <TouchableOpacity onPress={() => setIsTimelineUserSelectorOpen(false)}>
+                <Text className="text-gray-500 font-bold uppercase text-xs tracking-widest">Schließen</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Option: Alle Mitarbeiter */}
+              <TouchableOpacity
+                onPress={() => {
+                  setSelectedTimelineUserId('all');
+                  setIsTimelineUserSelectorOpen(false);
+                }}
+                className={`p-4 rounded-2xl mb-3 border flex-row items-center justify-between ${selectedTimelineUserId === 'all' ? 'border-brand-blue bg-brand-blue/10' : 'border-white/5 bg-white/5'}`}
+              >
+                <View className="flex-row items-center">
+                  <View className="w-8 h-8 rounded-full bg-brand-blue/20 items-center justify-center mr-3">
+                    <User size={16} color="#3B82F6" />
+                  </View>
+                  <View>
+                    <Text className="text-white font-bold text-sm">Alle Mitarbeiter</Text>
+                    <Text className="text-gray-500 text-xs mt-0.5">Sämtliche wochenplanrelevante Personen</Text>
+                  </View>
+                </View>
+                {selectedTimelineUserId === 'all' && <Check size={16} color="#3B82F6" />}
+              </TouchableOpacity>
+
+              {/* Individual Employees */}
+              {(usersList || []).map((u: any) => {
+                if (!u) return null;
+                const isSelected = selectedTimelineUserId === u.id;
+                return (
+                  <TouchableOpacity
+                    key={u.id}
+                    onPress={() => {
+                      setSelectedTimelineUserId(u.id);
+                      setIsTimelineUserSelectorOpen(false);
+                    }}
+                    className={`p-4 rounded-2xl mb-3 border flex-row items-center justify-between ${isSelected ? 'border-brand-blue bg-brand-blue/10' : 'border-white/5 bg-white/5'}`}
+                  >
+                    <View className="flex-row items-center">
+                      <View className="w-8 h-8 rounded-full bg-blue-500/20 items-center justify-center mr-3">
+                        <Text className="text-blue-400 text-xs font-bold">{u.name ? u.name[0].toUpperCase() : 'M'}</Text>
+                      </View>
+                      <View>
+                        <Text className="text-white font-bold text-sm">{u.name}</Text>
+                        <Text className="text-gray-500 text-xs mt-0.5">{u.role?.name || 'Mitarbeiter'}</Text>
+                      </View>
+                    </View>
+                    
+                    <View className="flex-row items-center">
+                      {isSelected && <Check size={16} color="#3B82F6" />}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </GlassCard>
+        </BlurView>
+      </Modal>
     </ScreenLayout>
   );
 }
