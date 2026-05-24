@@ -1689,40 +1689,195 @@ export default function TasksScreen() {
               )}
             </View>
           </GlassCard>
+
+          <ImageView
+            images={viewerImages}
+            imageIndex={0}
+            visible={isViewerVisible}
+            onRequestClose={() => setIsViewerVisible(false)}
+            HeaderComponent={() => (
+               <View className="flex-row justify-between items-center p-6 pt-12">
+                  <TouchableOpacity 
+                    onPress={() => setIsViewerVisible(false)}
+                    className="bg-black/50 p-2 rounded-full"
+                  >
+                     <X color="white" size={24} />
+                  </TouchableOpacity>
+                  
+                  <View className="flex-row gap-x-4">
+                    <TouchableOpacity 
+                      onPress={() => saveToGallery(viewerImages[0]?.uri)}
+                      className="bg-black/50 p-2 rounded-full"
+                    >
+                       <Download color="white" size={24} />
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      onPress={() => shareFile(viewerImages[0]?.uri)}
+                      className="bg-black/50 p-2 rounded-full"
+                    >
+                       <Share2 color="white" size={24} />
+                    </TouchableOpacity>
+                  </View>
+               </View>
+            )}
+          />
+
+          {/* Assignee Selector Modal Sheet */}
+          <Modal
+            visible={isAssigneePickerOpen}
+            animationType="slide"
+            transparent={true}
+            onRequestClose={() => setIsAssigneePickerOpen(false)}
+          >
+            <BlurView intensity={90} tint="dark" className="flex-1 justify-end">
+              <TouchableOpacity 
+                 activeOpacity={1} 
+                 onPress={() => setIsAssigneePickerOpen(false)} 
+                 className="flex-1"
+              />
+              <GlassCard className="p-6 rounded-t-[40px] border-t border-white/10 bg-black/80 overflow-hidden" style={{ maxHeight: '70%' }}>
+                <View className="w-full pb-6 items-center">
+                   <View className="w-12 h-1.5 bg-white/10 rounded-full" />
+                </View>
+                <View className="flex-row justify-between items-center mb-6">
+                  <Text className="text-white text-base font-bold uppercase tracking-widest">
+                    Mitarbeiter auswählen
+                  </Text>
+                  <TouchableOpacity onPress={() => setIsAssigneePickerOpen(false)}>
+                    <Text className="text-gray-500 font-bold uppercase text-xs tracking-widest">Schließen</Text>
+                  </TouchableOpacity>
+                </View>
+                
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  {/* Option: Unassigned */}
+                  <TouchableOpacity
+                    onPress={() => {
+                      setFormData({ ...formData, assigned_to_id: '' });
+                      setIsAssigneePickerOpen(false);
+                    }}
+                    className={`p-4 rounded-2xl mb-3 border flex-row items-center justify-between ${formData.assigned_to_id === '' ? 'border-brand-blue bg-brand-blue/10' : 'border-white/5 bg-white/5'}`}
+                  >
+                    <View className="flex-row items-center">
+                      <View className="w-8 h-8 rounded-full bg-brand-blue/20 items-center justify-center mr-3">
+                        <User size={16} color="#3B82F6" />
+                      </View>
+                      <View>
+                        <Text className="text-white font-bold text-sm">Nicht zugewiesen</Text>
+                        <Text className="text-gray-500 text-xs mt-0.5">Keine Zuweisung vornehmen</Text>
+                      </View>
+                    </View>
+                    {formData.assigned_to_id === '' && <Check size={16} color="#3B82F6" />}
+                  </TouchableOpacity>
+
+                  {/* Individual Employees */}
+                  {(usersList || []).map((u: any) => {
+                    if (!u) return null;
+                    const isSelected = formData.assigned_to_id.toString() === u.id.toString();
+                    return (
+                      <TouchableOpacity
+                        key={u.id}
+                        onPress={() => {
+                          setFormData({ ...formData, assigned_to_id: u.id });
+                          setIsAssigneePickerOpen(false);
+                        }}
+                        className={`p-4 rounded-2xl mb-3 border flex-row items-center justify-between ${isSelected ? 'border-brand-blue bg-brand-blue/10' : 'border-white/5 bg-white/5'}`}
+                      >
+                        <View className="flex-row items-center">
+                          <View className="w-8 h-8 rounded-full bg-blue-500/20 items-center justify-center mr-3">
+                            <Text className="text-blue-400 text-xs font-bold">{u.name ? u.name[0].toUpperCase() : 'M'}</Text>
+                          </View>
+                          <View>
+                            <Text className="text-white font-bold text-sm">{u.name}</Text>
+                            <Text className="text-gray-500 text-xs mt-0.5">{u.role?.name || 'Mitarbeiter'}</Text>
+                          </View>
+                        </View>
+                        {isSelected && <Check size={16} color="#3B82F6" />}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </GlassCard>
+            </BlurView>
+          </Modal>
+
+          {/* Project Selector Modal Sheet for Tasks */}
+          <Modal
+            visible={isProjectPickerOpen}
+            animationType="slide"
+            transparent={true}
+            onRequestClose={() => setIsProjectPickerOpen(false)}
+          >
+            <BlurView intensity={90} tint="dark" className="flex-1 justify-end">
+              <TouchableOpacity 
+                 activeOpacity={1} 
+                 onPress={() => setIsProjectPickerOpen(false)} 
+                 className="flex-1"
+              />
+              <GlassCard className="p-6 rounded-t-[40px] border-t border-white/10 bg-black/80 overflow-hidden" style={{ maxHeight: '70%' }}>
+                <View className="w-full pb-6 items-center">
+                   <View className="w-12 h-1.5 bg-white/10 rounded-full" />
+                </View>
+                <View className="flex-row justify-between items-center mb-6">
+                  <Text className="text-white text-base font-bold uppercase tracking-widest">
+                    Projekt auswählen
+                  </Text>
+                  <TouchableOpacity onPress={() => setIsProjectPickerOpen(false)}>
+                    <Text className="text-gray-500 font-bold uppercase text-xs tracking-widest">Schließen</Text>
+                  </TouchableOpacity>
+                </View>
+                
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  {/* Option: Kein Projekt */}
+                  <TouchableOpacity
+                    onPress={() => {
+                      setFormData({ ...formData, project_id: '' });
+                      setIsProjectPickerOpen(false);
+                    }}
+                    className={`p-4 rounded-2xl mb-3 border flex-row items-center justify-between ${formData.project_id === '' ? 'border-brand-blue bg-brand-blue/10' : 'border-white/5 bg-white/5'}`}
+                  >
+                    <View className="flex-row items-center">
+                      <View className="w-8 h-8 rounded-full bg-brand-blue/20 items-center justify-center mr-3">
+                        <Briefcase size={16} color="#3B82F6" />
+                      </View>
+                      <View>
+                        <Text className="text-white font-bold text-sm">Kein Projekt</Text>
+                        <Text className="text-gray-500 text-xs mt-0.5">Aufgabe ist keinem Projekt zugeordnet</Text>
+                      </View>
+                    </View>
+                    {formData.project_id === '' && <Check size={16} color="#3B82F6" />}
+                  </TouchableOpacity>
+
+                  {/* Individual Projects */}
+                  {projects.map((p: any) => {
+                    const isSelected = formData.project_id.toString() === p.id.toString();
+                    return (
+                      <TouchableOpacity
+                        key={p.id}
+                        onPress={() => {
+                          setFormData({ ...formData, project_id: p.id });
+                          setIsProjectPickerOpen(false);
+                        }}
+                        className={`p-4 rounded-2xl mb-3 border flex-row items-center justify-between ${isSelected ? 'border-brand-blue bg-brand-blue/10' : 'border-white/5 bg-white/5'}`}
+                      >
+                        <View className="flex-row items-center flex-1 pr-3">
+                          <View className="w-8 h-8 rounded-full bg-blue-500/20 items-center justify-center mr-3">
+                            <Text className="text-blue-400 text-xs font-bold">{p.project_number ? p.project_number.substring(0,2) : 'EP'}</Text>
+                          </View>
+                          <View className="flex-1">
+                            <Text className="text-white font-bold text-sm" numberOfLines={1}>{p.project_number} - {p.title}</Text>
+                            <Text className="text-gray-500 text-xs mt-1" numberOfLines={1}>{p.address || 'Keine Adresse'}</Text>
+                          </View>
+                        </View>
+                        {isSelected && <Check size={16} color="#3B82F6" />}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </GlassCard>
+            </BlurView>
+          </Modal>
         </BlurView>
       </Modal>
-
-      <ImageView
-        images={viewerImages}
-        imageIndex={0}
-        visible={isViewerVisible}
-        onRequestClose={() => setIsViewerVisible(false)}
-        HeaderComponent={() => (
-           <View className="flex-row justify-between items-center p-6 pt-12">
-              <TouchableOpacity 
-                onPress={() => setIsViewerVisible(false)}
-                className="bg-black/50 p-2 rounded-full"
-              >
-                 <X color="white" size={24} />
-              </TouchableOpacity>
-              
-              <View className="flex-row gap-x-4">
-                <TouchableOpacity 
-                  onPress={() => saveToGallery(viewerImages[0]?.uri)}
-                  className="bg-black/50 p-2 rounded-full"
-                >
-                   <Download color="white" size={24} />
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  onPress={() => shareFile(viewerImages[0]?.uri)}
-                  className="bg-black/50 p-2 rounded-full"
-                >
-                   <Share2 color="white" size={24} />
-                </TouchableOpacity>
-              </View>
-           </View>
-        )}
-      />
 
       {/* Employee Selector Bottom Sheet */}
       <Modal
@@ -1805,160 +1960,6 @@ export default function TasksScreen() {
         </BlurView>
       </Modal>
 
-      {/* Assignee Selector Modal Sheet */}
-      <Modal
-        visible={isAssigneePickerOpen}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setIsAssigneePickerOpen(false)}
-      >
-        <BlurView intensity={90} tint="dark" className="flex-1 justify-end">
-          <TouchableOpacity 
-             activeOpacity={1} 
-             onPress={() => setIsAssigneePickerOpen(false)} 
-             className="flex-1"
-          />
-          <GlassCard className="p-6 rounded-t-[40px] border-t border-white/10 bg-black/80 overflow-hidden" style={{ maxHeight: '70%' }}>
-            <View className="w-full pb-6 items-center">
-               <View className="w-12 h-1.5 bg-white/10 rounded-full" />
-            </View>
-            <View className="flex-row justify-between items-center mb-6">
-              <Text className="text-white text-base font-bold uppercase tracking-widest">
-                Mitarbeiter auswählen
-              </Text>
-              <TouchableOpacity onPress={() => setIsAssigneePickerOpen(false)}>
-                <Text className="text-gray-500 font-bold uppercase text-xs tracking-widest">Schließen</Text>
-              </TouchableOpacity>
-            </View>
-            
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Option: Unassigned */}
-              <TouchableOpacity
-                onPress={() => {
-                  setFormData({ ...formData, assigned_to_id: '' });
-                  setIsAssigneePickerOpen(false);
-                }}
-                className={`p-4 rounded-2xl mb-3 border flex-row items-center justify-between ${formData.assigned_to_id === '' ? 'border-brand-blue bg-brand-blue/10' : 'border-white/5 bg-white/5'}`}
-              >
-                <View className="flex-row items-center">
-                  <View className="w-8 h-8 rounded-full bg-brand-blue/20 items-center justify-center mr-3">
-                    <User size={16} color="#3B82F6" />
-                  </View>
-                  <View>
-                    <Text className="text-white font-bold text-sm">Nicht zugewiesen</Text>
-                    <Text className="text-gray-500 text-xs mt-0.5">Keine Zuweisung vornehmen</Text>
-                  </View>
-                </View>
-                {formData.assigned_to_id === '' && <Check size={16} color="#3B82F6" />}
-              </TouchableOpacity>
-
-              {/* Individual Employees */}
-              {(usersList || []).map((u: any) => {
-                if (!u) return null;
-                const isSelected = formData.assigned_to_id.toString() === u.id.toString();
-                return (
-                  <TouchableOpacity
-                    key={u.id}
-                    onPress={() => {
-                      setFormData({ ...formData, assigned_to_id: u.id });
-                      setIsAssigneePickerOpen(false);
-                    }}
-                    className={`p-4 rounded-2xl mb-3 border flex-row items-center justify-between ${isSelected ? 'border-brand-blue bg-brand-blue/10' : 'border-white/5 bg-white/5'}`}
-                  >
-                    <View className="flex-row items-center">
-                      <View className="w-8 h-8 rounded-full bg-blue-500/20 items-center justify-center mr-3">
-                        <Text className="text-blue-400 text-xs font-bold">{u.name ? u.name[0].toUpperCase() : 'M'}</Text>
-                      </View>
-                      <View>
-                        <Text className="text-white font-bold text-sm">{u.name}</Text>
-                        <Text className="text-gray-500 text-xs mt-0.5">{u.role?.name || 'Mitarbeiter'}</Text>
-                      </View>
-                    </View>
-                    {isSelected && <Check size={16} color="#3B82F6" />}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </GlassCard>
-        </BlurView>
-      </Modal>
-
-      {/* Project Selector Modal Sheet for Tasks */}
-      <Modal
-        visible={isProjectPickerOpen}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setIsProjectPickerOpen(false)}
-      >
-        <BlurView intensity={90} tint="dark" className="flex-1 justify-end">
-          <TouchableOpacity 
-             activeOpacity={1} 
-             onPress={() => setIsProjectPickerOpen(false)} 
-             className="flex-1"
-          />
-          <GlassCard className="p-6 rounded-t-[40px] border-t border-white/10 bg-black/80 overflow-hidden" style={{ maxHeight: '70%' }}>
-            <View className="w-full pb-6 items-center">
-               <View className="w-12 h-1.5 bg-white/10 rounded-full" />
-            </View>
-            <View className="flex-row justify-between items-center mb-6">
-              <Text className="text-white text-base font-bold uppercase tracking-widest">
-                Projekt auswählen
-              </Text>
-              <TouchableOpacity onPress={() => setIsProjectPickerOpen(false)}>
-                <Text className="text-gray-500 font-bold uppercase text-xs tracking-widest">Schließen</Text>
-              </TouchableOpacity>
-            </View>
-            
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Option: Kein Projekt */}
-              <TouchableOpacity
-                onPress={() => {
-                  setFormData({ ...formData, project_id: '' });
-                  setIsProjectPickerOpen(false);
-                }}
-                className={`p-4 rounded-2xl mb-3 border flex-row items-center justify-between ${formData.project_id === '' ? 'border-brand-blue bg-brand-blue/10' : 'border-white/5 bg-white/5'}`}
-              >
-                <View className="flex-row items-center">
-                  <View className="w-8 h-8 rounded-full bg-brand-blue/20 items-center justify-center mr-3">
-                    <Briefcase size={16} color="#3B82F6" />
-                  </View>
-                  <View>
-                    <Text className="text-white font-bold text-sm">Kein Projekt</Text>
-                    <Text className="text-gray-500 text-xs mt-0.5">Aufgabe ist keinem Projekt zugeordnet</Text>
-                  </View>
-                </View>
-                {formData.project_id === '' && <Check size={16} color="#3B82F6" />}
-              </TouchableOpacity>
-
-              {/* Individual Projects */}
-              {projects.map((p: any) => {
-                const isSelected = formData.project_id.toString() === p.id.toString();
-                return (
-                  <TouchableOpacity
-                    key={p.id}
-                    onPress={() => {
-                      setFormData({ ...formData, project_id: p.id });
-                      setIsProjectPickerOpen(false);
-                    }}
-                    className={`p-4 rounded-2xl mb-3 border flex-row items-center justify-between ${isSelected ? 'border-brand-blue bg-brand-blue/10' : 'border-white/5 bg-white/5'}`}
-                  >
-                    <View className="flex-row items-center flex-1 pr-3">
-                      <View className="w-8 h-8 rounded-full bg-blue-500/20 items-center justify-center mr-3">
-                        <Text className="text-blue-400 text-xs font-bold">{p.project_number ? p.project_number.substring(0,2) : 'EP'}</Text>
-                      </View>
-                      <View className="flex-1">
-                        <Text className="text-white font-bold text-sm" numberOfLines={1}>{p.project_number} - {p.title}</Text>
-                        <Text className="text-gray-500 text-xs mt-1" numberOfLines={1}>{p.address || 'Keine Adresse'}</Text>
-                      </View>
-                    </View>
-                    {isSelected && <Check size={16} color="#3B82F6" />}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </GlassCard>
-        </BlurView>
-      </Modal>
     </ScreenLayout>
   );
 }
