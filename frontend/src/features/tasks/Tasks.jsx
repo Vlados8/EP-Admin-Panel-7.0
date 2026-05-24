@@ -111,6 +111,8 @@ const Tasks = () => {
             setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth() - 1, 1));
         } else if (calendarTab === 'week') {
             setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() - 7));
+        } else if (calendarTab === 'day') {
+            setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() - 1));
         }
     };
 
@@ -119,6 +121,8 @@ const Tasks = () => {
             setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 1));
         } else if (calendarTab === 'week') {
             setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() + 7));
+        } else if (calendarTab === 'day') {
+            setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() + 1));
         }
     };
 
@@ -134,6 +138,8 @@ const Tasks = () => {
             const startStr = `${weekDays[0].getDate()}. ${monthNames[weekDays[0].getMonth()]}`;
             const endStr = `${weekDays[6].getDate()}. ${monthNames[weekDays[6].getMonth()]} ${weekDays[6].getFullYear()}`;
             return `${startStr} - ${endStr}`;
+        } else if (calendarTab === 'day') {
+            return `${selectedDate.getDate()}. ${monthNames[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`;
         }
         return '';
     };
@@ -436,6 +442,131 @@ const Tasks = () => {
                                                 </div>
                                             );
                                         })}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const renderDayView = () => {
+        const dayDate = selectedDate;
+        const dateStr = formatDateString(dayDate);
+        
+        const dayTasks = displayedTasks.filter(t => {
+            if (selectedTimelineUserId !== 'all') {
+                if (!t.assigned_to_id || t.assigned_to_id.toString() !== selectedTimelineUserId.toString()) return false;
+            }
+            return t.due_date === dateStr;
+        });
+        
+        const hours = [];
+        for (let i = 7; i <= 20; i++) {
+            hours.push(i);
+        }
+
+        const today = now;
+        const isCurrentDay = formatDateString(today) === dateStr;
+        const currentHour = today.getHours();
+        const currentMinute = today.getMinutes();
+        
+        return (
+            <div className="glass-card rounded-2xl border border-white/10 p-5 bg-black/20 overflow-x-auto custom-scrollbar animate-[fadeIn_0.3s_ease-out]">
+                <div className="min-w-[500px] flex flex-col">
+                    {/* Columns Header (Single Day) */}
+                    <div className="flex border-b border-white/10 pb-3 mb-2">
+                        {/* Time label placeholder */}
+                        <div className="w-24 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-widest text-center self-end">
+                            Uhrzeit
+                        </div>
+                        {/* Selected Day Column Header */}
+                        <div className="flex flex-1 gap-3">
+                            <div className={`flex-1 p-3 rounded-xl flex flex-col items-center justify-center border ${
+                                isCurrentDay 
+                                    ? 'bg-blue-500/10 border-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.1)]' 
+                                    : 'bg-white/5 border-white/10'
+                            }`}>
+                                <p className={`text-xs font-black uppercase tracking-wider ${isCurrentDay ? 'text-blue-400' : 'text-gray-400'}`}>
+                                    {dayNamesLong[dayDate.getDay()]}
+                                </p>
+                                <span className={`text-sm font-black mt-1 ${isCurrentDay ? 'text-white' : 'text-gray-300'}`}>
+                                    {dayDate.getDate()}.{String(dayDate.getMonth() + 1).padStart(2, '0')}.{dayDate.getFullYear()}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {/* Ganztägig (All Day) Row */}
+                    <div className="flex border-b border-white/5 py-2.5 bg-white/[0.02] rounded-xl mb-3 border border-white/10">
+                        <div className="w-24 shrink-0 flex flex-col items-center justify-center px-2">
+                            <span className="text-[9px] font-black uppercase text-gray-500 tracking-wider">Ganztägig</span>
+                            <i className="fa-solid fa-umbrella text-gray-600 text-xs mt-1"></i>
+                        </div>
+                        <div className="flex flex-1 gap-3">
+                            <div className="flex-1 space-y-1.5 px-1 min-h-[55px] justify-center flex flex-col">
+                                {dayTasks.filter(t => !t.time).map(t => renderCompactTaskCard(t))}
+                                {dayTasks.filter(t => !t.time).length === 0 && (
+                                    <span className="text-[10px] text-gray-600 italic text-center font-medium">Keine Aufgaben</span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {/* Hourly Rows */}
+                    <div className="space-y-2 relative">
+                        {/* Live Running current time indicator line */}
+                        {isCurrentDay && currentHour >= 7 && currentHour < 21 && (
+                            <div 
+                                className="absolute left-[96px] right-0 flex items-center pointer-events-none z-30"
+                                style={{ top: `${((currentHour - 7) + currentMinute / 60) * (90 + 8)}px` }}
+                            >
+                                <div className="w-full border-t-2 border-red-500 relative flex items-center">
+                                    <div className="absolute -left-1.5 w-3 h-3 rounded-full bg-red-500 ring-4 ring-red-500/30 animate-pulse"></div>
+                                    <div className="absolute -left-[58px] bg-red-500 text-white font-black text-[9px] px-1.5 py-0.5 rounded shadow-lg flex items-center gap-0.5">
+                                        <i className="fa-regular fa-clock text-[8px]"></i>
+                                        {String(currentHour).padStart(2, '0')}:{String(currentMinute).padStart(2, '0')}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {hours.map(hour => {
+                            const hourStr = `${String(hour).padStart(2, '0')}:00`;
+                            const hourTasks = dayTasks.filter(t => {
+                                const taskHour = getTaskHour(t.time);
+                                return taskHour === hour;
+                            });
+                            
+                            return (
+                                <div key={hour} className="flex items-stretch h-[90px] border-b border-white/5 pb-2">
+                                    {/* Hour Label */}
+                                    <div className="w-24 shrink-0 flex items-center justify-center font-black text-sm text-gray-500">
+                                        <i className="fa-regular fa-clock text-xs text-gray-600 mr-1.5"></i>
+                                        {hourStr}
+                                    </div>
+                                    
+                                    {/* Slot */}
+                                    <div className="flex flex-1 gap-3">
+                                        <div 
+                                            className="flex-1 bg-white/[0.02] hover:bg-blue-500/[0.03] border border-white/5 hover:border-blue-500/20 rounded-xl p-2 flex flex-col justify-between group relative transition-all"
+                                        >
+                                            <div className="space-y-1.5 flex-1 flex flex-col justify-center overflow-y-auto max-h-[80px] custom-scrollbar pr-0.5">
+                                                {hourTasks.map(t => renderCompactTaskCard(t))}
+                                            </div>
+                                            
+                                            {/* Inline Add Button inside specific Slot */}
+                                            <button
+                                                type="button"
+                                                onClick={() => handleOpenModalForDate(dateStr, selectedTimelineUserId === 'all' ? '' : selectedTimelineUserId, `${String(hour).padStart(2, '0')}:00`)}
+                                                className="absolute bottom-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 rounded-md bg-blue-500/20 text-blue-400 hover:bg-blue-500 hover:text-white flex items-center justify-center text-[10px]"
+                                                title={`Aufgabe für um ${hourStr} erstellen`}
+                                            >
+                                                <i className="fa-solid fa-plus"></i>
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             );
@@ -857,6 +988,17 @@ const Tasks = () => {
                             >
                                 <i className="fa-solid fa-calendar-week"></i> Wochenplan
                             </button>
+                            <button
+                                type="button"
+                                onClick={() => setCalendarTab('day')}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+                                    calendarTab === 'day' 
+                                        ? 'bg-white/10 text-white border border-white/10' 
+                                        : 'text-gray-400 hover:text-white'
+                                }`}
+                            >
+                                <i className="fa-solid fa-calendar-day"></i> Tagesplan
+                            </button>
                         </div>
 
                         {/* Date Navigation Controllers */}
@@ -890,8 +1032,8 @@ const Tasks = () => {
                             </h3>
                         </div>
 
-                        {/* Weekly Timeline view: User Select Dropdown */}
-                        {calendarTab === 'week' && (
+                        {/* Weekly & Daily Timeline view: User Select Dropdown */}
+                        {(calendarTab === 'week' || calendarTab === 'day') && (
                             <div className="flex items-center gap-2 self-stretch lg:self-auto min-w-[220px]">
                                 <i className="fa-solid fa-user-clock text-blue-400 text-sm"></i>
                                 <select
@@ -899,9 +1041,9 @@ const Tasks = () => {
                                     onChange={(e) => setSelectedTimelineUserId(e.target.value)}
                                     className="flex-1 bg-black/40 border border-white/15 rounded-xl py-2 px-3 text-xs text-white focus:outline-none focus:border-blue-500 appearance-none [&>option]:bg-gray-900"
                                 >
-                                    <option value="all">Wochenplan: Alle Mitarbeiter</option>
+                                    <option value="all">Tages/Wochenplan: Alle Mitarbeiter</option>
                                     {users.map(u => (
-                                        <option key={u.id} value={u.id}>Wochenplan: {u.name}</option>
+                                        <option key={u.id} value={u.id}>Tages/Wochenplan: {u.name}</option>
                                     ))}
                                 </select>
                             </div>
@@ -911,6 +1053,7 @@ const Tasks = () => {
                     {/* Sub-mode views contents */}
                     {calendarTab === 'month' && renderMonthView()}
                     {calendarTab === 'week' && renderWeekView()}
+                    {calendarTab === 'day' && renderDayView()}
                 </div>
             )}
 

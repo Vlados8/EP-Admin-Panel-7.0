@@ -130,7 +130,7 @@ export default function TasksScreen() {
 
   // Calendar Schedulers State
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
-  const [calendarTab, setCalendarTab] = useState<'month' | 'week'>('month');
+  const [calendarTab, setCalendarTab] = useState<'month' | 'week' | 'day'>('month');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedTimelineUserId, setSelectedTimelineUserId] = useState<string | number>('all');
   const [isTimelineUserSelectorOpen, setIsTimelineUserSelectorOpen] = useState(false);
@@ -153,6 +153,11 @@ export default function TasksScreen() {
       prevWeek.setDate(selectedDate.getDate() - 7);
       setSelectedDate(prevWeek);
       setSelectedWeekDay(formatDateString(prevWeek));
+    } else if (calendarTab === 'day') {
+      const prevDay = new Date(selectedDate);
+      prevDay.setDate(selectedDate.getDate() - 1);
+      setSelectedDate(prevDay);
+      setSelectedCalendarDay(formatDateString(prevDay));
     }
   };
 
@@ -164,6 +169,11 @@ export default function TasksScreen() {
       nextWeek.setDate(selectedDate.getDate() + 7);
       setSelectedDate(nextWeek);
       setSelectedWeekDay(formatDateString(nextWeek));
+    } else if (calendarTab === 'day') {
+      const nextDay = new Date(selectedDate);
+      nextDay.setDate(selectedDate.getDate() + 1);
+      setSelectedDate(nextDay);
+      setSelectedCalendarDay(formatDateString(nextDay));
     }
   };
 
@@ -182,6 +192,8 @@ export default function TasksScreen() {
       const startStr = `${weekDays[0].getDate()}. ${monthNames[weekDays[0].getMonth()].substring(0, 3)}.`;
       const endStr = `${weekDays[6].getDate()}. ${monthNames[weekDays[6].getMonth()].substring(0, 3)}. ${weekDays[6].getFullYear()}`;
       return `${startStr} - ${endStr}`;
+    } else if (calendarTab === 'day') {
+      return `${selectedDate.getDate()}. ${monthNames[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`;
     }
     return '';
   };
@@ -962,6 +974,142 @@ export default function TasksScreen() {
     );
   };
 
+  const renderDayView = () => {
+    const dayDate = selectedDate;
+    const dateStr = formatDateString(dayDate);
+    const activeTasks = tasks.filter((t: any) => {
+      if (selectedTimelineUserId !== 'all') {
+        if (!t.assigned_to_id || t.assigned_to_id.toString() !== selectedTimelineUserId.toString()) return false;
+      }
+      return t.due_date === dateStr;
+    });
+
+    const hours = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
+    const today = now;
+    const isSelectedDayToday = formatDateString(today) === dateStr;
+    const currentHour = today.getHours();
+    const currentMinute = today.getMinutes();
+
+    return (
+      <View className="flex-1 bg-black/20 rounded-3xl border border-white/5 p-4">
+        {/* Header Day */}
+        <View className="mb-4 bg-white/5 border border-white/10 p-3 rounded-2xl flex-row items-center justify-between">
+          <View className="flex-1">
+            <Text className="text-gray-400 text-[10px] font-black uppercase tracking-wider">
+              {dayNamesLong[dayDate.getDay()]}
+            </Text>
+            <Text className="text-white text-sm font-black mt-0.5">
+              {dayDate.getDate()}. {monthNames[dayDate.getMonth()]} {dayDate.getFullYear()}
+            </Text>
+          </View>
+          <View className="bg-brand-blue/10 px-3 py-1.5 rounded-xl border border-brand-blue/20">
+            <Text className="text-brand-blue text-[10px] font-black uppercase tracking-wider">
+              {activeTasks.length} {activeTasks.length === 1 ? 'Aufgabe' : 'Aufgaben'}
+            </Text>
+          </View>
+        </View>
+
+        <ScrollView showsVerticalScrollIndicator={false} className="flex-1">
+          {/* Ganztägig row */}
+          <GlassCard className="p-3 bg-black/40 flex-row items-center border-l-4 border-l-purple-500 mb-4">
+            <View className="w-16 items-center border-r border-white/10 pr-2 mr-3">
+              <Text className="text-[8px] font-black text-gray-500 uppercase tracking-wider text-center">Ganztägig</Text>
+            </View>
+            <View className="flex-1 space-y-2">
+              {activeTasks.filter((t: any) => !t.time).map((t: any) => (
+                <TouchableOpacity 
+                  key={t.id}
+                  onPress={() => handleOpenModal(t, false)}
+                  className="bg-white/5 border border-white/10 rounded-lg p-2 flex-row items-center justify-between"
+                >
+                  <Text className="text-white font-bold text-xs flex-1 truncate pr-2" numberOfLines={1}>{t.title}</Text>
+                  <ChevronRight size={12} color="#6B7280" />
+                </TouchableOpacity>
+              ))}
+              {activeTasks.filter((t: any) => !t.time).length === 0 && (
+                <Text className="text-gray-600 text-[10px] italic font-bold">Keine Aufgaben</Text>
+              )}
+            </View>
+          </GlassCard>
+
+          {/* Hourly rows */}
+          <View className="relative bg-black/20 rounded-2xl border border-white/5 p-3 space-y-3">
+            {/* Running time indicator line */}
+            {isSelectedDayToday && currentHour >= 7 && currentHour < 21 && (
+              <View 
+                className="absolute left-[70px] right-0 flex-row items-center pointer-events-none z-30"
+                style={{ top: ((currentHour - 7) + currentMinute / 60) * (90 + 12) + 12 }} // 90px row height, 12px vertical spacing
+              >
+                <View className="flex-1 border-t-2 border-red-500 relative flex-row items-center">
+                  <View className="absolute -left-1 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-red-500/30 animate-pulse" />
+                  <View className="absolute -left-[54px] bg-red-500 px-1.5 py-0.5 rounded text-[8px] font-bold text-white flex-row items-center gap-0.5 shadow-lg">
+                    <Clock size={8} color="white" />
+                    <Text className="text-white text-[8px] font-bold">{String(currentHour).padStart(2, '0')}:{String(currentMinute).padStart(2, '0')}</Text>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {hours.map(hour => {
+              const hourStr = `${String(hour).padStart(2, '0')}:00`;
+              const hourTasks = activeTasks.filter((t: any) => {
+                const taskHour = getTaskHour(t.time);
+                return taskHour === hour;
+              });
+
+              return (
+                <View key={hour} className="flex-row items-stretch min-h-[90px] border-b border-white/5 pb-3">
+                  {/* Left Column: Time label */}
+                  <View className="w-16 border-r border-white/5 pr-2 mr-3 justify-center items-center">
+                    <Text className="text-gray-500 text-[10px] font-black">{hourStr}</Text>
+                  </View>
+
+                  {/* Middle Column: Tasks inside slot */}
+                  <View className="flex-1 relative bg-white/[0.02] border border-white/5 rounded-xl p-2 min-h-[76px] justify-center">
+                    <View className="space-y-1.5 w-full">
+                      {hourTasks.map((t: any) => (
+                        <TouchableOpacity 
+                          key={t.id}
+                          onPress={() => handleOpenModal(t, false)}
+                          className={`w-full p-2.5 rounded-lg border-l-4 bg-black/40 flex-row items-center justify-between border ${
+                            t.status === 'Erledigt' ? 'border-l-green-500' : t.status === 'Warten' ? 'border-l-orange-500' : 'border-l-blue-500'
+                          }`}
+                        >
+                          <View className="flex-1 pr-1">
+                            <Text className="text-white font-bold text-[10px] truncate" numberOfLines={1}>{t.title}</Text>
+                            {selectedTimelineUserId === 'all' && t.assignee && (
+                              <Text className="text-blue-400 text-[8px] font-bold truncate mt-0.5">
+                                {t.assignee.name}
+                              </Text>
+                            )}
+                          </View>
+                          <ChevronRight size={10} color="#6B7280" />
+                        </TouchableOpacity>
+                      ))}
+                      {hourTasks.length === 0 && (
+                        <View className="flex-1 justify-center">
+                          <Text className="text-gray-600 text-[10px] font-bold italic">Frei</Text>
+                        </View>
+                      )}
+                    </View>
+                    
+                    {/* Inline Add Button on Right */}
+                    <TouchableOpacity
+                      onPress={() => handleOpenModalForDate(dateStr, selectedTimelineUserId === 'all' ? '' : selectedTimelineUserId, `${String(hour).padStart(2, '0')}:00`)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-md bg-blue-500/20 text-blue-400 items-center justify-center border border-blue-500/30"
+                    >
+                      <Plus size={12} color="#3B82F6" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </ScrollView>
+      </View>
+    );
+  };
+
   return (
     <ScreenLayout scroll={false}>
       <View className="mb-4 flex-row items-center justify-between">
@@ -1022,12 +1170,22 @@ export default function TasksScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => setCalendarTab('week')}
-              className={`px-3 py-1.5 rounded-lg ${
+              className={`px-3 py-1.5 rounded-lg mr-1 ${
                 calendarTab === 'week' ? 'bg-white/10 border border-white/5' : ''
               }`}
             >
               <Text className={`text-[10px] font-bold uppercase tracking-wider ${calendarTab === 'week' ? 'text-white' : 'text-gray-400'}`}>
                 Wochenplan
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setCalendarTab('day')}
+              className={`px-3 py-1.5 rounded-lg ${
+                calendarTab === 'day' ? 'bg-white/10 border border-white/5' : ''
+              }`}
+            >
+              <Text className={`text-[10px] font-bold uppercase tracking-wider ${calendarTab === 'day' ? 'text-white' : 'text-gray-400'}`}>
+                Tagesplan
               </Text>
             </TouchableOpacity>
           </View>
@@ -1062,8 +1220,8 @@ export default function TasksScreen() {
             </GlassCard>
           </View>
 
-          {/* Wochenplan Selector Dropdown for Employees */}
-          {calendarTab === 'week' && (
+          {/* Wochenplan/Tagesplan Selector Dropdown for Employees */}
+          {(calendarTab === 'week' || calendarTab === 'day') && (
             <View className="mb-2">
               <TouchableOpacity 
                 onPress={() => setIsTimelineUserSelectorOpen(true)}
@@ -1116,6 +1274,8 @@ export default function TasksScreen() {
           contentContainerStyle={{ paddingBottom: 20 }}
           showsVerticalScrollIndicator={false}
         />
+      ) : calendarTab === 'day' ? (
+        renderDayView()
       ) : (
         <ScrollView 
           showsVerticalScrollIndicator={false} 
