@@ -326,6 +326,22 @@ export default function TasksScreen() {
     setIsModalOpen(true);
   };
 
+  const handleOpenModalForDate = (dateStr: string, userId: string | number = '', timeStr: string = '') => {
+    setEditingTask(null);
+    setFormData({
+      title: '',
+      description: '',
+      status: 'In Arbeit',
+      assigned_to_id: userId || '',
+      project_id: '',
+      due_date: dateStr || getISODate(),
+      time: timeStr || '',
+    });
+    setIsModalEditMode(true);
+    setAttachments([]);
+    setIsModalOpen(true);
+  };
+
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingTask(null);
@@ -875,7 +891,7 @@ export default function TasksScreen() {
           {isSelectedDayToday && currentHour >= 7 && currentHour < 21 && (
             <View 
               className="absolute left-[70px] right-0 flex-row items-center pointer-events-none z-30"
-              style={{ top: `${((currentHour - 7) + currentMinute / 60) * (90 + 12) + 12}px` }} // 90px row height, 12px vertical spacing
+              style={{ top: ((currentHour - 7) + currentMinute / 60) * (90 + 12) + 12 }} // 90px row height, 12px vertical spacing
             >
               <View className="flex-1 border-t-2 border-red-500 relative flex-row items-center">
                 <View className="absolute -left-1 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-red-500/30 animate-pulse" />

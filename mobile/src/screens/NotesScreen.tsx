@@ -81,6 +81,7 @@ interface NoteForm {
 export default function NotesScreen() {
   const navigation = useNavigation<any>();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isModalEditMode, setIsModalEditMode] = useState(false);
   const [editingNote, setEditingNote] = useState<any | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -168,9 +169,13 @@ export default function NotesScreen() {
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: FormData }) => updateNote(id, data),
-    onSuccess: () => {
-      closeModal();
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['notes'] });
+      if (isModalEditMode) {
+        closeModal();
+      } else {
+        setEditingNote(data);
+      }
     },
   });
 
@@ -181,7 +186,7 @@ export default function NotesScreen() {
     },
   });
 
-  const handleOpenModal = (note: any = null) => {
+  const handleOpenModal = (note: any = null, forceEditMode: boolean = false) => {
     if (note) {
       setEditingNote(note);
       setFormData({
@@ -193,6 +198,7 @@ export default function NotesScreen() {
         project_id: note.project_id || '',
         showInDiary: note.showInDiary || false,
       });
+      setIsModalEditMode(forceEditMode);
     } else {
       setEditingNote(null);
       setFormData({
@@ -204,6 +210,7 @@ export default function NotesScreen() {
         project_id: '',
         showInDiary: false,
       });
+      setIsModalEditMode(true);
     }
     setAttachments([]);
     setIsModalOpen(true);
@@ -402,103 +409,108 @@ export default function NotesScreen() {
   const NoteCard = ({ note }: { note: any }) => {
     const isDone = note.isDone;
     return (
-      <GlassCard className={`p-5 mb-4 border-l-4 ${isDone ? 'opacity-60' : ''}`} style={{ borderLeftColor: note.color || '#3B82F6' }}>
-        <View className="flex-row justify-between items-start mb-2">
-          <View className="flex-1">
-            <View className="flex-row items-center mb-1">
-               <Text selectable={true} className={`text-white font-bold text-lg ${isDone ? 'line-through text-gray-500' : ''}`}>
-                 {note.title}
-               </Text>
+      <TouchableOpacity 
+        activeOpacity={0.95} 
+        onPress={() => handleOpenModal(note, false)}
+      >
+        <GlassCard className={`p-5 mb-4 border-l-4 ${isDone ? 'opacity-60' : ''}`} style={{ borderLeftColor: note.color || '#3B82F6' }}>
+          <View className="flex-row justify-between items-start mb-2">
+            <View className="flex-1">
+              <View className="flex-row items-center mb-1">
+                 <Text selectable={true} className={`text-white font-bold text-lg ${isDone ? 'line-through text-gray-500' : ''}`}>
+                   {note.title}
+                 </Text>
+              </View>
+              <View className="flex-row items-center">
+                <CalendarIcon size={12} color="#6B7280" />
+                <Text className="text-gray-500 text-[10px] ml-1 uppercase font-bold">
+                  {formatDate(note.date)}
+                </Text>
+                {note.time && (
+                  <View className="flex-row items-center ml-2">
+                     <Clock size={10} color="#6B7280" />
+                     <Text className="text-gray-400 text-[10px] ml-1 font-bold">{note.time}</Text>
+                  </View>
+                )}
+                {note.project && (
+                  <>
+                    <View className="w-1 h-1 bg-gray-700 rounded-full mx-2" />
+                    <TouchableOpacity 
+                      onPress={() => navigation.navigate('ProjectDetail', { id: note.project.id })}
+                      className="flex-row items-center bg-brand-blue/10 px-1.5 py-0.5 rounded-md"
+                    >
+                      <Briefcase size={10} color="#3B82F6" />
+                      <Text className="text-blue-400 text-[10px] ml-1 font-bold">
+                        {note.project.project_number}
+                      </Text>
+                      <ExternalLink size={8} color="#3B82F6" className="ml-1" />
+                    </TouchableOpacity>
+                  </>
+                )}
+              </View>
             </View>
-            <View className="flex-row items-center">
-              <CalendarIcon size={12} color="#6B7280" />
-              <Text className="text-gray-500 text-[10px] ml-1 uppercase font-bold">
-                {formatDate(note.date)}
-              </Text>
-              {note.time && (
-                <View className="flex-row items-center ml-2">
-                   <Clock size={10} color="#6B7280" />
-                   <Text className="text-gray-400 text-[10px] ml-1 font-bold">{note.time}</Text>
-                </View>
-              )}
-              {note.project && (
-                <>
-                  <View className="w-1 h-1 bg-gray-700 rounded-full mx-2" />
-                  <TouchableOpacity 
-                    onPress={() => navigation.navigate('ProjectDetail', { id: note.project.id })}
-                    className="flex-row items-center bg-brand-blue/10 px-1.5 py-0.5 rounded-md"
-                  >
-                    <Briefcase size={10} color="#3B82F6" />
-                    <Text className="text-blue-400 text-[10px] ml-1 font-bold">
-                      {note.project.project_number}
-                    </Text>
-                    <ExternalLink size={8} color="#3B82F6" className="ml-1" />
-                  </TouchableOpacity>
-                </>
-              )}
+            <View className="flex-row">
+              <TouchableOpacity onPress={() => toggleDone(note)} className="p-2 bg-white/5 rounded-lg mr-2">
+                <CheckCircle2 size={18} color={isDone ? '#10B981' : '#4B5563'} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => handleOpenModal(note, false)} className="p-2 bg-white/5 rounded-lg mr-2">
+                <FileText size={18} color="#6B7280" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => handleDelete(note.id)} className="p-2 bg-white/5 rounded-lg">
+                <Trash2 size={18} color="#EF4444" />
+              </TouchableOpacity>
             </View>
           </View>
-          <View className="flex-row">
-            <TouchableOpacity onPress={() => toggleDone(note)} className="p-2 bg-white/5 rounded-lg mr-2">
-              <CheckCircle2 size={18} color={isDone ? '#10B981' : '#4B5563'} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => handleOpenModal(note)} className="p-2 bg-white/5 rounded-lg mr-2">
-              <FileText size={18} color="#6B7280" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => handleDelete(note.id)} className="p-2 bg-white/5 rounded-lg">
-              <Trash2 size={18} color="#EF4444" />
-            </TouchableOpacity>
-          </View>
-        </View>
-        
-        <Text selectable={true} className={`text-gray-300 text-sm leading-relaxed mb-4 ${isDone ? 'text-gray-500' : ''}`}>
-          {note.content}
-        </Text>
-
-        {note.attachments && note.attachments.length > 0 && (
-          <View>
-            <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2">Anhänge</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
-              {note.attachments.map((att: any) => {
-                const url = att.fileUrl || att.file_url;
-                const thumbUrl = att.thumbUrl || att.thumb_url;
-                const name = att.fileName || att.file_name;
-                const type = att.fileType || att.content_type;
-                // Use thumbUrl for the small icon preview, fallback to fileUrl
-                const displayUrl = thumbUrl || url;
-                const fullUrl = displayUrl ? (displayUrl.startsWith('http') ? displayUrl : `${serverDomain}${displayUrl}`) : '';
-                return (
-                  <TouchableOpacity 
-                     key={att.id} 
-                     onPress={() => openAttachment(att)}
-                     activeOpacity={0.7}
-                     className="mr-2 border border-white/5 rounded-lg p-2 flex-row items-center bg-black/20"
-                  >
-                    {type?.includes('video') ? (
-                      <View className="w-8 h-8 rounded bg-gray-800 justify-center items-center">
-                         <Text className="text-white text-[8px] font-bold">VID</Text>
+          
+          <Text selectable={true} className={`text-gray-300 text-sm leading-relaxed mb-4 ${isDone ? 'text-gray-500' : ''}`}>
+            {note.content}
+          </Text>
+  
+          {note.attachments && note.attachments.length > 0 && (
+            <View>
+              <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2">Anhänge</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
+                {note.attachments.map((att: any) => {
+                  const url = att.fileUrl || att.file_url;
+                  const thumbUrl = att.thumbUrl || att.thumb_url;
+                  const name = att.fileName || att.file_name;
+                  const type = att.fileType || att.content_type;
+                  // Use thumbUrl for the small icon preview, fallback to fileUrl
+                  const displayUrl = thumbUrl || url;
+                  const fullUrl = displayUrl ? (displayUrl.startsWith('http') ? displayUrl : `${serverDomain}${displayUrl}`) : '';
+                  return (
+                    <TouchableOpacity 
+                       key={att.id} 
+                       onPress={() => openAttachment(att)}
+                       activeOpacity={0.7}
+                       className="mr-2 border border-white/5 rounded-lg p-2 flex-row items-center bg-black/20"
+                    >
+                      {type?.includes('video') ? (
+                        <View className="w-8 h-8 rounded bg-gray-800 justify-center items-center">
+                           <Text className="text-white text-[8px] font-bold">VID</Text>
+                        </View>
+                      ) : (
+                        <View className="w-8 h-8 rounded bg-white/5 justify-center items-center">
+                          <ImageIcon size={16} color="#6B7280" />
+                        </View>
+                      )}
+                      <View className="ml-2 w-24 flex-row items-center justify-between">
+                        <Text className="text-gray-300 text-xs font-bold flex-1 mr-1" numberOfLines={1}>{name}</Text>
+                        <TouchableOpacity onPress={() => {
+                          const downloadUrl = att.originalUrl || att.original_url || att.fileUrl || att.file_url;
+                          downloadFile(downloadUrl, name);
+                        }}>
+                           <Download size={12} color="#6B7280" />
+                        </TouchableOpacity>
                       </View>
-                    ) : (
-                      <View className="w-8 h-8 rounded bg-white/5 justify-center items-center">
-                        <ImageIcon size={16} color="#6B7280" />
-                      </View>
-                    )}
-                    <View className="ml-2 w-24 flex-row items-center justify-between">
-                      <Text className="text-gray-300 text-xs font-bold flex-1 mr-1" numberOfLines={1}>{name}</Text>
-                      <TouchableOpacity onPress={() => {
-                        const downloadUrl = att.originalUrl || att.original_url || att.fileUrl || att.file_url;
-                        downloadFile(downloadUrl, name);
-                      }}>
-                         <Download size={12} color="#6B7280" />
-                      </TouchableOpacity>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-        )}
-      </GlassCard>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
+        </GlassCard>
+      </TouchableOpacity>
     );
   };
 
@@ -572,226 +584,387 @@ export default function NotesScreen() {
             <View {...modalPanResponder.panHandlers} className="w-full pb-6 items-center">
               <View className="w-12 h-1.5 bg-white/10 rounded-full" />
             </View>
-            
-            <View className="flex-row justify-between items-center mb-6">
+              <View className="flex-row justify-between items-center mb-6">
               <Text className="text-white text-xl font-bold uppercase tracking-widest">
-                {editingNote ? 'Notiz bearbeiten' : 'Neue Notiz'}
+                {!isModalEditMode && editingNote ? 'Notiz Details' : editingNote ? 'Notiz bearbeiten' : 'Neue Notiz'}
               </Text>
               <TouchableOpacity onPress={closeModal}>
-                <Text className="text-gray-500 font-bold uppercase text-xs tracking-widest">Abbrechen</Text>
+                <Text className="text-gray-500 font-bold uppercase text-xs tracking-widest">
+                  {!isModalEditMode && editingNote ? 'Schließen' : 'Abbrechen'}
+                </Text>
               </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} className="flex-1">
-              {/* Title Input */}
-              <View className="mb-5">
-                <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Titel</Text>
-                <GlassCard className="p-0 overflow-hidden bg-black/40 border border-white/5">
-                  <TextInput
-                    value={formData.title}
-                    onChangeText={(text) => setFormData({ ...formData, title: text })}
-                    placeholder="z.B. Material fehlt"
-                    placeholderTextColor="#4B5563"
-                    className="p-4 text-white font-bold"
-                  />
-                </GlassCard>
-              </View>
-
-              {/* Column: Date & Time */}
-              <View className="flex-row justify-between mb-5">
-                {/* Date Picker */}
-                <View className="flex-1 mr-2">
-                  <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Datum</Text>
-                  <TouchableOpacity onPress={() => setShowDatePicker(true)}>
-                    <GlassCard className="p-4 bg-black/40 border border-white/5 flex-row items-center justify-between">
-                      <CalendarIcon size={16} color="#6B7280" />
-                      <Text className="text-white font-bold">{formatDate(formData.date)}</Text>
-                    </GlassCard>
-                  </TouchableOpacity>
-                  {showDatePicker && (
-                    <DateTimePicker
-                      value={new Date(formData.date)}
-                      mode="date"
-                      display="default"
-                      onChange={onDateChange}
-                    />
-                  )}
-                </View>
-
-                {/* Time Picker */}
-                <View className="flex-1 ml-2">
-                  <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Zeit (Opt.)</Text>
-                  <TouchableOpacity onPress={() => setShowTimePicker(true)}>
-                    <GlassCard className="p-4 bg-black/40 border border-white/5 flex-row items-center justify-between">
-                      <Clock size={16} color="#6B7280" />
-                      <Text className="text-white font-bold">{formData.time || '--:--'}</Text>
-                    </GlassCard>
-                  </TouchableOpacity>
-                  {showTimePicker && (
-                    <DateTimePicker
-                      value={formData.time ? (() => {
-                        const [h, m] = formData.time.split(':');
-                        const d = new Date();
-                        d.setHours(parseInt(h), parseInt(m));
-                        return d;
-                      })() : new Date()}
-                      mode="time"
-                      is24Hour={true}
-                      display="default"
-                      onChange={onTimeChange}
-                    />
-                  )}
-                </View>
-              </View>
-
-              {/* Row: Color Selection */}
-              <View className="mb-5">
-                <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Farbe</Text>
-                <GlassCard className="p-4 bg-black/40 border border-white/5 flex-row items-center justify-between">
-                  <Palette size={16} color={formData.color} />
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} className="ml-2">
-                    {COLORS.map((c) => (
-                      <TouchableOpacity
-                        key={c}
-                        onPress={() => setFormData({ ...formData, color: c })}
-                        className={`w-6 h-6 rounded-full mx-1 items-center justify-center ${formData.color === c ? 'border border-white scale-110' : ''}`}
-                        style={{ backgroundColor: c }}
-                      />
-                    ))}
-                  </ScrollView>
-                </GlassCard>
-              </View>
-
-              {/* Project Selection */}
-              <View className="mb-5">
-                <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Projekt (Optional)</Text>
-                <GlassCard className="p-3 bg-black/40 border border-white/5">
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
-                    <TouchableOpacity
-                      onPress={() => setFormData({ ...formData, project_id: '', showInDiary: false })}
-                      className={`px-3 py-2 rounded-lg mr-2 border flex-row items-center ${formData.project_id === '' ? 'bg-white/10 border-white/20' : 'bg-transparent border-transparent'}`}
-                    >
-                      <Briefcase size={14} color={formData.project_id === '' ? '#fff' : '#6B7280'} className="mr-2" />
-                      <Text className={`text-xs font-bold ${formData.project_id === '' ? 'text-white' : 'text-gray-400'}`}>Kein Projekt ausgewählt</Text>
-                    </TouchableOpacity>
-                    {projects.map((p: any) => (
-                      <TouchableOpacity
-                        key={p.id}
-                        onPress={() => setFormData({ ...formData, project_id: p.id })}
-                        className={`px-3 py-2 rounded-lg mr-2 border ${formData.project_id === p.id ? 'bg-brand-blue border-brand-blue' : 'bg-white/5 border-white/5'}`}
-                      >
-                        <Text className={`text-xs font-bold ${formData.project_id === p.id ? 'text-white' : 'text-gray-400'}`}>
-                          {p.project_number} - {p.title}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </GlassCard>
-              </View>
-
-              {/* Show In Diary Switch */}
-              {formData.project_id ? (
-                <View className="mb-5 flex-row justify-between items-center bg-black/40 border border-white/5 p-4 rounded-xl">
-                  <View className="flex-1 mr-4">
-                    <Text className="text-white font-bold text-sm">Im Bautagebuch anzeigen</Text>
-                    <Text className="text-gray-500 text-[10px] mt-1">Soll dieser Eintrag im öffentlichen Bautagebuch des Projekts erscheinen?</Text>
+              {!isModalEditMode && editingNote ? (
+                <View>
+                  {/* Title & Color bar */}
+                  <View className="flex-row items-center mb-4">
+                    <View className="w-4 h-4 rounded-full mr-3" style={{ backgroundColor: editingNote.color || '#3B82F6' }} />
+                    <Text selectable={true} className="text-white text-xl font-bold flex-1 leading-snug">
+                      {editingNote.title}
+                    </Text>
                   </View>
-                  <TouchableOpacity
-                    onPress={() => setFormData({ ...formData, showInDiary: !formData.showInDiary })}
-                    activeOpacity={0.8}
-                    className={`w-12 h-6 rounded-full justify-center px-0.5 ${formData.showInDiary ? 'bg-brand-blue' : 'bg-white/10'}`}
-                  >
-                    <View className={`w-5 h-5 rounded-full bg-white shadow-sm ${formData.showInDiary ? 'self-end' : 'self-start'}`} />
-                  </TouchableOpacity>
+
+                  {/* Metadata: Date, Time & Project badge */}
+                  <View className="flex-row flex-wrap items-center gap-3 bg-white/5 p-4 rounded-2xl border border-white/5 mb-4">
+                    <View className="flex-row items-center">
+                      <CalendarIcon size={14} color="#3B82F6" />
+                      <Text className="text-gray-300 text-xs ml-1.5 font-semibold">
+                        {formatDate(editingNote.date)}
+                      </Text>
+                    </View>
+                    {editingNote.time && (
+                      <View className="flex-row items-center">
+                        <Clock size={14} color="#10B981" />
+                        <Text className="text-gray-300 text-xs ml-1.5 font-semibold">
+                          {editingNote.time}
+                        </Text>
+                      </View>
+                    )}
+                    {editingNote.project && (
+                      <TouchableOpacity 
+                        onPress={() => {
+                          closeModal();
+                          navigation.navigate('ProjectDetail', { id: editingNote.project.id });
+                        }}
+                        className="flex-row items-center bg-brand-blue/20 border border-brand-blue/30 px-2.5 py-1 rounded-lg"
+                      >
+                        <Briefcase size={12} color="#3B82F6" />
+                        <Text className="text-blue-400 text-xs ml-1.5 font-bold">
+                          {editingNote.project.project_number}
+                        </Text>
+                        <ExternalLink size={10} color="#3B82F6" className="ml-1" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {/* Public Diary Switch */}
+                  {editingNote.project && (
+                    <View className="mb-4 flex-row justify-between items-center bg-white/5 border border-white/5 p-4 rounded-2xl">
+                      <View className="flex-1 mr-4">
+                        <Text className="text-white font-bold text-sm">Im Bautagebuch anzeigen</Text>
+                        <Text className="text-gray-500 text-[10px] mt-0.5">Soll diese Notiz im öffentlichen Bautagebuch erscheinen?</Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => {
+                          const data = new FormData();
+                          data.append('showInDiary', (!editingNote.showInDiary).toString());
+                          updateMutation.mutate({ id: editingNote.id, data });
+                        }}
+                        activeOpacity={0.8}
+                        className={`w-12 h-6 rounded-full justify-center px-0.5 ${editingNote.showInDiary ? 'bg-brand-blue' : 'bg-white/10'}`}
+                      >
+                        <View className={`w-5 h-5 rounded-full bg-white shadow-sm ${editingNote.showInDiary ? 'self-end' : 'self-start'}`} />
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  {/* Note Content Block */}
+                  <View className="mb-4 bg-white/5 border border-white/5 p-5 rounded-2xl">
+                    <View className="flex-row justify-between items-center mb-3">
+                      <Text className="text-gray-400 text-xs font-bold uppercase tracking-wider">Inhalt</Text>
+                      <TouchableOpacity 
+                        onPress={() => handleCopyContent(editingNote.content)}
+                        className="flex-row items-center bg-white/5 px-2.5 py-1 rounded-lg border border-white/5"
+                      >
+                        <Copy size={12} color="#3B82F6" className="mr-1.5" />
+                        <Text className="text-white text-[10px] font-bold uppercase">Kopieren</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <Text selectable={true} className="text-gray-200 text-sm leading-relaxed whitespace-pre-wrap">
+                      {editingNote.content}
+                    </Text>
+                  </View>
+
+                  {/* Status Block */}
+                  <View className="mb-4 flex-row justify-between items-center bg-white/5 border border-white/5 p-4 rounded-2xl">
+                    <View>
+                      <Text className="text-white font-bold text-sm">Erledigt-Status</Text>
+                      <Text className="text-gray-500 text-[10px] mt-0.5">Markiere diese Notiz als erledigt oder offen</Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => toggleDone(editingNote)}
+                      className={`flex-row items-center px-4 py-2 rounded-xl border ${editingNote.isDone ? 'bg-emerald-500/20 border-emerald-500/30' : 'bg-white/5 border-white/10'}`}
+                    >
+                      <CheckCircle2 size={16} color={editingNote.isDone ? '#10B981' : '#6B7280'} className="mr-2" />
+                      <Text className={`text-xs font-bold ${editingNote.isDone ? 'text-emerald-400' : 'text-gray-400'}`}>
+                        {editingNote.isDone ? 'Erledigt' : 'Offen'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Attachments Section */}
+                  {editingNote.attachments && editingNote.attachments.length > 0 && (
+                    <View className="mb-4 bg-white/5 border border-white/5 p-5 rounded-2xl">
+                      <Text className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-3">Anhänge</Text>
+                      <View className="flex-row flex-wrap gap-2">
+                        {editingNote.attachments.map((att: any) => {
+                          const name = att.fileName || att.file_name;
+                          const type = att.fileType || att.content_type;
+                          return (
+                            <TouchableOpacity
+                              key={att.id}
+                              onPress={() => openAttachment(att)}
+                              className="w-full flex-row items-center justify-between bg-black/30 border border-white/5 rounded-xl p-3"
+                            >
+                              <View className="flex-row items-center flex-1 mr-3">
+                                <View className="w-10 h-10 rounded-lg bg-brand-blue/10 justify-center items-center">
+                                  <FileText size={20} color="#3B82F6" />
+                                </View>
+                                <Text className="text-gray-200 text-xs font-bold ml-3 flex-1" numberOfLines={1}>
+                                  {name}
+                                </Text>
+                              </View>
+                              <TouchableOpacity 
+                                onPress={() => {
+                                  const downloadUrl = att.originalUrl || att.original_url || att.fileUrl || att.file_url;
+                                  downloadFile(downloadUrl, name);
+                                }}
+                                className="p-2 bg-white/5 rounded-lg border border-white/5"
+                              >
+                                <Download size={14} color="#6B7280" />
+                              </TouchableOpacity>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  )}
                 </View>
-              ) : null}
+              ) : (
+                <View>
+                  {/* Title Input */}
+                  <View className="mb-5">
+                    <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Titel</Text>
+                    <GlassCard className="p-0 overflow-hidden bg-black/40 border border-white/5">
+                      <TextInput
+                        value={formData.title}
+                        onChangeText={(text) => setFormData({ ...formData, title: text })}
+                        placeholder="z.B. Material fehlt"
+                        placeholderTextColor="#4B5563"
+                        className="p-4 text-white font-bold"
+                      />
+                    </GlassCard>
+                  </View>
 
-              {/* Content Input */}
-              <View className="mb-5">
-                <View className="flex-row justify-between items-center mb-2 ml-1">
-                   <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">Inhalt</Text>
-                   <TouchableOpacity 
-                      onPress={() => handleCopyContent(formData.content)}
-                      className="flex-row items-center bg-white/5 px-3 py-1.5 rounded-lg border border-white/5"
-                   >
-                      <Copy size={12} color="#3B82F6" className="mr-2" />
-                      <Text className="text-white text-[10px] font-bold uppercase tracking-widest">Kopieren</Text>
-                   </TouchableOpacity>
-                </View>
-                <GlassCard className="p-0 overflow-hidden bg-black/40 border border-white/5">
-                  <TextInput
-                    value={formData.content}
-                    onChangeText={(text) => setFormData({ ...formData, content: text })}
-                    placeholder="Notizendetails eingeben..."
-                    placeholderTextColor="#4B5563"
-                    className="p-4 text-white text-sm"
-                    multiline
-                    numberOfLines={6}
-                    textAlignVertical="top"
-                  />
-                </GlassCard>
-              </View>
+                  {/* Column: Date & Time */}
+                  <View className="flex-row justify-between mb-5">
+                    {/* Date Picker */}
+                    <View className="flex-1 mr-2">
+                      <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Datum</Text>
+                      <TouchableOpacity onPress={() => setShowDatePicker(true)}>
+                        <GlassCard className="p-4 bg-black/40 border border-white/5 flex-row items-center justify-between">
+                          <CalendarIcon size={16} color="#6B7280" />
+                          <Text className="text-white font-bold">{formatDate(formData.date)}</Text>
+                        </GlassCard>
+                      </TouchableOpacity>
+                      {showDatePicker && (
+                        <DateTimePicker
+                          value={new Date(formData.date)}
+                          mode="date"
+                          display="default"
+                          onChange={onDateChange}
+                        />
+                      )}
+                    </View>
 
-              {/* Attachments Section */}
-              <View className="mb-5">
-                <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Anhänge (Bilder, Videos, Dokumentе)</Text>
-                <TouchableOpacity onPress={handlePickMedia} activeOpacity={0.8}>
-                   <GlassCard className="p-6 bg-black/40 border border-dashed border-white/20 items-center justify-center">
-                      <UploadCloud size={32} color="#6B7280" className="mb-2" />
-                      <Text className="text-gray-400 font-bold text-xs uppercase tracking-widest">Dateien auswählen</Text>
-                   </GlassCard>
-                </TouchableOpacity>
+                    {/* Time Picker */}
+                    <View className="flex-1 ml-2">
+                      <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Zeit (Opt.)</Text>
+                      <TouchableOpacity onPress={() => setShowTimePicker(true)}>
+                        <GlassCard className="p-4 bg-black/40 border border-white/5 flex-row items-center justify-between">
+                          <Clock size={16} color="#6B7280" />
+                          <Text className="text-white font-bold">{formData.time || '--:--'}</Text>
+                        </GlassCard>
+                      </TouchableOpacity>
+                      {showTimePicker && (
+                        <DateTimePicker
+                          value={formData.time ? (() => {
+                            const [h, m] = formData.time.split(':');
+                            const d = new Date();
+                            d.setHours(parseInt(h), parseInt(m));
+                            return d;
+                          })() : new Date()}
+                          mode="time"
+                          is24Hour={true}
+                          display="default"
+                          onChange={onTimeChange}
+                        />
+                      )}
+                    </View>
+                  </View>
 
-                {attachments.length > 0 && (
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row py-4">
-                        {attachments.map((file, i) => (
-                            <View key={i} className="mr-3 relative">
-                                {file.type === 'video' ? (
-                                    <View className="w-20 h-20 rounded-xl bg-gray-800 justify-center items-center border border-white/10">
-                                        <Text className="text-white font-bold text-xs">VIDEO</Text>
-                                    </View>
-                                ) : (
-                                    <Image source={{ uri: file.uri }} className="w-20 h-20 rounded-xl border border-white/10" />
-                                )}
-                                <TouchableOpacity 
-                                    onPress={() => removeAttachment(i)}
-                                    className="absolute -top-2 -right-2 bg-[#1A1A1A] w-6 h-6 rounded-full items-center justify-center border border-white/20"
-                                >
-                                    <Text className="text-white font-bold text-[10px]">X</Text>
-                                </TouchableOpacity>
-                            </View>
+                  {/* Row: Color Selection */}
+                  <View className="mb-5">
+                    <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Farbe</Text>
+                    <GlassCard className="p-4 bg-black/40 border border-white/5 flex-row items-center justify-between">
+                      <Palette size={16} color={formData.color} />
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} className="ml-2">
+                        {COLORS.map((c) => (
+                          <TouchableOpacity
+                            key={c}
+                            onPress={() => setFormData({ ...formData, color: c })}
+                            className={`w-6 h-6 rounded-full mx-1 items-center justify-center ${formData.color === c ? 'border border-white scale-110' : ''}`}
+                            style={{ backgroundColor: c }}
+                          />
                         ))}
-                    </ScrollView>
-                )}
-              </View>
+                      </ScrollView>
+                    </GlassCard>
+                  </View>
 
-              <View className="h-10" />
+                  {/* Project Selection */}
+                  <View className="mb-5">
+                    <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Projekt (Optional)</Text>
+                    <GlassCard className="p-3 bg-black/40 border border-white/5">
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
+                        <TouchableOpacity
+                          onPress={() => setFormData({ ...formData, project_id: '', showInDiary: false })}
+                          className={`px-3 py-2 rounded-lg mr-2 border flex-row items-center ${formData.project_id === '' ? 'bg-white/10 border-white/20' : 'bg-transparent border-transparent'}`}
+                        >
+                          <Briefcase size={14} color={formData.project_id === '' ? '#fff' : '#6B7280'} className="mr-2" />
+                          <Text className={`text-xs font-bold ${formData.project_id === '' ? 'text-white' : 'text-gray-400'}`}>Kein Projekt ausgewählt</Text>
+                        </TouchableOpacity>
+                        {projects.map((p: any) => (
+                          <TouchableOpacity
+                            key={p.id}
+                            onPress={() => setFormData({ ...formData, project_id: p.id })}
+                            className={`px-3 py-2 rounded-lg mr-2 border ${formData.project_id === p.id ? 'bg-brand-blue border-brand-blue' : 'bg-white/5 border-white/5'}`}
+                          >
+                            <Text className={`text-xs font-bold ${formData.project_id === p.id ? 'text-white' : 'text-gray-400'}`}>
+                              {p.project_number} - {p.title}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </GlassCard>
+                  </View>
+
+                  {/* Show In Diary Switch */}
+                  {formData.project_id ? (
+                    <View className="mb-5 flex-row justify-between items-center bg-black/40 border border-white/5 p-4 rounded-xl">
+                      <View className="flex-1 mr-4">
+                        <Text className="text-white font-bold text-sm">Im Bautagebuch anzeigen</Text>
+                        <Text className="text-gray-500 text-[10px] mt-1">Soll dieser Eintrag im öffentlichen Bautagebuch des Projekts erscheinen?</Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => setFormData({ ...formData, showInDiary: !formData.showInDiary })}
+                        activeOpacity={0.8}
+                        className={`w-12 h-6 rounded-full justify-center px-0.5 ${formData.showInDiary ? 'bg-brand-blue' : 'bg-white/10'}`}
+                      >
+                        <View className={`w-5 h-5 rounded-full bg-white shadow-sm ${formData.showInDiary ? 'self-end' : 'self-start'}`} />
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
+
+                  {/* Content Input */}
+                  <View className="mb-5">
+                    <View className="flex-row justify-between items-center mb-2 ml-1">
+                       <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">Inhalt</Text>
+                       <TouchableOpacity 
+                          onPress={() => handleCopyContent(formData.content)}
+                          className="flex-row items-center bg-white/5 px-3 py-1.5 rounded-lg border border-white/5"
+                       >
+                          <Copy size={12} color="#3B82F6" className="mr-2" />
+                          <Text className="text-white text-[10px] font-bold uppercase tracking-widest">Kopieren</Text>
+                       </TouchableOpacity>
+                    </View>
+                    <GlassCard className="p-0 overflow-hidden bg-black/40 border border-white/5">
+                      <TextInput
+                        value={formData.content}
+                        onChangeText={(text) => setFormData({ ...formData, content: text })}
+                        placeholder="Notizendetails eingeben..."
+                        placeholderTextColor="#4B5563"
+                        className="p-4 text-white text-sm"
+                        multiline
+                        numberOfLines={6}
+                        textAlignVertical="top"
+                      />
+                    </GlassCard>
+                  </View>
+
+                  {/* Attachments Section */}
+                  <View className="mb-5">
+                    <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Anhänge (Bilder, Videos, Dokumentе)</Text>
+                    <TouchableOpacity onPress={handlePickMedia} activeOpacity={0.8}>
+                       <GlassCard className="p-6 bg-black/40 border border-dashed border-white/20 items-center justify-center">
+                          <UploadCloud size={32} color="#6B7280" className="mb-2" />
+                          <Text className="text-gray-400 font-bold text-xs uppercase tracking-widest">Dateien auswählen</Text>
+                       </GlassCard>
+                    </TouchableOpacity>
+
+                    {attachments.length > 0 && (
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row py-4">
+                            {attachments.map((file, i) => (
+                                <View key={i} className="mr-3 relative">
+                                    {file.type === 'video' ? (
+                                        <View className="w-20 h-20 rounded-xl bg-gray-800 justify-center items-center border border-white/10">
+                                            <Text className="text-white font-bold text-xs">VIDEO</Text>
+                                        </View>
+                                    ) : (
+                                        <Image source={{ uri: file.uri }} className="w-20 h-20 rounded-xl border border-white/10" />
+                                    )}
+                                    <TouchableOpacity 
+                                        onPress={() => removeAttachment(i)}
+                                        className="absolute -top-2 -right-2 bg-[#1A1A1A] w-6 h-6 rounded-full items-center justify-center border border-white/20"
+                                    >
+                                        <Text className="text-white font-bold text-[10px]">X</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            ))}
+                        </ScrollView>
+                    )}
+                  </View>
+                </View>
+              )}
             </ScrollView>
 
             <View className="flex-row justify-between pt-4 border-t border-white/5">
-              <TouchableOpacity 
-                onPress={closeModal}
-                className="bg-white/5 flex-1 py-4 rounded-xl items-center mr-2 border border-white/10"
-              >
-                  <Text className="text-white font-bold text-sm tracking-widest">
-                    Abbrechen
-                  </Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                onPress={handleSubmit}
-                disabled={createMutation.isPending || updateMutation.isPending}
-                className="bg-brand-blue flex-1 py-4 rounded-xl items-center shadow-lg shadow-blue-500/30 border border-brand-blue"
-              >
-                {(createMutation.isPending || updateMutation.isPending) ? (
-                  <ActivityIndicator color="white" size="small" />
-                ) : (
-                  <Text className="text-white font-bold text-sm tracking-widest">
-                    {editingNote ? 'Speichern' : 'Notiz speichern'}
-                  </Text>
-                )}
-              </TouchableOpacity>
+              {!isModalEditMode && editingNote ? (
+                <>
+                  <TouchableOpacity 
+                    onPress={closeModal}
+                    className="bg-white/5 flex-1 py-4 rounded-xl items-center mr-2 border border-white/10"
+                  >
+                      <Text className="text-white font-bold text-sm tracking-widest">
+                        SCHLIESSEN
+                      </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    onPress={() => setIsModalEditMode(true)}
+                    className="bg-brand-blue flex-1 py-4 rounded-xl items-center shadow-lg shadow-blue-500/30 border border-brand-blue"
+                  >
+                      <Text className="text-white font-bold text-sm tracking-widest">
+                        BEARBEITEN
+                      </Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <TouchableOpacity 
+                    onPress={closeModal}
+                    className="bg-white/5 flex-1 py-4 rounded-xl items-center mr-2 border border-white/10"
+                  >
+                      <Text className="text-white font-bold text-sm tracking-widest">
+                        Abbrechen
+                      </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    onPress={handleSubmit}
+                    disabled={createMutation.isPending || updateMutation.isPending}
+                    className="bg-brand-blue flex-1 py-4 rounded-xl items-center shadow-lg shadow-blue-500/30 border border-brand-blue"
+                  >
+                    {(createMutation.isPending || updateMutation.isPending) ? (
+                      <ActivityIndicator color="white" size="small" />
+                    ) : (
+                      <Text className="text-white font-bold text-sm tracking-widest">
+                        {editingNote ? 'Speichern' : 'Notiz speichern'}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
-
           </GlassCard>
         </BlurView>
 

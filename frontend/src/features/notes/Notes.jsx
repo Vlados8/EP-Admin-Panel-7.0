@@ -28,6 +28,8 @@ const Notes = () => {
     const [filePreviews, setFilePreviews] = useState([]);
     const [editingNote, setEditingNote] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isModalEditMode, setIsModalEditMode] = useState(false);
+    const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
 
     // Gallery State
     const [isGalleryOpen, setIsGalleryOpen] = useState(false);
@@ -73,9 +75,11 @@ const Notes = () => {
         filePreviews.forEach(p => URL.revokeObjectURL(p.url));
         setFilePreviews([]);
         setEditingNote(null);
+        setIsModalEditMode(false);
+        setIsProjectDropdownOpen(false);
     };
 
-    const handleOpenModal = (note = null) => {
+    const handleOpenModal = (note = null, forceEdit = false) => {
         if (note) {
             setEditingNote(note);
             setFormData({
@@ -87,8 +91,10 @@ const Notes = () => {
                 project_id: note.project_id || '',
                 isDone: note.isDone
             });
+            setIsModalEditMode(forceEdit);
         } else {
             resetForm();
+            setIsModalEditMode(true);
         }
         setIsModalOpen(true);
     };
@@ -260,7 +266,7 @@ const Notes = () => {
                         const isDone = note.isDone;
 
                         return (
-                            <div key={note.id} className={`glass-card p-5 rounded-2xl border-l-[6px] ${getColorClass(note.color)} ${isDone ? 'opacity-60' : ''} flex flex-col justify-between hover:-translate-y-1 transition-transform duration-300 shadow-lg`}>
+                            <div key={note.id} onClick={() => handleOpenModal(note, false)} className={`glass-card p-5 rounded-2xl border-l-[6px] ${getColorClass(note.color)} ${isDone ? 'opacity-60' : ''} flex flex-col justify-between hover:-translate-y-1 transition-all duration-300 shadow-lg cursor-pointer`}>
                                 <div>
                                     <div className="flex justify-between items-start mb-3">
                                         <div className="flex flex-col gap-1">
@@ -272,7 +278,7 @@ const Notes = () => {
                                         </div>
                                         <div className="flex gap-2">
                                             <button
-                                                onClick={(e) => { e.stopPropagation(); handleOpenModal(note); }}
+                                                onClick={(e) => { e.stopPropagation(); handleOpenModal(note, true); }}
                                                 className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/5 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
                                                 title="Notiz bearbeiten"
                                             >
@@ -344,7 +350,8 @@ const Notes = () => {
                     <div className="glass-card w-full max-w-xl rounded-2xl border border-white/10 shadow-2xl animate-[slideUp_0.3s_ease-out] my-auto">
                         <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/5 rounded-t-2xl">
                             <h2 className="text-xl font-semibold text-white flex items-center gap-3">
-                                <i className="fa-solid fa-note-sticky text-blue-400"></i> {editingNote ? 'Notiz bearbeiten' : 'Neue Notiz'}
+                                <i className="fa-solid fa-note-sticky text-blue-400"></i>
+                                {!isModalEditMode && editingNote ? 'Notiz Details' : editingNote ? 'Notiz bearbeiten' : 'Neue Notiz'}
                             </h2>
                              <button 
                                 onClick={() => { setIsModalOpen(false); resetForm(); }} 
@@ -353,175 +360,346 @@ const Notes = () => {
                                 <i className="fa-solid fa-xmark"></i>
                             </button>
                         </div>
-                        <form onSubmit={handleSubmit} className="p-6 space-y-5">
-                            <div className="space-y-1">
-                                <label className="text-xs font-medium text-gray-400 pl-1">Titel</label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={formData.title}
-                                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                                    className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 px-4 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors"
-                                    placeholder="Titel der Notiz..."
-                                />
-                            </div>
+                        
+                        {!isModalEditMode && editingNote ? (
+                            /* Read-only Detailed View Mode */
+                            <div className="p-6 space-y-5">
+                                {/* Title with color indicator */}
+                                <div className="flex items-center gap-3">
+                                    <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: editingNote.color === 'red' ? '#EF4444' : editingNote.color === 'green' ? '#10B981' : editingNote.color === 'yellow' ? '#F59E0B' : editingNote.color === 'purple' ? '#8B5CF6' : '#3B82F6' }}></span>
+                                    <h3 className="text-xl font-bold text-white leading-tight">{editingNote.title}</h3>
+                                </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                    <label className="text-xs font-medium text-gray-400 pl-1">Datum</label>
-                                    <input
-                                        type="date"
-                                        required
-                                        value={formData.date}
-                                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                                        className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 px-4 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors [&::-webkit-calendar-picker-indicator]:invert"
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-xs font-medium text-gray-400 pl-1">Zeit</label>
-                                    <input
-                                        type="time"
-                                        value={formData.time}
-                                        onChange={(e) => setFormData({ ...formData, time: e.target.value })}
-                                        className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 px-4 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors [&::-webkit-calendar-picker-indicator]:invert"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                    <label className="text-xs font-medium text-gray-400 pl-1">Projekt (Optional)</label>
-                                    <select
-                                        value={formData.project_id}
-                                        onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
-                                        className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 px-4 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors appearance-none [&>option]:bg-gray-900"
-                                    >
-                                        <option value="">Kein Projekt ausgewählt</option>
-                                        {projects.map(project => (
-                                            <option key={project.id} value={project.id}>
-                                                {project.project_number} - {project.title}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-xs font-medium text-gray-400 pl-1">Farbe</label>
-                                    <div className="flex gap-2 pt-1">
-                                        {['blue', 'red', 'green', 'yellow', 'purple'].map(c => (
-                                            <button
-                                                key={c}
-                                                type="button"
-                                                onClick={() => setFormData({ ...formData, color: c })}
-                                                className={`w-6 h-6 rounded-full border-2 transition-all ${formData.color === c ? 'border-white scale-125' : 'border-transparent opacity-50'}`}
-                                                style={{ backgroundColor: c === 'blue' ? '#3B82F6' : c === 'red' ? '#EF4444' : c === 'green' ? '#10B981' : c === 'yellow' ? '#F59E0B' : '#8B5CF6' }}
-                                            ></button>
-                                        ))}
+                                {/* Metadata Grid */}
+                                <div className="grid grid-cols-2 gap-4 bg-white/5 border border-white/10 rounded-xl p-4">
+                                    <div className="flex items-center gap-2 text-sm text-gray-300">
+                                        <i className="fa-regular fa-calendar text-blue-400"></i>
+                                        <span>{new Date(editingNote.date).toLocaleDateString('de-DE')}</span>
                                     </div>
+                                    {editingNote.time && (
+                                        <div className="flex items-center gap-2 text-sm text-gray-300">
+                                            <i className="fa-regular fa-clock text-emerald-400"></i>
+                                            <span>{editingNote.time}</span>
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
 
-                            <div className="space-y-1">
-                                <label className="text-xs font-medium text-gray-400 pl-1">Inhalt</label>
-                                <textarea
-                                    required
-                                    rows="6"
-                                    value={formData.content}
-                                    onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                                    className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors resize-none"
-                                    placeholder="Inhalt der Notiz..."
-                                ></textarea>
-                            </div>
-
-                            {/* Existing Attachments */}
-                            {editingNote && editingNote.attachments && editingNote.attachments.length > 0 && (
-                                <div className="space-y-2">
-                                    <label className="text-xs font-medium text-gray-400 pl-1">Aktuelle Anhänge</label>
-                                    <div className="grid grid-cols-1 gap-2">
-                                        {editingNote.attachments.map(att => (
-                                            <div key={att.id} className="flex items-center justify-between bg-black/20 border border-white/5 rounded-xl p-2.5">
-                                                <div className="flex items-center gap-3 min-w-0">
-                                                    <i className={`fa-solid ${att.content_type?.startsWith('image/') ? 'fa-image text-emerald-400' : att.content_type?.startsWith('video/') ? 'fa-video text-blue-400' : 'fa-file text-gray-400'}`}></i>
-                                                    <span className="text-xs text-gray-300 truncate">{att.file_name}</span>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleDeleteAttachment(att.id)}
-                                                    className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                                                >
-                                                    <i className="fa-solid fa-trash-can text-xs"></i>
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                             {/* File Upload Grid Preview */}
-                             <div className="space-y-1">
-                                <label className="text-xs font-medium text-gray-400 pl-1">Anhänge (Bilder, Videos, Dokumentе)</label>
-                                
-                                {filePreviews.length > 0 && (
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3">
-                                        {filePreviews.map((preview, idx) => (
-                                            <div key={idx} className="relative group/preview aspect-video bg-black/40 rounded-xl overflow-hidden border border-white/10">
-                                                {preview.type.startsWith('image/') ? (
-                                                    <img crossOrigin="anonymous" src={preview.url} alt="" className="w-full h-full object-cover" />
-                                                ) : (
-                                                    <div className="w-full h-full flex flex-col items-center justify-center gap-1 p-2">
-                                                        <i className={`fa-solid ${preview.type.startsWith('video/') ? 'fa-video text-blue-400' : 'fa-file text-gray-400'} text-xl`}></i>
-                                                        <span className="text-[10px] text-gray-400 truncate w-full text-center px-1">{preview.name}</span>
-                                                    </div>
-                                                )}
-                                                <button
-                                                    type="button"
-                                                    onClick={() => removeSelectedFile(idx)}
-                                                    className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover/preview:opacity-100 transition-opacity shadow-lg"
-                                                >
-                                                    <i className="fa-solid fa-xmark text-xs"></i>
-                                                </button>
-                                            </div>
-                                        ))}
+                                {/* Project Link */}
+                                {editingNote.project && (
+                                    <div className="flex flex-col gap-1.5">
+                                        <span className="text-xs text-gray-500 uppercase tracking-wider font-bold pl-1">Zugeordnetes Projekt</span>
+                                        <div 
+                                            onClick={() => { setIsModalOpen(false); navigate(`/projekte/${editingNote.project.id}`); }}
+                                            className="flex items-center gap-2 bg-emerald-400/10 hover:bg-emerald-400/20 border border-emerald-400/20 rounded-xl p-3 cursor-pointer transition-colors text-emerald-400"
+                                        >
+                                            <i className="fa-solid fa-folder text-base"></i>
+                                            <span className="text-sm font-semibold">{editingNote.project.project_number} - {editingNote.project.title}</span>
+                                            <i className="fa-solid fa-arrow-up-right-from-square text-xs ml-auto"></i>
+                                        </div>
                                     </div>
                                 )}
 
-                                <div className="relative group">
-                                    <input
-                                        type="file"
-                                        multiple
-                                        onChange={handleFileChange}
-                                        className="hidden"
-                                        id="note-file-upload"
-                                    />
-                                    <label
-                                        htmlFor="note-file-upload"
-                                        className="w-full bg-black/20 border border-white/10 border-dashed rounded-xl py-4 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-blue-500/50 hover:bg-blue-500/5 transition-all"
+                                {/* Note Content */}
+                                <div className="flex flex-col gap-1.5">
+                                    <div className="flex justify-between items-center pl-1">
+                                        <span className="text-xs text-gray-500 uppercase tracking-wider font-bold">Inhalt</span>
+                                        <button 
+                                            onClick={async () => {
+                                                await navigator.clipboard.writeText(editingNote.content);
+                                                alert('Kopiert! Der Inhalt wurde in die Zwischenablage kopiert.');
+                                            }}
+                                            className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 font-medium transition-colors bg-blue-500/10 px-2.5 py-1 rounded-lg"
+                                        >
+                                            <i className="fa-regular fa-copy"></i> Kopieren
+                                        </button>
+                                    </div>
+                                    <div className="bg-black/25 border border-white/5 rounded-xl p-4 min-h-[120px] max-h-[300px] overflow-y-auto text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">
+                                        {editingNote.content}
+                                    </div>
+                                </div>
+
+                                {/* Public construction diary toggle/switch */}
+                                {editingNote.project && (
+                                    <div className="flex items-center justify-between bg-white/5 border border-white/10 p-4 rounded-xl">
+                                        <div className="flex flex-col gap-0.5">
+                                            <span className="text-sm font-semibold text-white">Im Bautagebuch anzeigen</span>
+                                            <span className="text-xs text-gray-400">Soll dieser Eintrag im öffentlichen Bautagebuch erscheinen?</span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={async () => {
+                                                try {
+                                                    const res = await api.patch(`/notes/${editingNote.id}`, { showInDiary: !editingNote.showInDiary });
+                                                    setEditingNote(res.data.data.note);
+                                                    fetchData();
+                                                } catch (error) {
+                                                    console.error('Error updating diary status:', error);
+                                                }
+                                            }}
+                                            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${editingNote.showInDiary ? 'bg-blue-500' : 'bg-gray-700'}`}
+                                        >
+                                            <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${editingNote.showInDiary ? 'translate-x-5' : 'translate-x-0'}`}></span>
+                                        </button>
+                                    </div>
+                                )}
+
+                                {/* Attachments visual grid */}
+                                {editingNote.attachments && editingNote.attachments.length > 0 && (
+                                    <div className="space-y-2">
+                                        <span className="text-xs text-gray-500 uppercase tracking-wider font-bold pl-1">Anhänge</span>
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                            {editingNote.attachments.map((att, idx) => (
+                                                <div 
+                                                    key={att.id} 
+                                                    onClick={() => openGallery(editingNote.attachments, idx)}
+                                                    className="group/preview aspect-video bg-black/40 rounded-xl overflow-hidden border border-white/10 flex flex-col items-center justify-center gap-1.5 p-3 hover:bg-black/60 cursor-pointer relative"
+                                                >
+                                                    {att.content_type?.startsWith('image/') ? (
+                                                        <>
+                                                            <img crossOrigin="anonymous" src={getImageUrl(att.file_url)} alt="" className="w-full h-full object-cover rounded-lg" />
+                                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/preview:opacity-100 transition-opacity flex items-center justify-center">
+                                                                <i className="fa-solid fa-eye text-white text-lg"></i>
+                                                            </div>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <i className={`fa-solid ${att.content_type?.startsWith('video/') ? 'fa-video text-blue-400' : 'fa-file text-gray-400'} text-2xl`}></i>
+                                                            <span className="text-[11px] text-gray-400 truncate w-full text-center px-1 font-medium">{att.file_name}</span>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Action Buttons */}
+                                <div className="pt-4 flex justify-end gap-3 border-t border-white/10">
+                                    <button 
+                                        type="button" 
+                                        onClick={() => { setIsModalOpen(false); resetForm(); }} 
+                                        className="px-5 py-2.5 text-sm font-medium text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-colors"
                                     >
-                                        <i className="fa-solid fa-cloud-arrow-up text-xl text-gray-500 group-hover:text-blue-400 transition-colors"></i>
-                                        <span className="text-xs text-gray-400">Dateien auswählen</span>
-                                    </label>
+                                        Schließen
+                                    </button>
+                                    <button 
+                                        type="button"
+                                        onClick={() => setIsModalEditMode(true)}
+                                        className="px-6 py-2.5 text-sm font-medium bg-blue-500 hover:bg-blue-600 text-white rounded-xl transition-all shadow-[0_4px_15px_rgba(59,130,246,0.3)] flex items-center gap-2"
+                                    >
+                                        <i className="fa-solid fa-pen-to-square"></i> Bearbeiten
+                                    </button>
                                 </div>
                             </div>
+                        ) : (
+                            /* Original form with custom dropdowns */
+                            <form onSubmit={handleSubmit} className="p-6 space-y-5">
+                                <div className="space-y-1">
+                                    <label className="text-xs font-medium text-gray-400 pl-1">Titel</label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={formData.title}
+                                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                                        className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 px-4 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors"
+                                        placeholder="Titel der Notiz..."
+                                    />
+                                </div>
 
-                            <div className="pt-4 flex justify-end gap-3 border-t border-white/10">
-                                <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 text-sm font-medium text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-colors">
-                                    Abbrechen
-                                </button>
-                                <button 
-                                    type="submit" 
-                                    disabled={isSubmitting}
-                                    className="px-6 py-2.5 text-sm font-medium bg-blue-500 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl transition-all shadow-[0_4px_15px_rgba(59,130,246,0.3)] flex items-center gap-2"
-                                >
-                                    {isSubmitting ? (
-                                        <>
-                                            <i className="fa-solid fa-circle-notch fa-spin"></i>
-                                            Wird gespeichert...
-                                        </>
-                                    ) : (
-                                        'Notiz speichern'
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-medium text-gray-400 pl-1">Datum</label>
+                                        <input
+                                            type="date"
+                                            required
+                                            value={formData.date}
+                                            onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                                            className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 px-4 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors [&::-webkit-calendar-picker-indicator]:invert"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-medium text-gray-400 pl-1">Zeit</label>
+                                        <input
+                                            type="time"
+                                            value={formData.time}
+                                            onChange={(e) => setFormData({ ...formData, time: e.target.value })}
+                                            className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 px-4 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors [&::-webkit-calendar-picker-indicator]:invert"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {/* Custom Dropdown Selector for Projects */}
+                                    <div className="space-y-1 relative">
+                                        <label className="text-xs font-medium text-gray-400 pl-1">Projekt (Optional)</label>
+                                        <div className="relative">
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsProjectDropdownOpen(!isProjectDropdownOpen)}
+                                                className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 px-4 text-sm text-white text-left focus:outline-none focus:border-blue-500 transition-colors flex items-center justify-between"
+                                            >
+                                                <span className="truncate">
+                                                    {formData.project_id 
+                                                        ? `${projects.find(p => p.id.toString() === formData.project_id.toString())?.project_number || ''} - ${projects.find(p => p.id.toString() === formData.project_id.toString())?.title || ''}` 
+                                                        : 'Kein Projekt ausgewählt'}
+                                                </span>
+                                                <i className={`fa-solid fa-chevron-down text-gray-500 text-xs transition-transform duration-200 ${isProjectDropdownOpen ? 'rotate-180' : ''}`}></i>
+                                            </button>
+
+                                            {isProjectDropdownOpen && (
+                                                <>
+                                                    <div 
+                                                        className="fixed inset-0 z-40" 
+                                                        onClick={() => setIsProjectDropdownOpen(false)}
+                                                    />
+                                                    <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto backdrop-blur-md py-1.5 animate-[fadeIn_0.15s_ease-out]">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setFormData({ ...formData, project_id: '' });
+                                                                setIsProjectDropdownOpen(false);
+                                                            }}
+                                                            className={`w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors ${!formData.project_id ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                        >
+                                                            Kein Projekt ausgewählt
+                                                        </button>
+                                                        {projects.map(project => (
+                                                            <button
+                                                                key={project.id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setFormData({ ...formData, project_id: project.id.toString() });
+                                                                    setIsProjectDropdownOpen(false);
+                                                                }}
+                                                                className={`w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate ${formData.project_id.toString() === project.id.toString() ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                            >
+                                                                {project.project_number} - {project.title}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-medium text-gray-400 pl-1">Farbe</label>
+                                        <div className="flex gap-2 pt-1">
+                                            {['blue', 'red', 'green', 'yellow', 'purple'].map(c => (
+                                                <button
+                                                    key={c}
+                                                    type="button"
+                                                    onClick={() => setFormData({ ...formData, color: c })}
+                                                    className={`w-6 h-6 rounded-full border-2 transition-all ${formData.color === c ? 'border-white scale-125' : 'border-transparent opacity-50'}`}
+                                                    style={{ backgroundColor: c === 'blue' ? '#3B82F6' : c === 'red' ? '#EF4444' : c === 'green' ? '#10B981' : c === 'yellow' ? '#F59E0B' : '#8B5CF6' }}
+                                                ></button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <label className="text-xs font-medium text-gray-400 pl-1">Inhalt</label>
+                                    <textarea
+                                        required
+                                        rows="6"
+                                        value={formData.content}
+                                        onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                                        className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors resize-none"
+                                        placeholder="Inhalt der Notiz..."
+                                    ></textarea>
+                                </div>
+
+                                {/* Existing Attachments */}
+                                {editingNote && editingNote.attachments && editingNote.attachments.length > 0 && (
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-medium text-gray-400 pl-1">Aktuelle Anhänge</label>
+                                        <div className="grid grid-cols-1 gap-2">
+                                            {editingNote.attachments.map(att => (
+                                                <div key={att.id} className="flex items-center justify-between bg-black/20 border border-white/5 rounded-xl p-2.5">
+                                                    <div className="flex items-center gap-3 min-w-0">
+                                                        <i className={`fa-solid ${att.content_type?.startsWith('image/') ? 'fa-image text-emerald-400' : att.content_type?.startsWith('video/') ? 'fa-video text-blue-400' : 'fa-file text-gray-400'}`}></i>
+                                                        <span className="text-xs text-gray-300 truncate">{att.file_name}</span>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleDeleteAttachment(att.id)}
+                                                        className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                                                    >
+                                                        <i className="fa-solid fa-trash-can text-xs"></i>
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                 {/* File Upload Grid Preview */}
+                                 <div className="space-y-1">
+                                    <label className="text-xs font-medium text-gray-400 pl-1">Anhänge (Bilder, Videos, Dokumentе)</label>
+                                    
+                                    {filePreviews.length > 0 && (
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3">
+                                            {filePreviews.map((preview, idx) => (
+                                                <div key={idx} className="relative group/preview aspect-video bg-black/40 rounded-xl overflow-hidden border border-white/10">
+                                                    {preview.type.startsWith('image/') ? (
+                                                        <img crossOrigin="anonymous" src={preview.url} alt="" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <div className="w-full h-full flex flex-col items-center justify-center gap-1 p-2">
+                                                            <i className={`fa-solid ${preview.type.startsWith('video/') ? 'fa-video text-blue-400' : 'fa-file text-gray-400'} text-xl`}></i>
+                                                            <span className="text-[10px] text-gray-400 truncate w-full text-center px-1">{preview.name}</span>
+                                                        </div>
+                                                    )}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeSelectedFile(idx)}
+                                                        className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover/preview:opacity-100 transition-opacity shadow-lg"
+                                                    >
+                                                        <i className="fa-solid fa-xmark text-xs"></i>
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
                                     )}
-                                </button>
-                            </div>
-                        </form>
+
+                                    <div className="relative group">
+                                        <input
+                                            type="file"
+                                            multiple
+                                            onChange={handleFileChange}
+                                            className="hidden"
+                                            id="note-file-upload"
+                                        />
+                                        <label
+                                            htmlFor="note-file-upload"
+                                            className="w-full bg-black/20 border border-white/10 border-dashed rounded-xl py-4 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-blue-500/50 hover:bg-blue-500/5 transition-all"
+                                        >
+                                            <i className="fa-solid fa-cloud-arrow-up text-xl text-gray-500 group-hover:text-blue-400 transition-colors"></i>
+                                            <span className="text-xs text-gray-400">Dateien auswählen</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div className="pt-4 flex justify-end gap-3 border-t border-white/10">
+                                    <button type="button" onClick={() => { setIsModalOpen(false); resetForm(); }} className="px-5 py-2.5 text-sm font-medium text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-colors">
+                                        Abbrechen
+                                    </button>
+                                    <button 
+                                        type="submit" 
+                                        disabled={isSubmitting}
+                                        className="px-6 py-2.5 text-sm font-medium bg-blue-500 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl transition-all shadow-[0_4px_15px_rgba(59,130,246,0.3)] flex items-center gap-2"
+                                    >
+                                        {isSubmitting ? (
+                                            <>
+                                                <i className="fa-solid fa-circle-notch fa-spin"></i>
+                                                Wird gespeichert...
+                                            </>
+                                        ) : (
+                                            'Notiz speichern'
+                                        )}
+                                    </button>
+                                </div>
+                            </form>
+                        )}
                     </div>
                 </div>
             )}
