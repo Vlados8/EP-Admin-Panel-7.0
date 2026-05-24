@@ -15,6 +15,42 @@ const Notes = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
 
+    const [selectedDate, setSelectedDate] = useState(null);
+    const [currentMonth, setCurrentMonth] = useState(new Date());
+
+    const monthNames = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+
+    const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
+    const getFirstDayOfMonth = (year, month) => {
+        const day = new Date(year, month, 1).getDay();
+        return day === 0 ? 6 : day - 1; // Mo-So
+    };
+
+    const notesByDate = notes.reduce((acc, note) => {
+        const dateStr = note.date ? note.date.split('T')[0] : '';
+        if (dateStr) {
+            if (!acc[dateStr]) acc[dateStr] = [];
+            acc[dateStr].push(note);
+        }
+        return acc;
+    }, {});
+
+    const renderDots = (dayNotes) => {
+        if (!dayNotes || dayNotes.length === 0) return null;
+        return (
+            <div className="flex gap-[2px] justify-center mt-[2px] w-full px-0.5 shrink-0">
+                {dayNotes.slice(0, 4).map(note => {
+                    let colorClass = 'bg-blue-500';
+                    if (note.color === 'red') colorClass = 'bg-red-500';
+                    else if (note.color === 'green') colorClass = 'bg-emerald-500';
+                    else if (note.color === 'yellow') colorClass = 'bg-yellow-500';
+                    else if (note.color === 'purple') colorClass = 'bg-purple-500';
+                    return <span key={note.id} className={`w-[4px] h-[4px] rounded-full shrink-0 ${colorClass}`} />;
+                })}
+            </div>
+        );
+    };
+
     const [formData, setFormData] = useState({
         title: '',
         content: '',
@@ -211,9 +247,16 @@ const Notes = () => {
     const canManageNotes = usePermission('MANAGE_NOTES');
 
     const displayedNotes = notes.filter(note => {
-        if (searchQuery.trim() === '') return true;
-        return note.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        const matchesSearch = searchQuery.trim() === '' || 
+               note.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                note.content?.toLowerCase().includes(searchQuery.toLowerCase());
+               
+        if (selectedDate) {
+            const noteDateStr = note.date ? note.date.split('T')[0] : '';
+            return matchesSearch && noteDateStr === selectedDate;
+        }
+        
+        return matchesSearch;
     });
 
     const getColorClass = (color) => {
@@ -250,98 +293,263 @@ const Notes = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {loading ? (
-                    <div className="col-span-full py-12 text-center text-gray-400">
-                        <i className="fa-solid fa-circle-notch fa-spin text-2xl mb-2"></i>
-                        <p>Notizen werden geladen...</p>
-                    </div>
-                ) : displayedNotes.length === 0 ? (
-                    <div className="col-span-full py-12 text-center text-gray-400 bg-white/5 rounded-2xl border border-white/10 border-dashed">
-                        <i className="fa-solid fa-note-sticky text-4xl mb-3 opacity-50"></i>
-                        <p>Keine Notizen gefunden.</p>
-                    </div>
-                ) : (
-                    displayedNotes.map(note => {
-                        const isDone = note.isDone;
+            <div className="flex flex-col lg:flex-row gap-6 items-start">
+                {/* Left Column: Calendar Sidebar */}
+                <div className="w-full lg:w-[320px] shrink-0 flex flex-col gap-5">
+                    <div className="glass-card p-5 rounded-2xl border border-white/10 flex flex-col gap-4">
+                        <div className="flex justify-between items-center pb-2 border-b border-white/5">
+                            <span className="text-sm font-semibold text-white">Kalender-Filter</span>
+                            {selectedDate && (
+                                <button 
+                                    onClick={() => setSelectedDate(null)}
+                                    className="text-xs text-blue-400 hover:text-blue-300 font-medium transition-colors"
+                                >
+                                    Filter löschen
+                                </button>
+                            )}
+                        </div>
+                        
+                        {/* Calendar Header with Navigation */}
+                        <div className="flex justify-between items-center gap-2">
+                            <button 
+                                type="button"
+                                onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
+                                className="w-7 h-7 rounded-lg flex items-center justify-center bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 transition-all text-xs"
+                            >
+                                <i className="fa-solid fa-chevron-left"></i>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const today = new Date();
+                                    setCurrentMonth(today);
+                                    setSelectedDate(today.toISOString().split('T')[0]);
+                                }}
+                                className="px-2 py-0.5 rounded-lg bg-white/5 text-blue-400 hover:text-blue-300 hover:bg-white/10 transition-all text-[10px] font-bold uppercase tracking-wider"
+                            >
+                                Heute
+                            </button>
+                            <span className="text-xs font-bold text-white uppercase tracking-wider shrink-0">
+                                {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+                            </span>
+                            <button 
+                                type="button"
+                                onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))}
+                                className="w-7 h-7 rounded-lg flex items-center justify-center bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 transition-all text-xs"
+                            >
+                                <i className="fa-solid fa-chevron-right"></i>
+                            </button>
+                        </div>
 
-                        return (
-                            <div key={note.id} onClick={() => handleOpenModal(note, false)} className={`glass-card p-5 rounded-2xl border-l-[6px] ${getColorClass(note.color)} ${isDone ? 'opacity-60' : ''} flex flex-col justify-between hover:-translate-y-1 transition-all duration-300 shadow-lg cursor-pointer`}>
-                                <div>
-                                    <div className="flex justify-between items-start mb-3">
-                                        <div className="flex flex-col gap-1">
-                                            <span className={`text-xs font-medium text-gray-400`}>
-                                                <i className="fa-regular fa-calendar mr-1"></i>
-                                                {new Date(note.date).toLocaleDateString('de-DE')}
-                                                {note.time && ` ${note.time}`}
+                        {/* Week Headers */}
+                        <div className="grid grid-cols-7 gap-1 text-center border-b border-white/5 pb-2">
+                            {['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map(day => (
+                                <span key={day} className="text-[10px] font-black text-gray-500 uppercase">{day}</span>
+                            ))}
+                        </div>
+
+                        {/* Calendar Day Cells */}
+                        <div className="grid grid-cols-7 gap-1">
+                            {(() => {
+                                const cells = [];
+                                const year = currentMonth.getFullYear();
+                                const month = currentMonth.getMonth();
+                                const daysInMonth = getDaysInMonth(year, month);
+                                const firstDayIndex = getFirstDayOfMonth(year, month);
+                                
+                                // Prev month padding
+                                const prevMonthObj = new Date(year, month, 0);
+                                const prevDaysInMonth = prevMonthObj.getDate();
+                                for (let i = firstDayIndex - 1; i >= 0; i--) {
+                                    const prevDay = prevDaysInMonth - i;
+                                    const prevDate = new Date(year, month - 1, prevDay);
+                                    const prevDateStr = prevDate.toISOString().split('T')[0];
+                                    const dayNotes = notesByDate[prevDateStr] || [];
+                                    cells.push(
+                                        <button
+                                            key={`prev-${prevDay}`}
+                                            type="button"
+                                            onClick={() => {
+                                                setSelectedDate(prevDateStr);
+                                                setCurrentMonth(new Date(year, month - 1, 1));
+                                            }}
+                                            className="aspect-square flex flex-col items-center justify-center rounded-lg p-0.5 opacity-20 hover:opacity-50 transition-opacity"
+                                        >
+                                            <span className="text-[11px] font-bold text-gray-300">{prevDay}</span>
+                                            {renderDots(dayNotes)}
+                                        </button>
+                                    );
+                                }
+
+                                // Current month days
+                                for (let d = 1; d <= daysInMonth; d++) {
+                                    const curDate = new Date(year, month, d);
+                                    const curDateStr = curDate.toISOString().split('T')[0];
+                                    const isToday = new Date().toISOString().split('T')[0] === curDateStr;
+                                    const isSelected = selectedDate === curDateStr;
+                                    const dayNotes = notesByDate[curDateStr] || [];
+                                    
+                                    cells.push(
+                                        <button
+                                            key={`cur-${d}`}
+                                            type="button"
+                                            onClick={() => setSelectedDate(curDateStr)}
+                                            className={`aspect-square flex flex-col items-center justify-center rounded-lg p-0.5 transition-all relative ${
+                                                isSelected 
+                                                    ? 'bg-blue-500 text-white font-black border border-blue-500 shadow-md shadow-blue-500/25 scale-105' 
+                                                    : isToday 
+                                                        ? 'border border-blue-500/50 bg-blue-500/10 text-blue-400 font-black' 
+                                                        : 'hover:bg-white/5 text-gray-300'
+                                            }`}
+                                        >
+                                            <span className={`text-[11px] font-semibold ${isSelected ? 'text-white' : isToday ? 'text-blue-400' : 'text-gray-300'}`}>
+                                                {d}
                                             </span>
+                                            {renderDots(dayNotes)}
+                                        </button>
+                                    );
+                                }
+
+                                // Next month padding
+                                const totalCells = cells.length > 35 ? 42 : 35;
+                                const nextPadding = totalCells - cells.length;
+                                for (let i = 1; i <= nextPadding; i++) {
+                                    const nextDate = new Date(year, month + 1, i);
+                                    const nextDateStr = nextDate.toISOString().split('T')[0];
+                                    const dayNotes = notesByDate[nextDateStr] || [];
+                                    cells.push(
+                                        <button
+                                            key={`next-${i}`}
+                                            type="button"
+                                            onClick={() => {
+                                                setSelectedDate(nextDateStr);
+                                                setCurrentMonth(new Date(year, month + 1, 1));
+                                            }}
+                                            className="aspect-square flex flex-col items-center justify-center rounded-lg p-0.5 opacity-20 hover:opacity-50 transition-opacity"
+                                        >
+                                            <span className="text-[11px] font-bold text-gray-300">{i}</span>
+                                            {renderDots(dayNotes)}
+                                        </button>
+                                    );
+                                }
+
+                                return cells;
+                            })()}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Right Column: Notes Cards list */}
+                <div className="flex-grow w-full">
+                    {selectedDate && (
+                        <div className="flex justify-between items-center mb-6 bg-blue-500/10 border border-blue-500/20 px-4 py-3 rounded-2xl">
+                            <span className="text-sm font-semibold text-blue-400 flex items-center gap-2">
+                                <i className="fa-solid fa-filter"></i>
+                                Notizen gefiltert für: {new Date(selectedDate).toLocaleDateString('de-DE')}
+                            </span>
+                            <button 
+                                onClick={() => setSelectedDate(null)}
+                                className="text-xs text-white hover:text-blue-300 transition-colors font-medium bg-blue-500 hover:bg-blue-600 px-3 py-1.5 rounded-xl shadow-lg shadow-blue-500/25"
+                            >
+                                Filter löschen
+                            </button>
+                        </div>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {loading ? (
+                            <div className="col-span-full py-12 text-center text-gray-400">
+                                <i className="fa-solid fa-circle-notch fa-spin text-2xl mb-2"></i>
+                                <p>Notizen werden geladen...</p>
+                            </div>
+                        ) : displayedNotes.length === 0 ? (
+                            <div className="col-span-full py-12 text-center text-gray-400 bg-white/5 rounded-2xl border border-white/10 border-dashed">
+                                <i className="fa-solid fa-note-sticky text-4xl mb-3 opacity-50"></i>
+                                <p>Keine Notizen für diesen Tag gefunden.</p>
+                            </div>
+                        ) : (
+                            displayedNotes.map(note => {
+                                const isDone = note.isDone;
+
+                                return (
+                                    <div key={note.id} onClick={() => handleOpenModal(note, false)} className={`glass-card p-5 rounded-2xl border-l-[6px] ${getColorClass(note.color)} ${isDone ? 'opacity-60' : ''} flex flex-col justify-between hover:-translate-y-1 transition-all duration-300 shadow-lg cursor-pointer`}>
+                                        <div>
+                                            <div className="flex justify-between items-start mb-3">
+                                                <div className="flex flex-col gap-1">
+                                                    <span className={`text-xs font-medium text-gray-400`}>
+                                                        <i className="fa-regular fa-calendar mr-1"></i>
+                                                        {new Date(note.date).toLocaleDateString('de-DE')}
+                                                        {note.time && ` ${note.time}`}
+                                                    </span>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handleOpenModal(note, true); }}
+                                                        className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/5 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
+                                                        title="Notiz bearbeiten"
+                                                    >
+                                                        <i className="fa-solid fa-pen-to-square"></i>
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => toggleDone(note, e)}
+                                                        className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors bg-white/5 ${isDone ? 'text-emerald-400 bg-emerald-500/10' : 'text-gray-400 hover:text-white hover:bg-white/10'}`}
+                                                        title={isDone ? "Als nicht erledigt markieren" : "Als erledigt markieren"}
+                                                    >
+                                                        <i className="fa-solid fa-check"></i>
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => deleteNote(note.id, e)}
+                                                        className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                                                        title="Notiz löschen"
+                                                    >
+                                                        <i className="fa-solid fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <h4 className={`font-semibold text-lg text-white mb-2 ${isDone ? 'line-through text-gray-400' : ''}`}>{note.title}</h4>
+                                            <p className={`text-sm mb-4 line-clamp-4 whitespace-pre-wrap ${isDone ? 'text-gray-500' : 'text-gray-300'}`}>{note.content}</p>
+
+                                            {/* Attachments Display */}
+                                            {note.attachments && note.attachments.length > 0 && (
+                                                <div className="mt-2 space-y-2">
+                                                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-bold">Anhänge</p>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {note.attachments.map((att, index) => (
+                                                            <div 
+                                                                key={att.id} 
+                                                                onClick={(e) => { e.stopPropagation(); openGallery(note.attachments, index); }}
+                                                                className="group relative flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg p-1 hover:bg-white/10 transition-all cursor-pointer"
+                                                            >
+                                                                <div className="w-8 h-8 rounded bg-blue-500/20 text-blue-400 flex items-center justify-center flex-shrink-0">
+                                                                    <i className={`fa-solid ${att.content_type?.startsWith('image/') ? 'fa-image' : att.content_type?.startsWith('video/') ? 'fa-video' : 'fa-file'} text-xs`}></i>
+                                                                </div>
+                                                                <span className="text-[10px] text-gray-300 truncate max-w-[80px] pr-2" title={att.file_name}>{att.file_name}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
-                                        <div className="flex gap-2">
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); handleOpenModal(note, true); }}
-                                                className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/5 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
-                                                title="Notiz bearbeiten"
-                                            >
-                                                <i className="fa-solid fa-pen-to-square"></i>
-                                            </button>
-                                            <button
-                                                onClick={(e) => toggleDone(note, e)}
-                                                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors bg-white/5 ${isDone ? 'text-emerald-400 bg-emerald-500/10' : 'text-gray-400 hover:text-white hover:bg-white/10'}`}
-                                                title={isDone ? "Als nicht erledigt markieren" : "Als erledigt markieren"}
-                                            >
-                                                <i className="fa-solid fa-check"></i>
-                                            </button>
-                                            <button
-                                                onClick={(e) => deleteNote(note.id, e)}
-                                                className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                                                title="Notiz löschen"
-                                            >
-                                                <i className="fa-solid fa-trash"></i>
-                                            </button>
+
+                                        <div className="mt-4 pt-4 border-t border-white/10">
+                                            {note.project && (
+                                                <span
+                                                    onClick={(e) => { e.stopPropagation(); navigate(`/projekte/${note.project.id}`); }}
+                                                    className="inline-flex items-center gap-1 text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded-md w-fit border border-emerald-400/20 max-w-full truncate cursor-pointer hover:bg-emerald-400/20 transition-colors text-xs"
+                                                    title={`${note.project.project_number} - ${note.project.title}`}
+                                                >
+                                                    <i className="fa-solid fa-folder shrink-0"></i>
+                                                    <span className="truncate">{note.project.project_number} - {note.project.title}</span>
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
-
-                                    <h4 className={`font-semibold text-lg text-white mb-2 ${isDone ? 'line-through text-gray-400' : ''}`}>{note.title}</h4>
-                                    <p className={`text-sm mb-4 line-clamp-4 whitespace-pre-wrap ${isDone ? 'text-gray-500' : 'text-gray-300'}`}>{note.content}</p>
-
-                                    {/* Attachments Display */}
-                                    {note.attachments && note.attachments.length > 0 && (
-                                        <div className="mt-2 space-y-2">
-                                            <p className="text-[10px] uppercase tracking-wider text-gray-500 font-bold">Anhänge</p>
-                                            <div className="flex flex-wrap gap-2">
-                                                {note.attachments.map((att, index) => (
-                                                    <div 
-                                                        key={att.id} 
-                                                        onClick={(e) => { e.stopPropagation(); openGallery(note.attachments, index); }}
-                                                        className="group relative flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg p-1 hover:bg-white/10 transition-all cursor-pointer"
-                                                    >
-                                                        <div className="w-8 h-8 rounded bg-blue-500/20 text-blue-400 flex items-center justify-center flex-shrink-0">
-                                                            <i className={`fa-solid ${att.content_type?.startsWith('image/') ? 'fa-image' : att.content_type?.startsWith('video/') ? 'fa-video' : 'fa-file'} text-xs`}></i>
-                                                        </div>
-                                                        <span className="text-[10px] text-gray-300 truncate max-w-[80px] pr-2" title={att.file_name}>{att.file_name}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="mt-4 pt-4 border-t border-white/10">
-                                    {note.project && (
-                                        <span
-                                            onClick={(e) => { e.stopPropagation(); navigate(`/projekte/${note.project.id}`); }}
-                                            className="inline-flex items-center gap-1 text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded-md w-fit border border-emerald-400/20 max-w-full truncate cursor-pointer hover:bg-emerald-400/20 transition-colors text-xs"
-                                            title={`${note.project.project_number} - ${note.project.title}`}
-                                        >
-                                            <i className="fa-solid fa-folder shrink-0"></i>
-                                            <span className="truncate">{note.project.project_number} - {note.project.title}</span>
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-                        )
-                    })
-                )}
+                                );
+                            })
+                        )}
+                    </div>
+                </div>
             </div>
 
             {/* Modal for Creating Note */}
