@@ -47,7 +47,8 @@ import {
   X,
   Copy,
   ExternalLink,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Check
 } from 'lucide-react-native';
 import { MonthCalendar } from '../components/MonthCalendar';
 import { useNavigation } from '@react-navigation/native';
@@ -88,6 +89,7 @@ export default function NotesScreen() {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [isViewerVisible, setIsViewerVisible] = useState(false);
   const [viewerImages, setViewerImages] = useState<{uri: string, fileName: string}[]>([]);
+  const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(false);
   
   // Form State
   const [formData, setFormData] = useState<NoteForm>({
@@ -432,22 +434,21 @@ export default function NotesScreen() {
                      <Text className="text-gray-400 text-[10px] ml-1 font-bold">{note.time}</Text>
                   </View>
                 )}
-                {note.project && (
-                  <>
-                    <View className="w-1 h-1 bg-gray-700 rounded-full mx-2" />
-                    <TouchableOpacity 
-                      onPress={() => navigation.navigate('ProjectDetail', { id: note.project.id })}
-                      className="flex-row items-center bg-brand-blue/10 px-1.5 py-0.5 rounded-md"
-                    >
-                      <Briefcase size={10} color="#3B82F6" />
-                      <Text className="text-blue-400 text-[10px] ml-1 font-bold">
-                        {note.project.project_number}
-                      </Text>
-                      <ExternalLink size={8} color="#3B82F6" className="ml-1" />
-                    </TouchableOpacity>
-                  </>
-                )}
               </View>
+              {note.project && (
+                <View className="flex-row mt-2 self-start">
+                  <TouchableOpacity 
+                    onPress={() => navigation.navigate('ProjectDetail', { id: note.project.id })}
+                    className="flex-row items-center bg-brand-blue/10 px-2 py-1 rounded-lg border border-brand-blue/20"
+                  >
+                    <Briefcase size={10} color="#3B82F6" />
+                    <Text className="text-blue-400 text-[10px] ml-1 font-bold">
+                      {note.project.project_number} - {note.project.title}
+                    </Text>
+                    <ExternalLink size={8} color="#3B82F6" className="ml-1.5" />
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
             <View className="flex-row">
               <TouchableOpacity onPress={() => toggleDone(note)} className="p-2 bg-white/5 rounded-lg mr-2">
@@ -580,7 +581,7 @@ export default function NotesScreen() {
              onPress={Keyboard.dismiss} 
              className="flex-1"
           />
-          <GlassCard className="p-6 rounded-t-[40px] border-t border-white/10 bg-black/60" style={{ height: '85%' }}>
+          <GlassCard className="p-6 rounded-t-[40px] border-t border-white/10 bg-black/60 overflow-hidden" style={{ height: '85%' }}>
             <View {...modalPanResponder.panHandlers} className="w-full pb-6 items-center">
               <View className="w-12 h-1.5 bg-white/10 rounded-full" />
             </View>
@@ -813,31 +814,35 @@ export default function NotesScreen() {
                     </GlassCard>
                   </View>
 
-                  {/* Project Selection */}
+                  {/* Project Selection Trigger */}
                   <View className="mb-5">
                     <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Projekt (Optional)</Text>
-                    <GlassCard className="p-3 bg-black/40 border border-white/5">
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
-                        <TouchableOpacity
-                          onPress={() => setFormData({ ...formData, project_id: '', showInDiary: false })}
-                          className={`px-3 py-2 rounded-lg mr-2 border flex-row items-center ${formData.project_id === '' ? 'bg-white/10 border-white/20' : 'bg-transparent border-transparent'}`}
-                        >
-                          <Briefcase size={14} color={formData.project_id === '' ? '#fff' : '#6B7280'} className="mr-2" />
-                          <Text className={`text-xs font-bold ${formData.project_id === '' ? 'text-white' : 'text-gray-400'}`}>Kein Projekt ausgewählt</Text>
-                        </TouchableOpacity>
-                        {projects.map((p: any) => (
-                          <TouchableOpacity
-                            key={p.id}
-                            onPress={() => setFormData({ ...formData, project_id: p.id })}
-                            className={`px-3 py-2 rounded-lg mr-2 border ${formData.project_id === p.id ? 'bg-brand-blue border-brand-blue' : 'bg-white/5 border-white/5'}`}
-                          >
-                            <Text className={`text-xs font-bold ${formData.project_id === p.id ? 'text-white' : 'text-gray-400'}`}>
-                              {p.project_number} - {p.title}
+                    <TouchableOpacity 
+                      onPress={() => setIsProjectSelectorOpen(true)}
+                      activeOpacity={0.8}
+                    >
+                      <GlassCard className="p-4 flex-row justify-between items-center border border-white/5 bg-black/40">
+                        <View className="flex-row items-center">
+                          <View className="w-8 h-8 rounded-full bg-brand-blue/10 items-center justify-center mr-3">
+                            <Briefcase size={16} color="#3B82F6" />
+                          </View>
+                          <View className="flex-1 pr-4">
+                            <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">
+                              Zugeordnetes Projekt
                             </Text>
-                          </TouchableOpacity>
-                        ))}
-                      </ScrollView>
-                    </GlassCard>
+                            <Text className="text-white font-bold text-sm mt-0.5" numberOfLines={1}>
+                              {formData.project_id === '' 
+                                ? 'Kein Projekt ausgewählt' 
+                                : (() => {
+                                    const selectedProj = projects.find((p: any) => p.id.toString() === formData.project_id.toString());
+                                    return selectedProj ? `${selectedProj.project_number} - ${selectedProj.title}` : 'Kein Projekt ausgewählt';
+                                  })()}
+                            </Text>
+                          </View>
+                        </View>
+                        <ChevronDown size={16} color="#6B7280" />
+                      </GlassCard>
+                    </TouchableOpacity>
                   </View>
 
                   {/* Show In Diary Switch */}
@@ -1001,6 +1006,83 @@ export default function NotesScreen() {
            </View>
         )}
       />
+
+      {/* Project Selector Bottom Sheet */}
+      <Modal
+        visible={isProjectSelectorOpen}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsProjectSelectorOpen(false)}
+      >
+        <BlurView intensity={90} tint="dark" className="flex-1 justify-end">
+          <TouchableOpacity 
+             activeOpacity={1} 
+             onPress={() => setIsProjectSelectorOpen(false)} 
+             className="flex-1"
+          />
+          <GlassCard className="p-6 rounded-t-[40px] border-t border-white/10 bg-black/80 overflow-hidden" style={{ maxHeight: '70%' }}>
+            <View className="w-full pb-6 items-center">
+               <View className="w-12 h-1.5 bg-white/10 rounded-full" />
+            </View>
+            <View className="flex-row justify-between items-center mb-6">
+              <Text className="text-white text-base font-bold uppercase tracking-widest">
+                Projekt auswählen
+              </Text>
+              <TouchableOpacity onPress={() => setIsProjectSelectorOpen(false)}>
+                <Text className="text-gray-500 font-bold uppercase text-xs tracking-widest">Schließen</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Option: Kein Projekt */}
+              <TouchableOpacity
+                onPress={() => {
+                  setFormData({ ...formData, project_id: '', showInDiary: false });
+                  setIsProjectSelectorOpen(false);
+                }}
+                className={`p-4 rounded-2xl mb-3 border flex-row items-center justify-between ${formData.project_id === '' ? 'border-brand-blue bg-brand-blue/10' : 'border-white/5 bg-white/5'}`}
+              >
+                <View className="flex-row items-center">
+                  <View className="w-8 h-8 rounded-full bg-brand-blue/20 items-center justify-center mr-3">
+                    <Briefcase size={16} color="#3B82F6" />
+                  </View>
+                  <View>
+                    <Text className="text-white font-bold text-sm">Kein Projekt</Text>
+                    <Text className="text-gray-500 text-xs mt-0.5">Notiz ist keinem Projekt zugeordnet</Text>
+                  </View>
+                </View>
+                {formData.project_id === '' && <Check size={16} color="#3B82F6" />}
+              </TouchableOpacity>
+
+              {/* Individual Projects */}
+              {projects.map((p: any) => {
+                const isSelected = formData.project_id.toString() === p.id.toString();
+                return (
+                  <TouchableOpacity
+                    key={p.id}
+                    onPress={() => {
+                      setFormData({ ...formData, project_id: p.id });
+                      setIsProjectSelectorOpen(false);
+                    }}
+                    className={`p-4 rounded-2xl mb-3 border flex-row items-center justify-between ${isSelected ? 'border-brand-blue bg-brand-blue/10' : 'border-white/5 bg-white/5'}`}
+                  >
+                    <View className="flex-row items-center flex-1 pr-3">
+                      <View className="w-8 h-8 rounded-full bg-blue-500/20 items-center justify-center mr-3">
+                        <Text className="text-blue-400 text-xs font-bold">{p.project_number ? p.project_number.substring(0,2) : 'EP'}</Text>
+                      </View>
+                      <View className="flex-1">
+                        <Text className="text-white font-bold text-sm" numberOfLines={1}>{p.project_number} - {p.title}</Text>
+                        <Text className="text-gray-500 text-xs mt-0.5" numberOfLines={1}>{p.address || 'Keine Adresse'}</Text>
+                      </View>
+                    </View>
+                    {isSelected && <Check size={16} color="#3B82F6" />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </GlassCard>
+        </BlurView>
+      </Modal>
     </ScreenLayout>
   );
 }
