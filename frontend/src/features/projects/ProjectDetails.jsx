@@ -846,16 +846,18 @@ const ProjectDetails = () => {
                                         )}
                                     </div>
                                     <div className="grid grid-cols-1 gap-4">
-                                        <div>
-                                            <h4 className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-2 flex items-center gap-2">
-                                                <i className="fa-solid fa-euro-sign"></i> Budget
-                                            </h4>
-                                            <p className="text-white text-sm">
-                                                {project.budget !== undefined && project.budget !== null
-                                                    ? new Number(project.budget).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
-                                                    : '-'}
-                                            </p>
-                                        </div>
+                                        {!isWorker && (
+                                            <div>
+                                                <h4 className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-2 flex items-center gap-2">
+                                                    <i className="fa-solid fa-euro-sign"></i> Budget
+                                                </h4>
+                                                <p className="text-white text-sm">
+                                                    {project.budget !== undefined && project.budget !== null
+                                                        ? new Number(project.budget).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
+                                                        : '-'}
+                                                </p>
+                                            </div>
+                                        )}
                                         {project.start_date && (
                                             <div>
                                                 <h4 className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-2 flex items-center gap-2">
@@ -900,7 +902,7 @@ const ProjectDetails = () => {
                         </div>
 
                         {/* Financial Widget */}
-                        {(() => {
+                        {!isWorker && (() => {
                             const budget = parseFloat(project.budget || 0);
                             const estimatedCosts = project.estimated_costs !== undefined && project.estimated_costs !== null
                                 ? parseFloat(project.estimated_costs)

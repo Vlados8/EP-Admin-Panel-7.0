@@ -12,7 +12,7 @@ router.use(auth.protect);
 router
     .route('/')
     .get(taskController.getTasks)
-    .post(upload.array('files', 10), taskController.createTask);
+    .post(auth.checkPermission('MANAGE_TASKS'), upload.array('files', 10), taskController.createTask);
 
 router
     .route('/:id')

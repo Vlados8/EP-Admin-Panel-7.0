@@ -60,6 +60,7 @@ const NavGroup = ({ label, items, currentPath, search }) => {
 
 const Sidebar = ({ isOpen, onClose, currentPath }) => {
     const { user } = useSelector(state => state.auth);
+    const isWorker = user?.role?.name === 'Worker' || user?.role === 'Worker';
     const { companyData, getAssetUrl } = useCompany();
     const location = useLocation();
     const [emailAccounts, setEmailAccounts] = useState([]);
@@ -144,17 +145,17 @@ const Sidebar = ({ isOpen, onClose, currentPath }) => {
         { path: '/telefon', icon: 'fa-phone', label: 'Telefon', show: true },
         { path: '/telefon/verlauf', icon: 'fa-clock-rotate-left', label: 'Anrufverlauf', show: true },
         { path: '/telefon/globaler-verlauf', icon: 'fa-earth-europe', label: 'Globaler Verlauf', show: canManageApiKeys },
-        { path: '/telefon/einstellungen', icon: 'fa-gears', label: 'Einstellungen', show: true }
+        { path: '/telefon/einstellungen', icon: 'fa-gears', label: 'Einstellungen', show: !isWorker }
     ].filter(item => item.show);
 
     const timeTrackingItems = [
-        { path: '/zeiterfassung/terminal', icon: 'fa-clock', label: 'Terminal', show: true },
-        { path: '/zeiterfassung/protokolle', icon: 'fa-clipboard-list', label: 'Protokolle', show: true },
-        { path: '/settings/zeiterfassung', icon: 'fa-gears', label: 'Einstellungen', show: true }
+        { path: '/zeiterfassung/terminal', icon: 'fa-clock', label: 'Terminal', show: !isWorker },
+        { path: '/zeiterfassung/protokolle', icon: 'fa-clipboard-list', label: 'Protokolle', show: !isWorker },
+        { path: '/settings/zeiterfassung', icon: 'fa-gears', label: 'Einstellungen', show: !isWorker }
     ].filter(item => item.show);
 
     const reonicItems = [
-        { path: '/angebote/reonic', icon: 'fa-plug', label: 'Reonic API', show: true }
+        { path: '/angebote/reonic', icon: 'fa-plug', label: 'Reonic API', show: !isWorker }
     ].filter(item => item.show);
 
     let emailMenuItems = [];

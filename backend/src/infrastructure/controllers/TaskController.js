@@ -147,8 +147,16 @@ exports.updateTask = async (req, res, next) => {
 
         if (!hasPermission(req.user, 'MANAGE_USERS')) {
             const role = req.user.role?.name || req.user.role;
-            if (role === 'Worker' && task.assigned_to_id !== req.user.id) {
-                return next(new AppError('Keine Berechtigung zum Bearbeiten dieser Aufgabe', 403));
+            if (role === 'Worker') {
+                if (task.assigned_to_id !== req.user.id) {
+                    return next(new AppError('Keine Berechtigung zum Bearbeiten dieser Aufgabe', 403));
+                }
+                // Worker can ONLY update status
+                const keys = Object.keys(req.body);
+                const otherFields = keys.filter(key => key !== 'status');
+                if (otherFields.length > 0) {
+                    return next(new AppError('Sie haben keine Berechtigung, Aufgabendetails zu ändern. Sie können nur den Status aktualisieren.', 403));
+                }
             } else if ((role === 'Gruppenleiter' || role === 'Projektleiter') && task.created_by_id !== req.user.id && task.assigned_to_id !== req.user.id) {
                 return next(new AppError('Keine Berechtigung zum Bearbeiten dieser Aufgabe', 403));
             }
