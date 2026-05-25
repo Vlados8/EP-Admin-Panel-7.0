@@ -16,13 +16,7 @@
         "simulator": true
       }
     },
-    "production": {
-      "ios": {
-        "entitlements": {
-          "aps-environment": "production"
-        }
-      }
-    }
+    "production": {}
   },
   "submit": {
     "production": {}
