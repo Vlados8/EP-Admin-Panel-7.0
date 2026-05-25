@@ -69,6 +69,19 @@ exports.createTask = async (req, res, next) => {
             }
         }
 
+        if (role === 'Projektleiter' && assigned_to_id && assigned_to_id !== req.user.id) {
+            const assignee = await User.findByPk(assigned_to_id, {
+                include: [{ model: Role, as: 'role' }]
+            });
+            if (!assignee) {
+                return next(new AppError('Mitarbeiter nicht gefunden.', 404));
+            }
+            const assigneeRole = assignee.role?.name || assignee.role;
+            if (assigneeRole !== 'Gruppenleiter' && assigneeRole !== 'Worker') {
+                return next(new AppError('Ein Projektleiter kann Aufgaben nur sich selbst, Gruppenleitern oder Workern zuweisen.', 403));
+            }
+        }
+
         const newTask = await Task.create({
             title,
             description,
@@ -173,6 +186,9 @@ exports.updateTask = async (req, res, next) => {
                         isAllowed = true;
                     }
                 }
+                if (role === 'Projektleiter') {
+                    isAllowed = true; // Projektleiter has general permission to edit tasks
+                }
                 if (!isAllowed) {
                     return next(new AppError('Keine Berechtigung zum Bearbeiten dieser Aufgabe', 403));
                 }
@@ -182,6 +198,20 @@ exports.updateTask = async (req, res, next) => {
                     const newAssignee = await User.findByPk(req.body.assigned_to_id);
                     if (!newAssignee || newAssignee.manager_id !== req.user.id) {
                         return next(new AppError('Ein Gruppenleiter kann Aufgaben nur sich selbst oder ihm untergeordneten Mitarbeitern zuweisen.', 403));
+                    }
+                }
+
+                // If Projektleiter is changing the assignee, verify the new assignee is themselves, a Gruppenleiter, or a Worker
+                if (role === 'Projektleiter' && req.body.assigned_to_id && req.body.assigned_to_id !== req.user.id) {
+                    const newAssignee = await User.findByPk(req.body.assigned_to_id, {
+                        include: [{ model: Role, as: 'role' }]
+                    });
+                    if (!newAssignee) {
+                        return next(new AppError('Mitarbeiter nicht gefunden.', 404));
+                    }
+                    const newAssigneeRole = newAssignee.role?.name || newAssignee.role;
+                    if (newAssigneeRole !== 'Gruppenleiter' && newAssigneeRole !== 'Worker') {
+                        return next(new AppError('Ein Projektleiter kann Aufgaben nur sich selbst, Gruppenleitern oder Workern zuweisen.', 403));
                     }
                 }
             }
