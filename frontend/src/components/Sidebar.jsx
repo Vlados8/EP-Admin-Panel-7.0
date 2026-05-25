@@ -61,6 +61,8 @@ const NavGroup = ({ label, items, currentPath, search }) => {
 const Sidebar = ({ isOpen, onClose, currentPath }) => {
     const { user } = useSelector(state => state.auth);
     const isWorker = user?.role?.name === 'Worker' || user?.role === 'Worker';
+    const isGroupLeader = user?.role?.name === 'Gruppenleiter' || user?.role === 'Gruppenleiter';
+    const isRestricted = isWorker || isGroupLeader;
     const { companyData, getAssetUrl } = useCompany();
     const location = useLocation();
     const [emailAccounts, setEmailAccounts] = useState([]);
@@ -145,17 +147,17 @@ const Sidebar = ({ isOpen, onClose, currentPath }) => {
         { path: '/telefon', icon: 'fa-phone', label: 'Telefon', show: true },
         { path: '/telefon/verlauf', icon: 'fa-clock-rotate-left', label: 'Anrufverlauf', show: true },
         { path: '/telefon/globaler-verlauf', icon: 'fa-earth-europe', label: 'Globaler Verlauf', show: canManageApiKeys },
-        { path: '/telefon/einstellungen', icon: 'fa-gears', label: 'Einstellungen', show: !isWorker }
+        { path: '/telefon/einstellungen', icon: 'fa-gears', label: 'Einstellungen', show: !isRestricted }
     ].filter(item => item.show);
 
     const timeTrackingItems = [
-        { path: '/zeiterfassung/terminal', icon: 'fa-clock', label: 'Terminal', show: !isWorker },
-        { path: '/zeiterfassung/protokolle', icon: 'fa-clipboard-list', label: 'Protokolle', show: !isWorker },
-        { path: '/settings/zeiterfassung', icon: 'fa-gears', label: 'Einstellungen', show: !isWorker }
+        { path: '/zeiterfassung/terminal', icon: 'fa-clock', label: 'Terminal', show: !isRestricted },
+        { path: '/zeiterfassung/protokolle', icon: 'fa-clipboard-list', label: 'Protokolle', show: !isRestricted },
+        { path: '/settings/zeiterfassung', icon: 'fa-gears', label: 'Einstellungen', show: !isRestricted }
     ].filter(item => item.show);
 
     const reonicItems = [
-        { path: '/angebote/reonic', icon: 'fa-plug', label: 'Reonic API', show: !isWorker }
+        { path: '/angebote/reonic', icon: 'fa-plug', label: 'Reonic API', show: !isRestricted }
     ].filter(item => item.show);
 
     let emailMenuItems = [];

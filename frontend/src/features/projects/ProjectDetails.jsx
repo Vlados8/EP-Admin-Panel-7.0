@@ -22,6 +22,8 @@ const ProjectDetails = () => {
     const canDeleteProject = usePermission('MANAGE_USERS'); // Proxy for Admin/Office
     const canManageStages = usePermission('MANAGE_PROJECTS'); // PL and above can manage all stages
     const isWorker = currentUser?.role?.name === 'Worker' || currentUser?.role === 'Worker';
+    const isGroupLeader = currentUser?.role?.name === 'Gruppenleiter' || currentUser?.role === 'Gruppenleiter';
+    const hideBudget = isWorker || isGroupLeader;
     const [activeTab, setActiveTab] = useState('info'); // 'info', 'steps', or 'files'
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isAddingTask, setIsAddingTask] = useState(false);
@@ -846,7 +848,7 @@ const ProjectDetails = () => {
                                         )}
                                     </div>
                                     <div className="grid grid-cols-1 gap-4">
-                                        {!isWorker && (
+                                        {!hideBudget && (
                                             <div>
                                                 <h4 className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-2 flex items-center gap-2">
                                                     <i className="fa-solid fa-euro-sign"></i> Budget
@@ -902,7 +904,7 @@ const ProjectDetails = () => {
                         </div>
 
                         {/* Financial Widget */}
-                        {!isWorker && (() => {
+                        {!hideBudget && (() => {
                             const budget = parseFloat(project.budget || 0);
                             const estimatedCosts = project.estimated_costs !== undefined && project.estimated_costs !== null
                                 ? parseFloat(project.estimated_costs)
