@@ -126,22 +126,17 @@ export default function NotesScreen() {
     queryFn: fetchProjects,
   });
 
-  // Date Selection
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  // Date Selection (defaults to today's date filter as requested)
+  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
 
   const notes = notesData?.data?.notes || [];
-  
-  // Filter notes by selected date AND derive marked dates
-  const markedDates = useMemo(() => {
-    return notes.map((n: any) => {
-      const nDate = new Date(n.date || n.createdAt);
-      return new Date(nDate.getTime() - nDate.getTimezoneOffset() * 60000).toISOString().split('T')[0];
-    });
-  }, [notes]);
 
   const filteredNotes = notes.filter((n: any) => {
-     const nDate = new Date(n.date || n.createdAt);
-     return nDate.toDateString() === selectedDate.toDateString();
+    if (selectedDate) {
+      const nDate = new Date(n.date || n.createdAt);
+      return nDate.toDateString() === selectedDate.toDateString();
+    }
+    return true; // No date filter selected, show all notes
   });
 
   const projects = projectsData?.data?.projects || [];
@@ -547,11 +542,14 @@ export default function NotesScreen() {
                 <MonthCalendar 
                   selectedDate={selectedDate} 
                   onSelectDate={setSelectedDate}
-                  markedDates={markedDates}
+                  notes={notes}
                 />
 
                 <Text className="text-white font-bold text-lg mb-4">
-                  Alle Notizen ({MONTHS[selectedDate.getMonth()]} {selectedDate.getFullYear()})
+                  {selectedDate 
+                    ? `Notizen für den ${selectedDate.getDate()}. ${MONTHS[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`
+                    : 'Alle Notizen'
+                  }
                 </Text>
               </View>
             }

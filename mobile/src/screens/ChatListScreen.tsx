@@ -1,10 +1,13 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Image, RefreshControl, SafeAreaView, Modal, TextInput, ActivityIndicator, Alert } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, FlatList, TouchableOpacity, RefreshControl, Modal, TextInput, ActivityIndicator, Alert } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { MessageCircle, Users, Plus, X, Search } from 'lucide-react-native';
 import { apiClient } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import socketService from '../services/socket';
+import { ScreenLayout } from '../components/ScreenLayout';
+import { GlassCard } from '../components/GlassCard';
+import { BlurView } from 'expo-blur';
 
 export default function ChatListScreen() {
     const { user } = useAuth();
@@ -214,76 +217,97 @@ export default function ChatListScreen() {
                u.email?.toLowerCase().includes(searchQuery.toLowerCase());
     });
 
-    const renderItem = ({ item }: { item: any }) => (
-        <TouchableOpacity 
-            className="flex-row items-center p-4 border-b border-gray-100 dark:border-gray-800"
-            onPress={() => (navigation as any).navigate('ChatDetail', { 
-                conversationId: item.id, 
-                name: item.name, 
-                isGroup: item.isGroup, 
-                avatar: item.avatar,
-                otherUser: item.otherUser,
-                isOnline: item.online,
-                participants: item.participants
-            })}
-        >
-            <View className="relative">
-                <View className="w-12 h-12 rounded-full bg-blue-500 items-center justify-center">
-                    <Text className="text-white text-lg font-bold">{getInitials(item.name)}</Text>
-                </View>
-                {item.online && (
-                    <View className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
-                )}
-            </View>
-            <View className="flex-1 ml-3">
-                <View className="flex-row justify-between items-center mb-1">
-                    <Text className="font-bold text-gray-900 dark:text-white" numberOfLines={1}>
-                        {item.name}
-                    </Text>
-                    <Text className="text-xs text-gray-500">{item.time}</Text>
-                </View>
-                <View className="flex-row justify-between items-center">
-                    <Text className="text-sm text-gray-600 dark:text-gray-400 flex-1" numberOfLines={1}>
-                        {item.lastMessage}
-                    </Text>
-                    {item.unread > 0 && (
-                        <View className="bg-blue-500 rounded-full min-w-[20px] h-5 items-center justify-center px-1 ml-2">
-                            <Text className="text-white text-xs font-bold">{item.unread}</Text>
+    const renderItem = ({ item }: { item: any }) => {
+        const isOnline = item.online;
+        return (
+            <TouchableOpacity 
+                activeOpacity={0.8}
+                onPress={() => (navigation as any).navigate('ChatDetail', { 
+                    conversationId: item.id, 
+                    name: item.name, 
+                    isGroup: item.isGroup, 
+                    avatar: item.avatar,
+                    otherUser: item.otherUser,
+                    isOnline: item.online,
+                    participants: item.participants
+                })}
+                className="mb-3"
+            >
+                <GlassCard className="flex-row items-center p-4 border border-white/5 bg-white/5 rounded-2xl">
+                    <View className="relative">
+                        <View className="w-12 h-12 rounded-full bg-brand-blue/20 border border-brand-blue/30 items-center justify-center">
+                            <Text className="text-blue-400 text-base font-black uppercase tracking-wider">{getInitials(item.name)}</Text>
                         </View>
-                    )}
-                </View>
-            </View>
-        </TouchableOpacity>
-    );
+                        {isOnline && (
+                            <View className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-[#0a0a0c] rounded-full shadow-md shadow-green-500/50" />
+                        )}
+                    </View>
+                    <View className="flex-1 ml-4">
+                        <View className="flex-row justify-between items-center mb-1.5">
+                            <Text className="font-extrabold text-white text-base leading-snug" numberOfLines={1}>
+                                {item.name}
+                            </Text>
+                            <Text className="text-[10px] text-gray-500 font-bold uppercase">{item.time}</Text>
+                        </View>
+                        <View className="flex-row justify-between items-center">
+                            <Text className="text-xs text-gray-400 flex-1 leading-snug" numberOfLines={1}>
+                                {item.lastMessage}
+                            </Text>
+                            {item.unread > 0 && (
+                                <View className="bg-brand-blue rounded-full min-w-[20px] h-5 items-center justify-center px-1.5 ml-2 shadow-lg shadow-blue-500/30">
+                                    <Text className="text-white text-[10px] font-black">{item.unread}</Text>
+                                </View>
+                            )}
+                        </View>
+                    </View>
+                </GlassCard>
+            </TouchableOpacity>
+        );
+    };
 
     return (
-        <SafeAreaView className="flex-1 bg-white dark:bg-[#0a0a0c]">
-            <View className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex-row justify-between items-center mt-10">
-                <Text className="text-2xl font-bold text-gray-900 dark:text-white">Chats</Text>
-                <TouchableOpacity className="p-2 bg-gray-100 dark:bg-white/10 rounded-full">
+        <ScreenLayout scroll={false}>
+            {/* Header */}
+            <View className="mb-6 flex-row items-center justify-between">
+                <View className="flex-row items-center">
+                    <View className="w-1 h-6 bg-brand-blue rounded-full mr-3" />
+                    <Text className="text-white font-bold text-2xl uppercase tracking-widest">Chats</Text>
+                </View>
+                <TouchableOpacity 
+                    onPress={openNewChatModal}
+                    className="p-2 bg-white/5 rounded-xl border border-white/10"
+                >
                     <Users size={20} color="#3B82F6" />
                 </TouchableOpacity>
             </View>
+
             <FlatList
                 data={conversations}
                 renderItem={renderItem}
                 keyExtractor={(item) => item.id}
                 refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3B82F6" />
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3B82F6" colors={['#3B82F6']} />
                 }
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 80 }}
                 ListEmptyComponent={
                     !isLoading ? (
-                        <View className="flex-1 items-center justify-center p-8 mt-20">
-                            <MessageCircle size={48} color="#9CA3AF" />
-                            <Text className="text-gray-500 mt-4 text-center">Keine Nachrichten vorhanden</Text>
-                        </View>
-                    ) : null
+                        <GlassCard className="p-10 items-center mt-10">
+                            <MessageCircle size={48} color="#4B5563" />
+                            <Text className="text-gray-400 mt-4 text-center font-bold uppercase tracking-widest text-xs">
+                                Keine Nachrichten vorhanden
+                            </Text>
+                        </GlassCard>
+                    ) : (
+                        <ActivityIndicator color="#3B82F6" size="large" className="mt-20" />
+                    )
                 }
             />
 
             {/* FAB */}
             <TouchableOpacity 
-                className="absolute bottom-6 right-6 w-14 h-14 bg-blue-500 rounded-full items-center justify-center shadow-lg"
+                activeOpacity={0.8}
+                className="absolute bottom-6 right-6 w-14 h-14 bg-brand-blue rounded-full items-center justify-center shadow-lg shadow-blue-500/40"
                 onPress={openNewChatModal}
             >
                 <Plus size={24} color="white" />
@@ -293,126 +317,147 @@ export default function ChatListScreen() {
             <Modal
                 visible={isNewChatModalVisible}
                 animationType="slide"
-                presentationStyle="pageSheet"
+                transparent={true}
                 onRequestClose={closeNewChatModal}
             >
-                <SafeAreaView className="flex-1 bg-white dark:bg-[#0a0a0c]">
-                    <View className="px-4 py-3 flex-row justify-between items-center border-b border-gray-100 dark:border-gray-800">
-                        {isCreatingGroup ? (
-                            <TouchableOpacity onPress={() => setIsCreatingGroup(false)} className="p-2 -ml-2">
-                                <Text className="text-blue-500 font-bold">Zurück</Text>
-                            </TouchableOpacity>
-                        ) : (
-                            <Text className="text-xl font-bold text-gray-900 dark:text-white">Neuer Chat</Text>
-                        )}
-                        
-                        {isCreatingGroup ? (
-                            <Text className="text-xl font-bold text-gray-900 dark:text-white">Neue Gruppe</Text>
-                        ) : null}
+                <BlurView intensity={80} tint="dark" className="flex-1 justify-end">
+                    <TouchableOpacity 
+                        activeOpacity={1} 
+                        onPress={closeNewChatModal} 
+                        className="flex-1"
+                    />
+                    <GlassCard className="p-6 rounded-t-[40px] border-t border-white/10 bg-[#0a0a0c] overflow-hidden" style={{ height: '85%' }}>
+                        <View className="w-full pb-6 items-center">
+                            <View className="w-12 h-1.5 bg-white/10 rounded-full" />
+                        </View>
 
-                        {isCreatingGroup ? (
-                            <TouchableOpacity 
-                                onPress={createGroupChat} 
-                                disabled={isCreatingGroupLoading}
-                                className={`p-2 -mr-2 ${isCreatingGroupLoading ? 'opacity-50' : ''}`}
-                            >
-                                {isCreatingGroupLoading ? (
-                                    <ActivityIndicator size="small" color="#3B82F6" />
-                                ) : (
-                                    <Text className="text-blue-500 font-bold">Erstellen</Text>
+                        <View className="flex-row justify-between items-center mb-6">
+                            <Text className="text-white text-xl font-bold uppercase tracking-widest">
+                                {isCreatingGroup ? 'Neue Gruppe' : 'Neuer Chat'}
+                            </Text>
+                            <TouchableOpacity onPress={closeNewChatModal}>
+                                <Text className="text-gray-500 font-bold uppercase text-xs tracking-widest">Abbrechen</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {isCreatingGroup && (
+                            <View className="mb-5">
+                                <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Gruppenname</Text>
+                                <GlassCard className="p-0 overflow-hidden bg-black/40 border border-white/5">
+                                    <TextInput
+                                        className="p-4 text-white font-bold"
+                                        placeholder="Name der Gruppe..."
+                                        placeholderTextColor="#4B5563"
+                                        value={groupName}
+                                        onChangeText={setGroupName}
+                                    />
+                                </GlassCard>
+                            </View>
+                        )}
+
+                        <View className="mb-5">
+                            <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Empfänger Suchen</Text>
+                            <GlassCard className="p-0 overflow-hidden bg-black/40 border border-white/5 flex-row items-center px-4">
+                                <Search size={16} color="#6B7280" />
+                                <TextInput
+                                    className="flex-1 p-4 text-white font-bold"
+                                    placeholder="Kontakt suchen..."
+                                    placeholderTextColor="#4B5563"
+                                    value={searchQuery}
+                                    onChangeText={setSearchQuery}
+                                />
+                                {searchQuery.length > 0 && (
+                                    <TouchableOpacity onPress={() => setSearchQuery('')}>
+                                        <X size={16} color="#6B7280" />
+                                    </TouchableOpacity>
                                 )}
-                            </TouchableOpacity>
+                            </GlassCard>
+                        </View>
+
+                        {isLoadingUsers ? (
+                            <View className="flex-1 items-center justify-center">
+                                <ActivityIndicator size="large" color="#3B82F6" />
+                            </View>
                         ) : (
-                            <TouchableOpacity onPress={closeNewChatModal} className="p-2">
-                                <X size={24} color="#6B7280" />
-                            </TouchableOpacity>
+                            <View className="flex-1">
+                                {!isCreatingGroup && (
+                                    <TouchableOpacity 
+                                        activeOpacity={0.8}
+                                        className="flex-row items-center p-4 border border-white/5 bg-green-500/10 rounded-2xl mb-4"
+                                        onPress={() => setIsCreatingGroup(true)}
+                                    >
+                                        <View className="w-10 h-10 rounded-full bg-green-500/20 items-center justify-center mr-3 shadow-sm shadow-green-500/30">
+                                            <Users size={20} color="#10B981" />
+                                        </View>
+                                        <Text className="text-base font-black text-green-400 uppercase tracking-wider">Neue Gruppe erstellen</Text>
+                                    </TouchableOpacity>
+                                )}
+
+                                <FlatList
+                                    data={filteredUsers}
+                                    keyExtractor={item => item.id}
+                                    showsVerticalScrollIndicator={false}
+                                    renderItem={({ item }) => {
+                                        const isSelected = selectedUserIds.includes(item.id);
+                                        return (
+                                            <TouchableOpacity 
+                                                activeOpacity={0.8}
+                                                className={`flex-row items-center p-4 border border-white/5 rounded-2xl mb-3 ${isSelected ? 'bg-brand-blue/10 border-brand-blue/30' : 'bg-white/5'}`}
+                                                onPress={() => isCreatingGroup ? toggleUserSelection(item.id) : startNewChat(item.id)}
+                                            >
+                                                <View className="w-10 h-10 rounded-full bg-brand-blue/20 items-center justify-center mr-3 relative border border-brand-blue/30">
+                                                    <Text className="text-blue-400 text-sm font-black uppercase tracking-wider">{getInitials(item.name)}</Text>
+                                                    {isCreatingGroup && isSelected && (
+                                                        <View className="absolute -bottom-1 -right-1 bg-green-500 rounded-full w-5 h-5 items-center justify-center border-2 border-[#121212]">
+                                                            <Text className="text-white text-[10px] font-black">✓</Text>
+                                                        </View>
+                                                    )}
+                                                </View>
+                                                <View className="flex-1 pr-3">
+                                                    <Text className="text-sm font-black text-white" numberOfLines={1}>{item.name}</Text>
+                                                    <Text className="text-gray-500 text-[10px] uppercase font-bold mt-0.5">{item.role?.name || item.email}</Text>
+                                                </View>
+                                            </TouchableOpacity>
+                                        );
+                                    }}
+                                    ListEmptyComponent={
+                                        <View className="flex-1 items-center justify-center p-8 mt-10">
+                                            <Users size={32} color="#4B5563" />
+                                            <Text className="text-gray-400 mt-4 text-center font-bold uppercase tracking-widest text-xs">Keine Kontakte gefunden</Text>
+                                        </View>
+                                    }
+                                />
+                            </View>
                         )}
-                    </View>
 
-                    {isCreatingGroup && (
-                        <View className="p-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-[#1a1a1c]">
-                            <Text className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Gruppenname</Text>
-                            <TextInput
-                                className="bg-white dark:bg-[#252528] px-4 py-3 rounded-xl text-gray-900 dark:text-white text-base border border-gray-200 dark:border-gray-700"
-                                placeholder="Name der Gruppe..."
-                                placeholderTextColor="#9CA3AF"
-                                value={groupName}
-                                onChangeText={setGroupName}
-                            />
-                        </View>
-                    )}
-
-                    <View className="p-4 border-b border-gray-100 dark:border-gray-800">
-                        <View className="flex-row items-center bg-gray-100 dark:bg-[#252528] rounded-xl px-3 py-2">
-                            <Search size={20} color="#9CA3AF" />
-                            <TextInput
-                                className="flex-1 ml-2 text-gray-900 dark:text-white text-base"
-                                placeholder="Kontakt suchen..."
-                                placeholderTextColor="#9CA3AF"
-                                value={searchQuery}
-                                onChangeText={setSearchQuery}
-                            />
-                            {searchQuery.length > 0 && (
-                                <TouchableOpacity onPress={() => setSearchQuery('')}>
-                                    <X size={16} color="#9CA3AF" />
-                                </TouchableOpacity>
-                            )}
-                        </View>
-                    </View>
-
-                    {isLoadingUsers ? (
-                        <View className="flex-1 items-center justify-center">
-                            <ActivityIndicator size="large" color="#3B82F6" />
-                        </View>
-                    ) : (
-                        <>
-                            {!isCreatingGroup && (
+                        {isCreatingGroup && (
+                            <View className="pt-4 flex-row justify-between border-t border-white/5">
                                 <TouchableOpacity 
-                                    className="flex-row items-center p-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-[#1a1a1c]"
-                                    onPress={() => setIsCreatingGroup(true)}
+                                    onPress={() => setIsCreatingGroup(false)}
+                                    className="bg-white/5 flex-1 py-4 rounded-xl items-center mr-2 border border-white/10"
                                 >
-                                    <View className="w-12 h-12 rounded-full bg-green-500 items-center justify-center mr-3 shadow-sm shadow-green-500/30">
-                                        <Users size={24} color="white" />
-                                    </View>
-                                    <Text className="text-base font-bold text-green-600 dark:text-green-400">Neue Gruppe erstellen</Text>
+                                    <Text className="text-white font-bold text-sm tracking-widest">
+                                        Zurück
+                                    </Text>
                                 </TouchableOpacity>
-                            )}
-                            <FlatList
-                                data={filteredUsers}
-                                keyExtractor={item => item.id}
-                                renderItem={({ item }) => {
-                                    const isSelected = selectedUserIds.includes(item.id);
-                                    return (
-                                        <TouchableOpacity 
-                                            className={`flex-row items-center p-4 border-b border-gray-100 dark:border-gray-800 ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
-                                            onPress={() => isCreatingGroup ? toggleUserSelection(item.id) : startNewChat(item.id)}
-                                        >
-                                            <View className="w-12 h-12 rounded-full bg-blue-500 items-center justify-center mr-3 relative">
-                                                <Text className="text-white text-lg font-bold">{getInitials(item.name)}</Text>
-                                                {isCreatingGroup && isSelected && (
-                                                    <View className="absolute -bottom-1 -right-1 bg-green-500 rounded-full w-5 h-5 items-center justify-center border-2 border-white dark:border-[#0a0a0c]">
-                                                        <Text className="text-white text-[10px] font-bold">✓</Text>
-                                                    </View>
-                                                )}
-                                            </View>
-                                            <View className="flex-1">
-                                                <Text className="text-base font-bold text-gray-900 dark:text-white">{item.name}</Text>
-                                                <Text className="text-sm text-gray-500">{item.role?.name || item.email}</Text>
-                                            </View>
-                                        </TouchableOpacity>
-                                    );
-                                }}
-                                ListEmptyComponent={
-                                    <View className="flex-1 items-center justify-center p-8 mt-10">
-                                        <Users size={48} color="#9CA3AF" />
-                                        <Text className="text-gray-500 mt-4 text-center">Keine Kontakte gefunden</Text>
-                                    </View>
-                                }
-                            />
-                        </>
-                    )}
-                </SafeAreaView>
+                                <TouchableOpacity 
+                                    onPress={createGroupChat} 
+                                    disabled={isCreatingGroupLoading}
+                                    className="bg-brand-blue flex-1 py-4 rounded-xl items-center shadow-lg shadow-blue-500/30 border border-brand-blue"
+                                >
+                                    {isCreatingGroupLoading ? (
+                                        <ActivityIndicator size="small" color="white" />
+                                    ) : (
+                                        <Text className="text-white font-bold text-sm tracking-widest">
+                                            Erstellen
+                                        </Text>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </GlassCard>
+                </BlurView>
             </Modal>
-        </SafeAreaView>
+        </ScreenLayout>
     );
 }

@@ -82,26 +82,19 @@ const ImageGrid = ({ images, onImageClick, isOwn }) => {
                 crossOrigin="anonymous"
                 src={getImageUrl(msg.text)}
                 alt="Attachment"
-                className="max-w-full max-h-[500px] object-contain rounded-xl border border-white/10 cursor-pointer hover:scale-[1.01] transition-transform shadow-lg"
+                className="max-w-[300px] max-h-[300px] object-contain rounded-2xl border border-white/10 cursor-pointer hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl"
                 onClick={() => onImageClick(msg.id)}
             />
         );
     }
 
-    const gridClass = count === 2 
-        ? 'grid-cols-2' 
-        : count === 3 
-            ? 'grid-cols-2' // 1 large + 2 small or similar
-            : 'grid-cols-2';
-
-    return (
-        <div className={`grid ${gridClass} gap-1 rounded-xl overflow-hidden border border-white/10 shadow-lg max-w-[400px]`}>
-            {images.slice(0, 4).map((msg, index) => {
-                const isLast = index === 3 && count > 4;
-                return (
+    if (count === 2) {
+        return (
+            <div className="grid grid-cols-2 gap-1.5 rounded-2xl overflow-hidden border border-white/10 shadow-xl max-w-[340px]">
+                {images.map((msg) => (
                     <div 
                         key={msg.id} 
-                        className={`relative aspect-square cursor-pointer hover:opacity-90 transition-opacity ${count === 3 && index === 0 ? 'col-span-2 aspect-[2/1]' : ''}`}
+                        className="relative aspect-[3/4] cursor-pointer hover:scale-[1.01] hover:brightness-110 active:scale-[0.99] transition-all"
                         onClick={() => onImageClick(msg.id)}
                     >
                         <img
@@ -110,9 +103,75 @@ const ImageGrid = ({ images, onImageClick, isOwn }) => {
                             alt="Attachment"
                             className="w-full h-full object-cover"
                         />
-                        {isLast && (
-                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-[2px]">
-                                <span className="text-white text-xl font-bold">+{count - 4}</span>
+                    </div>
+                ))}
+            </div>
+        );
+    }
+
+    if (count === 3) {
+        return (
+            <div className="grid grid-cols-3 gap-1.5 rounded-2xl overflow-hidden border border-white/10 shadow-xl max-w-[340px]">
+                <div 
+                    className="col-span-2 aspect-square cursor-pointer hover:scale-[1.01] hover:brightness-110 active:scale-[0.99] transition-all"
+                    onClick={() => onImageClick(images[0].id)}
+                >
+                    <img
+                        crossOrigin="anonymous"
+                        src={getImageUrl(images[0].text)}
+                        alt="Attachment"
+                        className="w-full h-full object-cover"
+                    />
+                </div>
+                <div className="col-span-1 flex flex-col gap-1.5">
+                    <div 
+                        className="flex-1 aspect-square cursor-pointer hover:scale-[1.01] hover:brightness-110 active:scale-[0.99] transition-all animate-[fadeIn_0.2s_ease-out]"
+                        onClick={() => onImageClick(images[1].id)}
+                    >
+                        <img
+                            crossOrigin="anonymous"
+                            src={getImageUrl(images[1].text)}
+                            alt="Attachment"
+                            className="w-full h-full object-cover"
+                        />
+                    </div>
+                    <div 
+                        className="flex-1 aspect-square cursor-pointer hover:scale-[1.01] hover:brightness-110 active:scale-[0.99] transition-all animate-[fadeIn_0.3s_ease-out]"
+                        onClick={() => onImageClick(images[2].id)}
+                    >
+                        <img
+                            crossOrigin="anonymous"
+                            src={getImageUrl(images[2].text)}
+                            alt="Attachment"
+                            className="w-full h-full object-cover"
+                        />
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // 4 or more images
+    return (
+        <div className="grid grid-cols-2 gap-1.5 rounded-2xl overflow-hidden border border-white/10 shadow-xl max-w-[340px]">
+            {images.slice(0, 4).map((msg, index) => {
+                const isLast = index === 3;
+                const hasMore = count > 4;
+                return (
+                    <div 
+                        key={msg.id} 
+                        className="relative aspect-square cursor-pointer hover:scale-[1.01] hover:brightness-110 active:scale-[0.99] transition-all"
+                        onClick={() => onImageClick(msg.id)}
+                    >
+                        <img
+                            crossOrigin="anonymous"
+                            src={getImageUrl(msg.text)}
+                            alt="Attachment"
+                            className="w-full h-full object-cover"
+                        />
+                        {isLast && hasMore && (
+                            <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center backdrop-blur-[2px] transition-all hover:bg-black/50">
+                                <span className="text-white text-2xl font-black">+{count - 3}</span>
                             </div>
                         )}
                     </div>
@@ -136,7 +195,7 @@ const groupMessages = (messages) => {
                         currentGroup.type === 'image_group' && 
                         isImage &&
                         !msg.repliedTo &&
-                        (new Date(msg.createdAt) - new Date(currentGroup.lastCreatedAt)) < 60000;
+                        (new Date(msg.createdAt) - new Date(currentGroup.lastCreatedAt)) < 15000;
 
         if (canGroup) {
             currentGroup.images.push(msg);
@@ -182,6 +241,16 @@ const Chat = () => {
     const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+    // Dynamic Upload Queue & Editor Zoom States
+    const [uploadQueue, setUploadQueue] = useState([]);
+    const [zoom, setZoom] = useState(1);
+    const [pan, setPan] = useState({ x: 0, y: 0 });
+    const lastTouchDistanceRef = useRef(null);
+    const lastTouchMidpointRef = useRef(null);
+    const isPinchingRef = useRef(false);
+    const [isMouseDownForPan, setIsMouseDownForPan] = useState(false);
+    const lastMousePosRef = useRef({ x: 0, y: 0 });
 
     const onEmojiClick = (emojiObject) => {
         setNewMessage(prev => prev + emojiObject.emoji);
@@ -242,6 +311,7 @@ const Chat = () => {
     const myPeerIdRef = useRef(null);
     const selectedIdRef = useRef(null);
     const callDurationRef = useRef(0);
+    const pendingCallRef = useRef(null);
 
     useEffect(() => { localStreamRef.current = localStream; }, [localStream]);
     useEffect(() => { peerRef.current = peer; }, [peer]);
@@ -290,8 +360,19 @@ const Chat = () => {
         });
 
         publicPeer.on('call', (call) => {
-            // This is for incoming WebRTC calls once accepted
-            // We handle the accepting logic separately via Socket.io first
+            console.log('Incoming PeerJS call received:', call);
+            if (localStreamRef.current) {
+                console.log('Answering PeerJS call immediately with localStream');
+                call.answer(localStreamRef.current);
+                call.on('stream', (userRemoteStream) => {
+                    console.log('Receiver side: Received remote stream');
+                    setRemoteStream(userRemoteStream);
+                });
+                setActiveCall(prev => ({ ...prev, peerCall: call, status: 'active' }));
+            } else {
+                console.log('Local stream not ready yet. Storing call in pendingCallRef.');
+                pendingCallRef.current = call;
+            }
         });
 
         setPeer(publicPeer);
@@ -306,7 +387,6 @@ const Chat = () => {
             if (data.accepted) {
                 handleEstablishCall(data.peerId);
             } else {
-                alert('Anruf abgelehnt');
                 stopMediaTracks();
                 setActiveCall(null);
             }
@@ -358,23 +438,7 @@ const Chat = () => {
         setActiveCall(prev => ({ ...prev, peerCall: call, status: 'active' }));
     };
 
-    // Handle PeerJS events for answering
-    useEffect(() => {
-        if (!peer || !localStream || !incomingCall) return;
-
-        const handleCall = (call) => {
-            console.log('Answering incoming PeerJS call');
-            call.answer(localStream);
-            call.on('stream', (userRemoteStream) => {
-                console.log('Receiver side: Received remote stream');
-                setRemoteStream(userRemoteStream);
-            });
-            setActiveCall(prev => ({ ...prev, peerCall: call, status: 'active' }));
-        };
-
-        peer.on('call', handleCall);
-        return () => peer.off('call', handleCall);
-    }, [peer, localStream, incomingCall]);
+    // Handle PeerJS events for answering is now globally and safely bound to the peer instance.
 
     const initiateCall = async (type) => {
         try {
@@ -388,11 +452,12 @@ const Chat = () => {
             const otherParticipant = activeConversation.participants.find(p => p.userId !== currentUser.id);
             if (!otherParticipant) return;
 
+            const callerName = currentUser.name || currentUser.username || 'Mitarbeiter';
             socketService.emit('call:request', {
                 targetUserId: otherParticipant.userId,
                 peerId: myPeerId,
                 type,
-                callerName: currentUser.username // Explicitly send name
+                callerName
             });
 
             setActiveCall({
@@ -403,7 +468,7 @@ const Chat = () => {
             });
         } catch (err) {
             console.error('Failed to get media stream:', err);
-            alert('Kamera или Mikrofon Zugriff verweigert');
+            alert('Kamera oder Mikrofon Zugriff verweigert');
         }
     };
 
@@ -429,6 +494,18 @@ const Chat = () => {
                 direction: 'in',
                 status: 'active'
             });
+
+            if (pendingCallRef.current) {
+                console.log('Answering pending PeerJS call now that stream is ready');
+                pendingCallRef.current.answer(stream);
+                pendingCallRef.current.on('stream', (userRemoteStream) => {
+                    console.log('Receiver side: Received remote stream');
+                    setRemoteStream(userRemoteStream);
+                });
+                setActiveCall(prev => ({ ...prev, peerCall: pendingCallRef.current, status: 'active' }));
+                pendingCallRef.current = null;
+            }
+
             setIncomingCall(null);
         } catch (err) {
             console.error('Failed to answer call:', err);
@@ -1166,10 +1243,24 @@ const Chat = () => {
         const currentReplyToId = replyingTo?.id;
         setReplyingTo(null);
 
+        // Initialize items in uploadQueue
+        const newItems = selectedFiles.map(file => {
+            const isImg = file.type.startsWith('image/');
+            return {
+                id: Math.random().toString(36).substr(2, 9),
+                name: file.name,
+                file,
+                previewUrl: isImg ? URL.createObjectURL(file) : null,
+                status: 'uploading'
+            };
+        });
+
+        setUploadQueue(prev => [...prev, ...newItems]);
+
         // Upload files sequentially for better reliability and granular error handling
-        for (const file of selectedFiles) {
+        for (const item of newItems) {
             const formData = new FormData();
-            formData.append('files', file);
+            formData.append('files', item.file);
             if (currentReplyToId) formData.append('replyToId', currentReplyToId);
 
             try {
@@ -1177,15 +1268,21 @@ const Chat = () => {
                     headers: { 'Content-Type': 'multipart/form-data' }
                 });
                 if (res.data?.success && res.data?.data?.messages) {
+                    setUploadQueue(prev => prev.map(q => q.id === item.id ? { ...q, status: 'success' } : q));
                     setMessages(prev => {
                         const newIds = res.data.data.messages.map(m => m.id);
                         const filtered = prev.filter(m => !newIds.includes(m.id));
                         return [...filtered, ...res.data.data.messages];
                     });
+                    setTimeout(() => {
+                        setUploadQueue(prev => prev.filter(q => q.id !== item.id));
+                    }, 1500);
+                } else {
+                    throw new Error("Fehler beim Hochladen");
                 }
             } catch (err) {
-                console.error(`Failed to upload file: ${file.name}`, err);
-                alert(`Fehler beim Hochladen von: ${file.name}`);
+                console.error(`Failed to upload file: ${item.name}`, err);
+                setUploadQueue(prev => prev.map(q => q.id === item.id ? { ...q, status: 'error' } : q));
             }
         }
 
@@ -1193,6 +1290,41 @@ const Chat = () => {
         if (fileInputRef.current) fileInputRef.current.value = '';
         if (imageInputRef.current) imageInputRef.current.value = '';
         if (cameraInputRef.current) cameraInputRef.current.value = '';
+    };
+
+    const handleRetryUpload = async (item) => {
+        setUploadQueue(prev => prev.map(q => q.id === item.id ? { ...q, status: 'uploading' } : q));
+        const currentReplyToId = replyingTo?.id;
+
+        const formData = new FormData();
+        formData.append('files', item.file);
+        if (currentReplyToId) formData.append('replyToId', currentReplyToId);
+
+        try {
+            const res = await api.post(`/chat/conversations/${selectedId}/upload`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            if (res.data?.success && res.data?.data?.messages) {
+                setUploadQueue(prev => prev.map(q => q.id === item.id ? { ...q, status: 'success' } : q));
+                setMessages(prev => {
+                    const newIds = res.data.data.messages.map(m => m.id);
+                    const filtered = prev.filter(m => !newIds.includes(m.id));
+                    return [...filtered, ...res.data.data.messages];
+                });
+                setTimeout(() => {
+                    setUploadQueue(prev => prev.filter(q => q.id !== item.id));
+                }, 1500);
+            } else {
+                throw new Error("Fehler beim Hochladen");
+            }
+        } catch (err) {
+            console.error(`Failed to retry upload for file: ${item.name}`, err);
+            setUploadQueue(prev => prev.map(q => q.id === item.id ? { ...q, status: 'error' } : q));
+        }
+    };
+
+    const handleRemoveUploadQueueItem = (id) => {
+        setUploadQueue(prev => prev.filter(q => q.id !== id));
     };
 
     const handleSendEditedImage = async () => {
@@ -1240,6 +1372,137 @@ const Chat = () => {
             if (cameraInputRef.current) cameraInputRef.current.value = '';
         }
     };
+
+    // Image Editor Zoom and Pan Touch / Mouse Event Handlers
+    const handleWheel = (e) => {
+        e.preventDefault();
+        const scale = e.deltaY < 0 ? 1.15 : 0.85;
+        setZoom(prev => Math.min(5, Math.max(1, prev * scale)));
+    };
+
+    const handleTouchStart = (e) => {
+        if (e.touches.length > 1) {
+            const t1 = e.touches[0];
+            const t2 = e.touches[1];
+            const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+            lastTouchDistanceRef.current = dist;
+            lastTouchMidpointRef.current = {
+                x: (t1.clientX + t2.clientX) / 2,
+                y: (t1.clientY + t2.clientY) / 2
+            };
+            isPinchingRef.current = true;
+            
+            const canvas = canvasRef.current;
+            if (canvas) {
+                canvas.isDrawing = false;
+                canvas.isCropping = false;
+            }
+        } else if (e.touches.length === 1) {
+            if (zoom > 1 || editorMode !== 'draw') {
+                lastTouchMidpointRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            } else {
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                const x = ((e.touches[0].clientX - rect.left) - pan.x) * (canvas.width / (rect.width * zoom));
+                const y = ((e.touches[0].clientY - rect.top) - pan.y) * (canvas.height / (rect.height * zoom));
+                
+                if (editorMode === 'draw') {
+                    const ctx = canvas.getContext('2d');
+                    ctx.beginPath();
+                    ctx.moveTo(x, y);
+                    canvas.isDrawing = true;
+                } else if (editorMode === 'crop') {
+                    setCropStart({ x, y });
+                    setCropEnd({ x, y });
+                    canvas.isCropping = true;
+                }
+            }
+        }
+    };
+
+    const handleTouchMove = (e) => {
+        if (e.touches.length > 1 && isPinchingRef.current) {
+            e.preventDefault();
+            const t1 = e.touches[0];
+            const t2 = e.touches[1];
+            const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+            const mid = {
+                x: (t1.clientX + t2.clientX) / 2,
+                y: (t1.clientY + t2.clientY) / 2
+            };
+
+            if (lastTouchDistanceRef.current) {
+                const ratio = dist / lastTouchDistanceRef.current;
+                setZoom(prev => Math.min(5, Math.max(1, prev * ratio)));
+            }
+
+            if (lastTouchMidpointRef.current) {
+                const dx = mid.x - lastTouchMidpointRef.current.x;
+                const dy = mid.y - lastTouchMidpointRef.current.y;
+                setPan(prev => ({ x: prev.x + dx, y: prev.y + dy }));
+            }
+
+            lastTouchDistanceRef.current = dist;
+            lastTouchMidpointRef.current = mid;
+
+            const canvas = canvasRef.current;
+            if (canvas) {
+                canvas.isDrawing = false;
+                canvas.isCropping = false;
+            }
+        } else if (e.touches.length === 1) {
+            if (zoom > 1 || editorMode !== 'draw') {
+                e.preventDefault();
+                const touch = e.touches[0];
+                if (lastTouchMidpointRef.current) {
+                    const dx = touch.clientX - lastTouchMidpointRef.current.x;
+                    const dy = touch.clientY - lastTouchMidpointRef.current.y;
+                    setPan(prev => ({ x: prev.x + dx, y: prev.y + dy }));
+                }
+                lastTouchMidpointRef.current = { x: touch.clientX, y: touch.clientY };
+            } else {
+                const canvas = canvasRef.current;
+                if (canvas && canvas.isDrawing && editorMode === 'draw') {
+                    const rect = canvas.getBoundingClientRect();
+                    const x = ((e.touches[0].clientX - rect.left) - pan.x) * (canvas.width / (rect.width * zoom));
+                    const y = ((e.touches[0].clientY - rect.top) - pan.y) * (canvas.height / (rect.height * zoom));
+                    const ctx = canvas.getContext('2d');
+                    ctx.lineTo(x, y);
+                    ctx.strokeStyle = pencilColor;
+                    ctx.lineWidth = 5 / zoom;
+                    ctx.lineCap = 'round';
+                    ctx.stroke();
+                } else if (canvas && canvas.isCropping && editorMode === 'crop') {
+                    const rect = canvas.getBoundingClientRect();
+                    const x = ((e.touches[0].clientX - rect.left) - pan.x) * (canvas.width / (rect.width * zoom));
+                    const y = ((e.touches[0].clientY - rect.top) - pan.y) * (canvas.height / (rect.height * zoom));
+                    setCropEnd({ x, y });
+                }
+            }
+        }
+    };
+
+    const handleTouchEnd = () => {
+        lastTouchDistanceRef.current = null;
+        lastTouchMidpointRef.current = null;
+        isPinchingRef.current = false;
+        const canvas = canvasRef.current;
+        if (canvas) {
+            canvas.isDrawing = false;
+            canvas.isCropping = false;
+        }
+    };
+
+    // Reset zoom and pan states on opening or closing editor
+    useEffect(() => {
+        if (isEditorOpen) {
+            setZoom(1);
+            setPan({ x: 0, y: 0 });
+        }
+    }, [isEditorOpen]);
 
     const handleForwardClick = (msg) => {
         setForwardingMsg(msg);
@@ -1838,6 +2101,80 @@ const Chat = () => {
                                 </div>
                             )}
 
+                            {/* Upload Queue Glassmorphic Tray */}
+                            {uploadQueue.length > 0 && (
+                                <div className="mb-4 bg-white/5 backdrop-blur-2xl p-3 rounded-2xl border border-white/10 flex flex-wrap gap-3 shadow-2xl animate-[fadeInUp_0.2s_ease-out] z-[40]">
+                                    {uploadQueue.map(item => (
+                                        <div key={item.id} className="relative w-28 h-20 bg-white/5 rounded-xl border border-white/10 overflow-hidden group flex flex-col justify-between p-2">
+                                            {item.previewUrl ? (
+                                                <img src={item.previewUrl} className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-50 transition-opacity" alt="Preview" />
+                                            ) : (
+                                                <div className="absolute inset-0 flex items-center justify-center opacity-20">
+                                                    <i className="fa-solid fa-file-lines text-2xl text-blue-400"></i>
+                                                </div>
+                                            )}
+                                            
+                                            <div className="relative z-10 flex flex-col justify-between h-full">
+                                                <p className="text-[10px] text-white font-medium truncate w-full pr-4">{item.name}</p>
+                                                
+                                                <div className="flex items-center justify-between">
+                                                    {item.status === 'uploading' && (
+                                                        <span className="text-[9px] text-blue-400 font-bold flex items-center gap-1">
+                                                            <i className="fa-solid fa-circle-notch fa-spin text-[8px]"></i> LÄDT...
+                                                        </span>
+                                                    )}
+                                                    {item.status === 'success' && (
+                                                        <span className="text-[9px] text-emerald-400 font-bold flex items-center gap-1">
+                                                            <i className="fa-solid fa-circle-check text-[8px]"></i> OK
+                                                        </span>
+                                                    )}
+                                                    {item.status === 'error' && (
+                                                        <div className="flex items-center gap-1 w-full">
+                                                            <span className="text-[8px] text-red-500 font-bold flex items-center gap-0.5 shrink-0">
+                                                                <i className="fa-solid fa-circle-xmark text-[8px]"></i> FEHLER
+                                                            </span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRetryUpload(item); }}
+                                                                className="bg-blue-600 hover:bg-blue-500 text-white rounded px-1 py-0.5 text-[8px] font-black tracking-wider transition-colors shrink-0 ml-auto"
+                                                            >
+                                                                RETRY
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Remove button */}
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRemoveUploadQueueItem(item.id)}
+                                                className="absolute top-1 right-1 w-4 h-4 rounded-full bg-black/60 hover:bg-black/90 text-white/70 hover:text-white flex items-center justify-center transition-colors z-20 text-[9px]"
+                                            >
+                                                <i className="fa-solid fa-xmark"></i>
+                                            </button>
+
+                                            {/* Overlays for statuses */}
+                                            {item.status === 'uploading' && (
+                                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                                    <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                                                </div>
+                                            )}
+                                            {item.status === 'success' && (
+                                                <div className="absolute inset-0 bg-emerald-950/40 flex items-center justify-center backdrop-blur-[1px]">
+                                                    <i className="fa-solid fa-circle-check text-xl text-emerald-400 animate-[scaleIn_0.2s_ease-out]"></i>
+                                                </div>
+                                            )}
+                                            {item.status === 'error' && (
+                                                <div className="absolute inset-0 bg-red-950/40 flex items-center justify-center backdrop-blur-[1px]">
+                                                    <i className="fa-solid fa-circle-xmark text-xl text-red-500 animate-[scaleIn_0.2s_ease-out]"></i>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
                             <div className="flex items-center gap-2 md:gap-4 relative">
                                 {!isRecording && (
                                     <div className="relative shrink-0" ref={attachmentMenuRef}>
@@ -2120,23 +2457,79 @@ const Chat = () => {
                                 </button>
                                 <h2 className="text-lg font-bold">Bild bearbeiten</h2>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-3">
+                                {/* ZEICHNEN */}
                                 <button
+                                    type="button"
                                     onClick={() => setEditorMode(editorMode === 'draw' ? 'none' : 'draw')}
-                                    className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${editorMode === 'draw' ? 'bg-blue-600' : 'bg-white/5'}`}
-                                    title="Zeichnen"
+                                    className={`px-3 py-1.5 md:px-4 md:py-2.5 rounded-xl flex items-center gap-2 transition-all text-xs font-bold tracking-wider ${editorMode === 'draw' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white border border-white/5'}`}
                                 >
                                     <i className="fa-solid fa-pencil"></i>
+                                    <span>ZEICHNEN</span>
                                 </button>
+
+                                {/* DREHEN */}
                                 <button
+                                    type="button"
+                                    onClick={() => {
+                                        const canvas = canvasRef.current;
+                                        const ctx = canvas.getContext('2d');
+                                        const tempCanvas = document.createElement('canvas');
+                                        tempCanvas.width = canvas.height;
+                                        tempCanvas.height = canvas.width;
+                                        const tempCtx = tempCanvas.getContext('2d');
+                                        tempCtx.translate(tempCanvas.width / 2, tempCanvas.height / 2);
+                                        tempCtx.rotate(90 * Math.PI / 180);
+                                        tempCtx.drawImage(canvas, -canvas.width / 2, -canvas.height / 2);
+                                        canvas.width = tempCanvas.width;
+                                        canvas.height = tempCanvas.height;
+                                        ctx.drawImage(tempCanvas, 0, 0);
+                                        setZoom(1);
+                                        setPan({ x: 0, y: 0 });
+                                    }}
+                                    className="px-3 py-1.5 md:px-4 md:py-2.5 rounded-xl flex items-center gap-2 bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white border border-white/5 transition-all text-xs font-bold tracking-wider"
+                                >
+                                    <i className="fa-solid fa-rotate-right"></i>
+                                    <span>DREHEN</span>
+                                </button>
+
+                                {/* SPIEGELN */}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const canvas = canvasRef.current;
+                                        const ctx = canvas.getContext('2d');
+                                        const tempCanvas = document.createElement('canvas');
+                                        tempCanvas.width = canvas.width;
+                                        tempCanvas.height = canvas.height;
+                                        const tempCtx = tempCanvas.getContext('2d');
+                                        tempCtx.translate(canvas.width, 0);
+                                        tempCtx.scale(-1, 1);
+                                        tempCtx.drawImage(canvas, 0, 0);
+                                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                                        ctx.drawImage(tempCanvas, 0, 0);
+                                        setZoom(1);
+                                        setPan({ x: 0, y: 0 });
+                                    }}
+                                    className="px-3 py-1.5 md:px-4 md:py-2.5 rounded-xl flex items-center gap-2 bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white border border-white/5 transition-all text-xs font-bold tracking-wider"
+                                >
+                                    <i className="fa-solid fa-arrows-left-right"></i>
+                                    <span>SPIEGELN</span>
+                                </button>
+
+                                {/* ZUSCHNEIDEN */}
+                                <button
+                                    type="button"
                                     onClick={() => setEditorMode(editorMode === 'crop' ? 'none' : 'crop')}
-                                    className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${editorMode === 'crop' ? 'bg-blue-600' : 'bg-white/5'}`}
-                                    title="Zuschneiden"
+                                    className={`px-3 py-1.5 md:px-4 md:py-2.5 rounded-xl flex items-center gap-2 transition-all text-xs font-bold tracking-wider ${editorMode === 'crop' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white border border-white/5'}`}
                                 >
                                     <i className="fa-solid fa-crop-simple"></i>
+                                    <span>CROP</span>
                                 </button>
+
                                 {editorMode === 'crop' && cropStart && cropEnd && (
                                     <button
+                                        type="button"
                                         onClick={() => {
                                             const canvas = canvasRef.current;
                                             const ctx = canvas.getContext('2d');
@@ -2156,8 +2549,10 @@ const Chat = () => {
                                             setCropStart(null);
                                             setCropEnd(null);
                                             setEditorMode('none');
+                                            setZoom(1);
+                                            setPan({ x: 0, y: 0 });
                                         }}
-                                        className="px-3 h-10 rounded-xl bg-emerald-600 text-white text-xs font-bold"
+                                        className="px-3 h-10 rounded-xl bg-emerald-600 text-white text-xs font-bold uppercase tracking-wider hover:bg-emerald-500 transition-colors"
                                     >
                                         Anwenden
                                     </button>
@@ -2176,53 +2571,98 @@ const Chat = () => {
                         </div>
 
                         <div className="flex-1 relative bg-black/20 overflow-hidden flex items-center justify-center p-4">
-                            <canvas
-                                ref={canvasRef}
-                                className={`max-w-full max-h-full object-contain ${editorMode === 'draw' ? 'cursor-crosshair' : ''}`}
-                                onMouseDown={(e) => {
-                                    const canvas = canvasRef.current;
-                                    const rect = canvas.getBoundingClientRect();
-                                    const scaleX = canvas.width / rect.width;
-                                    const scaleY = canvas.height / rect.height;
-                                    const x = (e.clientX - rect.left) * scaleX;
-                                    const y = (e.clientY - rect.top) * scaleY;
+                            <div className="w-full h-full flex items-center justify-center relative overflow-hidden">
+                                <canvas
+                                    ref={canvasRef}
+                                    style={{
+                                        transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                                        transformOrigin: 'center center',
+                                        transition: isPinchingRef.current ? 'none' : 'transform 0.1s ease-out'
+                                    }}
+                                    className={`max-w-full max-h-full object-contain ${editorMode === 'draw' ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}`}
+                                    onWheel={handleWheel}
+                                    onTouchStart={handleTouchStart}
+                                    onTouchMove={handleTouchMove}
+                                    onTouchEnd={handleTouchEnd}
+                                    onMouseDown={(e) => {
+                                        if (zoom > 1 || editorMode !== 'draw') {
+                                            setIsMouseDownForPan(true);
+                                            lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+                                            return;
+                                        }
 
-                                    if (editorMode === 'draw') {
-                                        const ctx = canvas.getContext('2d');
-                                        ctx.beginPath();
-                                        ctx.moveTo(x, y);
-                                        canvas.isDrawing = true;
-                                    } else if (editorMode === 'crop') {
-                                        setCropStart({ x, y });
-                                        setCropEnd({ x, y });
-                                        canvas.isCropping = true;
-                                    }
-                                }}
-                                onMouseMove={(e) => {
-                                    const canvas = canvasRef.current;
-                                    const rect = canvas.getBoundingClientRect();
-                                    const scaleX = canvas.width / rect.width;
-                                    const scaleY = canvas.height / rect.height;
-                                    const x = (e.clientX - rect.left) * scaleX;
-                                    const y = (e.clientY - rect.top) * scaleY;
+                                        const canvas = canvasRef.current;
+                                        const rect = canvas.getBoundingClientRect();
+                                        const x = ((e.clientX - rect.left) - pan.x) * (canvas.width / (rect.width * zoom));
+                                        const y = ((e.clientY - rect.top) - pan.y) * (canvas.height / (rect.height * zoom));
 
-                                    if (editorMode === 'draw' && canvas.isDrawing) {
-                                        const ctx = canvas.getContext('2d');
-                                        ctx.lineTo(x, y);
-                                        ctx.strokeStyle = pencilColor;
-                                        ctx.lineWidth = 5;
-                                        ctx.lineCap = 'round';
-                                        ctx.stroke();
-                                    } else if (editorMode === 'crop' && canvas.isCropping) {
-                                        setCropEnd({ x, y });
-                                    }
-                                }}
-                                onMouseUp={() => {
-                                    const canvas = canvasRef.current;
-                                    canvas.isDrawing = false;
-                                    canvas.isCropping = false;
-                                }}
-                            />
+                                        if (editorMode === 'draw') {
+                                            const ctx = canvas.getContext('2d');
+                                            ctx.beginPath();
+                                            ctx.moveTo(x, y);
+                                            canvas.isDrawing = true;
+                                        } else if (editorMode === 'crop') {
+                                            setCropStart({ x, y });
+                                            setCropEnd({ x, y });
+                                            canvas.isCropping = true;
+                                        }
+                                    }}
+                                    onMouseMove={(e) => {
+                                        if (isMouseDownForPan) {
+                                            const dx = e.clientX - lastMousePosRef.current.x;
+                                            const dy = e.clientY - lastMousePosRef.current.y;
+                                            setPan(prev => ({ x: prev.x + dx, y: prev.y + dy }));
+                                            lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+                                            return;
+                                        }
+
+                                        const canvas = canvasRef.current;
+                                        if (!canvas) return;
+
+                                        if (editorMode === 'draw' && canvas.isDrawing) {
+                                            const rect = canvas.getBoundingClientRect();
+                                            const x = ((e.clientX - rect.left) - pan.x) * (canvas.width / (rect.width * zoom));
+                                            const y = ((e.clientY - rect.top) - pan.y) * (canvas.height / (rect.height * zoom));
+
+                                            const ctx = canvas.getContext('2d');
+                                            ctx.lineTo(x, y);
+                                            ctx.strokeStyle = pencilColor;
+                                            ctx.lineWidth = 5 / zoom;
+                                            ctx.lineCap = 'round';
+                                            ctx.stroke();
+                                        } else if (editorMode === 'crop' && canvas.isCropping) {
+                                            const rect = canvas.getBoundingClientRect();
+                                            const x = ((e.clientX - rect.left) - pan.x) * (canvas.width / (rect.width * zoom));
+                                            const y = ((e.clientY - rect.top) - pan.y) * (canvas.height / (rect.height * zoom));
+                                            setCropEnd({ x, y });
+                                        }
+                                    }}
+                                    onMouseUp={() => {
+                                        const canvas = canvasRef.current;
+                                        if (canvas) {
+                                            canvas.isDrawing = false;
+                                            canvas.isCropping = false;
+                                        }
+                                        setIsMouseDownForPan(false);
+                                    }}
+                                    onMouseLeave={() => {
+                                        const canvas = canvasRef.current;
+                                        if (canvas) {
+                                            canvas.isDrawing = false;
+                                        }
+                                        setIsMouseDownForPan(false);
+                                    }}
+                                />
+                                {zoom > 1 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}
+                                        className="absolute bottom-4 right-4 bg-black/60 text-white px-3 py-1.5 rounded-lg text-xs hover:bg-black/80 transition-colors z-20 border border-white/5"
+                                    >
+                                        Reset Zoom
+                                    </button>
+                                )}
+                            </div>
                             {editorMode === 'crop' && cropStart && cropEnd && (
                                 <div
                                     className="absolute border-2 border-white border-dashed bg-white/10 pointer-events-none"
@@ -2416,7 +2856,7 @@ const Chat = () => {
 
                     {/* Video Elements */}
                     <div className="relative w-full h-full flex items-center justify-center p-8">
-                        {/* Always render remote video to ensure stream plays, hide if audio only */}
+                        {/* Always render remote video to ensure stream plays, hide visually if audio only (hidden class silences audio in browsers) */}
                         <video
                             ref={remoteVideoRef}
                             autoPlay
@@ -2425,7 +2865,7 @@ const Chat = () => {
                                 // Fallback click to play if browser blocks autoplay
                                 e.target.play().catch(console.error);
                             }}
-                            className={`${activeCall.type === 'video' ? 'w-full h-full object-cover rounded-3xl' : 'hidden'}`}
+                            className={`${activeCall.type === 'video' ? 'w-full h-full object-cover rounded-3xl' : 'absolute w-0 h-0 opacity-0 pointer-events-none'}`}
                         />
 
                         {activeCall.type === 'video' ? (
