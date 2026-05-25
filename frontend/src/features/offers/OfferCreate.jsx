@@ -8,6 +8,16 @@ const OfferCreate = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const { user: currentUser } = useSelector(state => state.auth);
+
+    useEffect(() => {
+        if (currentUser) {
+            const isWorker = currentUser.role?.name === 'Worker' || currentUser.role === 'Worker';
+            if (isWorker) {
+                navigate('/angebote');
+            }
+        }
+    }, [currentUser, navigate]);
+
     const { companyData, getAssetUrl } = useCompany();
     const [clients, setClients] = useState([]);
     const [loadingClients, setLoadingClients] = useState(true);

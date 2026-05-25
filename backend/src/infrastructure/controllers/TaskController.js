@@ -61,6 +61,14 @@ exports.createTask = async (req, res, next) => {
             return next(new AppError('Bitte geben Sie einen Titel an', 400));
         }
 
+        const role = req.user.role?.name || req.user.role;
+        if (role === 'Gruppenleiter' && assigned_to_id && assigned_to_id !== req.user.id) {
+            const assignee = await User.findByPk(assigned_to_id);
+            if (!assignee || assignee.manager_id !== req.user.id) {
+                return next(new AppError('Ein Gruppenleiter kann Aufgaben nur sich selbst oder ihm untergeordneten Mitarbeitern zuweisen.', 403));
+            }
+        }
+
         const newTask = await Task.create({
             title,
             description,
@@ -157,8 +165,25 @@ exports.updateTask = async (req, res, next) => {
                 if (otherFields.length > 0) {
                     return next(new AppError('Sie haben keine Berechtigung, Aufgabendetails zu ändern. Sie können nur den Status aktualisieren.', 403));
                 }
-            } else if ((role === 'Gruppenleiter' || role === 'Projektleiter') && task.created_by_id !== req.user.id && task.assigned_to_id !== req.user.id) {
-                return next(new AppError('Keine Berechtigung zum Bearbeiten dieser Aufgabe', 403));
+            } else if (role === 'Gruppenleiter' || role === 'Projektleiter') {
+                let isAllowed = task.created_by_id === req.user.id || task.assigned_to_id === req.user.id;
+                if (!isAllowed && role === 'Gruppenleiter' && task.assigned_to_id) {
+                    const assignee = await User.findByPk(task.assigned_to_id);
+                    if (assignee && assignee.manager_id === req.user.id) {
+                        isAllowed = true;
+                    }
+                }
+                if (!isAllowed) {
+                    return next(new AppError('Keine Berechtigung zum Bearbeiten dieser Aufgabe', 403));
+                }
+
+                // If Gruppenleiter is changing the assignee, verify the new assignee is themselves or a subordinate
+                if (role === 'Gruppenleiter' && req.body.assigned_to_id && req.body.assigned_to_id !== req.user.id) {
+                    const newAssignee = await User.findByPk(req.body.assigned_to_id);
+                    if (!newAssignee || newAssignee.manager_id !== req.user.id) {
+                        return next(new AppError('Ein Gruppenleiter kann Aufgaben nur sich selbst oder ihm untergeordneten Mitarbeitern zuweisen.', 403));
+                    }
+                }
             }
         }
 

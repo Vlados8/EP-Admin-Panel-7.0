@@ -6,6 +6,7 @@ import { useSelector } from 'react-redux';
 const Offers = () => {
     const navigate = useNavigate();
     const { user } = useSelector(state => state.auth);
+    const isWorker = user?.role?.name === 'Worker' || user?.role === 'Worker';
     const [offers, setOffers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
@@ -58,12 +59,14 @@ const Offers = () => {
                             className="bg-black/20 border border-white/10 rounded-xl py-2.5 pl-9 pr-4 text-sm text-white focus:outline-none focus:border-blue-500 transition-all w-full md:w-64 backdrop-blur-sm"
                         />
                     </div>
-                    <button
-                        onClick={() => navigate('/angebote/neu')}
-                        className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl transition-all shadow-[0_0_20px_rgba(37,99,235,0.4)] hover:shadow-[0_0_25px_rgba(37,99,235,0.6)] hover:-translate-y-0.5 flex items-center gap-2 text-sm font-medium whitespace-nowrap active:scale-95"
-                    >
-                        <i className="fa-solid fa-plus mr-1"></i> Neues Angebot
-                    </button>
+                    {!isWorker && (
+                        <button
+                            onClick={() => navigate('/angebote/neu')}
+                            className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl transition-all shadow-[0_0_20px_rgba(37,99,235,0.4)] hover:shadow-[0_0_25px_rgba(37,99,235,0.6)] hover:-translate-y-0.5 flex items-center gap-2 text-sm font-medium whitespace-nowrap active:scale-95"
+                        >
+                            <i className="fa-solid fa-plus mr-1"></i> Neues Angebot
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -77,12 +80,14 @@ const Offers = () => {
                         <i className="fa-solid fa-file-invoice-dollar opacity-30"></i>
                     </div>
                     <p className="text-gray-400 text-lg font-medium">Keine Angebote gefunden</p>
-                    <button 
-                        onClick={() => navigate('/angebote/neu')}
-                        className="mt-4 text-blue-400 hover:text-blue-300 transition-colors font-medium border-b border-blue-400/20"
-                    >
-                        Erstes Angebot erstellen
-                    </button>
+                    {!isWorker && (
+                        <button 
+                            onClick={() => navigate('/angebote/neu')}
+                            className="mt-4 text-blue-400 hover:text-blue-300 transition-colors font-medium border-b border-blue-400/20"
+                        >
+                            Erstes Angebot erstellen
+                        </button>
+                    )}
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 overflow-y-auto pr-2 custom-scrollbar">
