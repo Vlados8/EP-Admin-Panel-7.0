@@ -6,4 +6,4 @@ Write-Host "=============================================" -ForegroundColor Yell
 cd "$PSScriptRoot\.."
 
 # Запуск сборки APK
-eas build -p android --profile preview
+npx eas-cli build -p android --profile preview

@@ -6,4 +6,4 @@ Write-Host "=============================================" -ForegroundColor Gree
 cd "$PSScriptRoot\.."
 
 # Запуск сборки
-eas build -p ios --profile production
+npx eas-cli build -p ios --profile production
