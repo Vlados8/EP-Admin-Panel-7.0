@@ -169,6 +169,7 @@ export default function ProjectDetailScreen() {
 
   // Edit Project State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isCustomClientEnabled, setIsCustomClientEnabled] = useState(false);
   const [editFormData, setEditFormData] = useState({
     title: '',
     description: '',
@@ -179,10 +180,17 @@ export default function ProjectDetailScreen() {
     end_date: '',
     category_id: '' as string | number,
     subcategory_id: '' as string | number,
-    budget: ''
+    budget: '',
+    client_first_name: '',
+    client_last_name: '',
+    client_phone: '',
+    client_email: '',
+    client_address: '',
+    client_notes: ''
   });
   const [assignedUsers, setAssignedUsers] = useState<{ user_id: number, role: string }[]>([]);
   const [assignedSubcontractors, setAssignedSubcontractors] = useState<number[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<{ category_id: number; subcategory_id: number | null }[]>([]);
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
 
@@ -411,6 +419,10 @@ export default function ProjectDetailScreen() {
     ? managementRoleNames.includes(user.role)
     : managementRoleNames.includes((user?.role as any)?.name || '');
   const isManagement = canManagePermissions;
+  const roleName = typeof user?.role === 'string' ? user.role : (user?.role as any)?.name || '';
+  const isWorker = roleName === 'Worker';
+  const isGroupLeader = roleName === 'Gruppenleiter';
+  const isRestricted = isWorker || isGroupLeader;
   const roles = (rolesRes?.data?.roles || [])
     .filter((role: any) => !['Admin', 'Büro'].includes(role.name))
     .sort((a: any, b: any) => {
@@ -858,6 +870,7 @@ export default function ProjectDetailScreen() {
     const p = projectRes?.data?.project || projectRes;
     if (!p) return;
 
+    setIsCustomClientEnabled(!!(p.client_first_name || p.client_last_name));
     setEditFormData({
       title: p.title || '',
       description: p.description || '',
@@ -868,10 +881,35 @@ export default function ProjectDetailScreen() {
       end_date: p.end_date ? p.end_date.split('T')[0] : '',
       category_id: p.category_id || '',
       subcategory_id: p.subcategory_id || '',
-      budget: p.budget?.toString() || ''
+      budget: p.budget?.toString() || '',
+      client_first_name: p.client_first_name || '',
+      client_last_name: p.client_last_name || '',
+      client_phone: p.client_phone || '',
+      client_email: p.client_email || '',
+      client_address: p.client_address || '',
+      client_notes: p.client_notes || ''
     });
     setAssignedUsers(p.assigned_personnel?.map((ap: any) => ({ user_id: ap.user_id, role: ap.role })) || []);
     setAssignedSubcontractors(p.assigned_subcontractors?.map((as: any) => as.subcontractor_id) || []);
+
+    let parsedCats = [];
+    if (p.categories_json) {
+      try {
+        parsedCats = typeof p.categories_json === 'string' ? JSON.parse(p.categories_json) : p.categories_json;
+      } catch (err) {
+        console.error('Error parsing categories_json:', err);
+      }
+    }
+    if (!parsedCats || parsedCats.length === 0) {
+      if (p.category_id) {
+        parsedCats = [{
+          category_id: parseInt(p.category_id),
+          subcategory_id: p.subcategory_id ? parseInt(p.subcategory_id) : null
+        }];
+      }
+    }
+    setSelectedCategories(parsedCats || []);
+
     setIsEditModalOpen(true);
   };
 
@@ -893,8 +931,33 @@ export default function ProjectDetailScreen() {
       return;
     }
 
+    const finalClientData = isCustomClientEnabled ? {
+      client_first_name: editFormData.client_first_name,
+      client_last_name: editFormData.client_last_name,
+      client_phone: editFormData.client_phone,
+      client_email: editFormData.client_email,
+      client_address: editFormData.client_address,
+      client_notes: editFormData.client_notes
+    } : {
+      client_first_name: '',
+      client_last_name: '',
+      client_phone: '',
+      client_email: '',
+      client_address: '',
+      client_notes: ''
+    };
+
+    const firstCat = selectedCategories[0] || null;
+    const legacyCategoryData = {
+      category_id: firstCat ? firstCat.category_id : '',
+      subcategory_id: firstCat ? (firstCat.subcategory_id || '') : '',
+      categories_json: JSON.stringify(selectedCategories)
+    };
+
     updateProjectMutation.mutate({
       ...editFormData,
+      ...finalClientData,
+      ...legacyCategoryData,
       assigned_users: assignedUsers,
       assigned_subcontractors: assignedSubcontractors
     });
@@ -1156,33 +1219,35 @@ export default function ProjectDetailScreen() {
         </GlassCard>
 
         {/* Financial Widget */}
-        <GlassCard className="p-5">
-          <View className="flex-row items-center mb-4 pb-3 border-b border-white/5">
-            <PieChart size={16} color="#3B82F6" className="mr-2" />
-            <Text className="text-white font-bold text-sm">Finanzübersicht & Marge</Text>
-          </View>
-          <View className="space-y-4">
-            <View className="flex-row justify-between items-center">
-              <Text className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Gesamtbudget</Text>
-              <Text className="text-white font-black text-base">{formatCurrency(budget)}</Text>
+        {!isRestricted && (
+          <GlassCard className="p-5">
+            <View className="flex-row items-center mb-4 pb-3 border-b border-white/5">
+              <PieChart size={16} color="#3B82F6" className="mr-2" />
+              <Text className="text-white font-bold text-sm">Finanzübersicht & Marge</Text>
             </View>
-            <View className="w-full h-3 bg-white/5 rounded-full overflow-hidden border border-white/10 p-[2px] flex flex-row">
-              <View style={{ width: `${costPercent}%` }} className="h-full bg-amber-500 rounded-full" />
-              <View style={{ width: `${marginPercent}%` }} className="h-full bg-emerald-500 rounded-full" />
-            </View>
+            <View className="space-y-4">
+              <View className="flex-row justify-between items-center">
+                <Text className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Gesamtbudget</Text>
+                <Text className="text-white font-black text-base">{formatCurrency(budget)}</Text>
+              </View>
+              <View className="w-full h-3 bg-white/5 rounded-full overflow-hidden border border-white/10 p-[2px] flex flex-row">
+                <View style={{ width: `${costPercent}%` }} className="h-full bg-amber-500 rounded-full" />
+                <View style={{ width: `${marginPercent}%` }} className="h-full bg-emerald-500 rounded-full" />
+              </View>
 
-            <View className="flex-row justify-between mt-2">
-              <View className="bg-white/5 p-4 rounded-xl border border-white/5 w-[48%]">
-                <Text className="text-gray-500 text-[9px] font-bold uppercase tracking-wider mb-1">Kosten ({costPercent}%)</Text>
-                <Text className="text-amber-400 font-black text-sm">{formatCurrency(estimatedCosts)}</Text>
-              </View>
-              <View className={`p-4 rounded-xl border w-[48%] ${profitMargin >= 0 ? 'bg-emerald-500/5 border-emerald-500/10' : 'bg-red-500/5 border-red-500/10'}`}>
-                <Text className={`text-[9px] font-bold uppercase tracking-wider mb-1 ${profitMargin >= 0 ? 'text-emerald-500/70' : 'text-red-500/70'}`}>Marge ({marginPercent}%)</Text>
-                <Text className={`font-black text-sm ${profitMargin >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{formatCurrency(profitMargin)}</Text>
+              <View className="flex-row justify-between mt-2">
+                <View className="bg-white/5 p-4 rounded-xl border border-white/5 w-[48%]">
+                  <Text className="text-gray-500 text-[9px] font-bold uppercase tracking-wider mb-1">Kosten ({costPercent}%)</Text>
+                  <Text className="text-amber-400 font-black text-sm">{formatCurrency(estimatedCosts)}</Text>
+                </View>
+                <View className={`p-4 rounded-xl border w-[48%] ${profitMargin >= 0 ? 'bg-emerald-500/5 border-emerald-500/10' : 'bg-red-500/5 border-red-500/10'}`}>
+                  <Text className={`text-[9px] font-bold uppercase tracking-wider mb-1 ${profitMargin >= 0 ? 'text-emerald-500/70' : 'text-red-500/70'}`}>Marge ({marginPercent}%)</Text>
+                  <Text className={`font-black text-sm ${profitMargin >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{formatCurrency(profitMargin)}</Text>
+                </View>
               </View>
             </View>
-          </View>
-        </GlassCard>
+          </GlassCard>
+        )}
 
         {/* Weather Forecast Widget */}
         {weatherForecast && weatherForecast.length > 0 ? (
@@ -1339,31 +1404,111 @@ export default function ProjectDetailScreen() {
           </GlassCard>
         </View>
 
-        {/* Classification & Category */}
-        {(project?.category || project?.subcategory) && (
+        {/* Project Specific Ansprechpartner */}
+        {(project?.client_first_name || project?.client_last_name) && (
           <View>
-            <Text className="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-3 ml-1">Klassifizierung</Text>
-            <GlassCard className="p-5 flex-row">
-              {project?.category && (
-                <View className="flex-1 border-r border-white/5 pr-4">
-                  <Text className="text-gray-500 text-[9px] uppercase font-bold mb-1">Kategorie</Text>
-                  <View className="flex-row items-center">
-                    <View className="w-6 h-6 rounded bg-blue-500/10 items-center justify-center mr-2">
-                      <Target size={12} color="#3B82F6" />
+            <Text className="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-3 ml-1">Ansprechpartner / Endkunde</Text>
+            <GlassCard className="p-5 border-emerald-500/10">
+              <View className="flex-row items-center mb-4">
+                <View className="w-10 h-10 rounded-xl bg-emerald-500/20 items-center justify-center border border-emerald-500/30">
+                  <User size={20} color="#10B981" />
+                </View>
+                <View className="ml-4 flex-1">
+                  <Text className="text-white font-bold text-base">
+                    {project.client_first_name || ''} {project.client_last_name || ''}
+                  </Text>
+                  <Text className="text-emerald-400 text-[10px] font-bold uppercase tracking-widest mt-0.5">Projekt-Ansprechpartner</Text>
+                </View>
+              </View>
+
+              {(project.client_phone || project.client_email || project.client_address) && (
+                <View className="pt-3 border-t border-white/5 space-y-2.5">
+                  {project.client_phone && (
+                    <TouchableOpacity
+                      onPress={() => Linking.openURL(`tel:${project.client_phone}`)}
+                      className="flex-row items-center"
+                    >
+                      <Phone size={12} color="#10B981" className="mr-2.5" />
+                      <Text className="text-emerald-400 text-xs font-semibold">{project.client_phone}</Text>
+                    </TouchableOpacity>
+                  )}
+                  {project.client_email && (
+                    <TouchableOpacity
+                      onPress={() => navigation.navigate('Main', { screen: 'E-Mail', params: { initialRecipient: project.client_email, initialSubject: `Projekt: ${project.title}` } })}
+                      className="flex-row items-center"
+                    >
+                      <Mail size={12} color="#10B981" className="mr-2.5" />
+                      <Text className="text-emerald-400 text-xs font-semibold">{project.client_email}</Text>
+                    </TouchableOpacity>
+                  )}
+                  {project.client_address && (
+                    <View className="flex-row items-center">
+                      <MapPin size={12} color="#6B7280" className="mr-2.5" />
+                      <Text className="text-gray-300 text-xs">{project.client_address}</Text>
                     </View>
-                    <Text className="text-white text-xs font-bold" numberOfLines={1}>{project.category.name}</Text>
-                  </View>
+                  )}
                 </View>
               )}
-              {project?.subcategory && (
-                <View className="flex-1 pl-4">
-                  <Text className="text-gray-500 text-[9px] uppercase font-bold mb-1">Unterkategorie</Text>
-                  <View className="flex-row items-center">
-                    <View className="w-6 h-6 rounded bg-purple-500/10 items-center justify-center mr-2">
-                      <BriefcaseIcon size={12} color="#A855F7" />
+            </GlassCard>
+          </View>
+        )}
+
+        {/* Project Notes (Internal) */}
+        {project?.client_notes && (
+          <View>
+            <Text className="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-3 ml-1">Interne Projekt-Notizen</Text>
+            <GlassCard className="p-5 border-emerald-500/10 bg-emerald-500/5">
+              <Text className="text-gray-300 text-xs leading-relaxed whitespace-pre-wrap">
+                {project.client_notes}
+              </Text>
+            </GlassCard>
+          </View>
+        )}
+
+        {/* Classification & Category */}
+        {((project?.categories_list && project.categories_list.length > 0) || project?.category || project?.subcategory) && (
+          <View>
+            <Text className="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-3 ml-1">Klassifizierung</Text>
+            <GlassCard className="p-5">
+              {project.categories_list && project.categories_list.length > 0 ? (
+                <View className="flex-row flex-wrap">
+                  {project.categories_list.map((catItem: any, idx: number) => (
+                    <View 
+                      key={idx} 
+                      className="bg-blue-500/10 border border-blue-500/20 px-3 py-2 rounded-xl flex-row items-center mr-2 mb-2"
+                    >
+                      <Target size={12} color="#3B82F6" className="mr-1.5" />
+                      <Text className="text-white text-xs font-bold">
+                        {catItem.category?.name || 'Kategorie'}
+                        {catItem.subcategory?.name ? ` : ${catItem.subcategory.name}` : ''}
+                      </Text>
                     </View>
-                    <Text className="text-white text-xs font-bold" numberOfLines={1}>{project.subcategory.name}</Text>
-                  </View>
+                  ))}
+                </View>
+              ) : (
+                <View className="flex-row">
+                  {project?.category && (
+                    <View className="flex-1 border-r border-white/5 pr-4">
+                      <Text className="text-gray-500 text-[9px] uppercase font-bold mb-1">Kategorie</Text>
+                      <View className="flex-row items-center">
+                        <View className="w-6 h-6 rounded bg-blue-500/10 items-center justify-center mr-2">
+                          <Target size={12} color="#3B82F6" />
+                        </View>
+                        <Text className="text-white text-xs font-bold" numberOfLines={1}>{project.category.name}</Text>
+                      </View>
+                    </View>
+                  )}
+                  {project?.subcategory && (
+                    <View className="flex-1 pl-4">
+                      <Text className="text-gray-500 text-[9px] uppercase font-bold mb-1">Unterkategorie</Text>
+                      <View className="flex-row items-center">
+                        <View className="w-6 h-6 rounded bg-purple-500/10 items-center justify-center mr-2">
+                          <BriefcaseIcon size={12} color="#A855F7" />
+                        </View>
+                        <Text className="text-white text-xs font-bold" numberOfLines={1}>{project.subcategory.name}</Text>
+                      </View>
+                    </View>
+                  )}
                 </View>
               )}
             </GlassCard>
@@ -2312,42 +2457,89 @@ export default function ProjectDetailScreen() {
                   </View>
                 </View>
 
-                {/* Category & Subcategory */}
+                {/* Categories Checkbox Grid */}
                 <View>
-                  <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Kategorie</Text>
-                  <GlassCard className="p-2 bg-black/40 border border-white/5">
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
-                      {categoriesRes?.data?.categories?.map((c: any) => (
+                  <Text className="text-gray-400 text-[11px] font-bold uppercase tracking-widest mb-3 ml-1">Klassifizierung (Mehrfachauswahl)</Text>
+                  <Text className="text-gray-500 text-[9px] font-bold uppercase tracking-widest mb-2 ml-1">Hauptkategorien</Text>
+                  
+                  <View className="flex-row flex-wrap gap-2 mb-4">
+                    {categoriesRes?.data?.categories?.map((cat: any) => {
+                      const isSelected = selectedCategories.some(c => c.category_id === cat.id);
+                      return (
                         <TouchableOpacity
-                          key={c.id}
-                          onPress={() => setEditFormData({ ...editFormData, category_id: c.id, subcategory_id: '' })}
-                          className={`px-3 py-2 rounded-lg mr-2 border ${editFormData.category_id === c.id ? 'bg-brand-blue border-brand-blue' : 'bg-white/5 border-white/5'}`}
+                          key={cat.id}
+                          onPress={() => {
+                            setSelectedCategories(prev => {
+                              const exists = prev.some(c => c.category_id === cat.id);
+                              if (exists) {
+                                return prev.filter(c => c.category_id !== cat.id);
+                              } else {
+                                return [...prev, { category_id: cat.id, subcategory_id: null }];
+                              }
+                            });
+                          }}
+                          className={`px-3.5 py-2.5 rounded-xl border flex-row items-center mb-1 bg-black/40 ${isSelected ? 'border-brand-blue bg-brand-blue/15' : 'border-white/5'}`}
                         >
-                          <Text className={`text-xs font-bold ${editFormData.category_id === c.id ? 'text-white' : 'text-gray-400'}`}>{c.name}</Text>
+                          <View className={`w-4 h-4 rounded border mr-2 items-center justify-center ${isSelected ? 'bg-brand-blue border-brand-blue' : 'border-white/20'}`}>
+                            {isSelected && <Check size={10} color="white" />}
+                          </View>
+                          <Text className={`text-xs font-bold ${isSelected ? 'text-brand-blue' : 'text-gray-400'}`}>{cat.name}</Text>
                         </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </GlassCard>
-                </View>
-
-                {editFormData.category_id && (
-                  <View>
-                    <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Unterkategorie</Text>
-                    <GlassCard className="p-2 bg-black/40 border border-white/5">
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
-                        {categoriesRes?.data?.categories?.find((c: any) => c.id === editFormData.category_id)?.subcategories?.map((s: any) => (
-                          <TouchableOpacity
-                            key={s.id}
-                            onPress={() => setEditFormData({ ...editFormData, subcategory_id: s.id })}
-                            className={`px-3 py-2 rounded-lg mr-2 border ${editFormData.subcategory_id === s.id ? 'bg-brand-blue border-brand-blue' : 'bg-white/5 border-white/5'}`}
-                          >
-                            <Text className={`text-xs font-bold ${editFormData.subcategory_id === s.id ? 'text-white' : 'text-gray-400'}`}>{s.name}</Text>
-                          </TouchableOpacity>
-                        ))}
-                      </ScrollView>
-                    </GlassCard>
+                      );
+                    })}
                   </View>
-                )}
+
+                  {/* Selected Categories with subcategory selects */}
+                  {selectedCategories.length > 0 && (
+                    <View className="space-y-3">
+                      <Text className="text-gray-500 text-[9px] font-bold uppercase tracking-widest mb-1.5 ml-1">Unterkategorien zuweisen</Text>
+                      {selectedCategories.map((selectedCat) => {
+                        const cat = categoriesRes?.data?.categories?.find((c: any) => c.id === selectedCat.category_id);
+                        if (!cat || !cat.subcategories || cat.subcategories.length === 0) return null;
+                        
+                        return (
+                          <GlassCard key={selectedCat.category_id} className="p-4 bg-black/40 border border-white/5 mb-2.5">
+                            <View className="flex-row justify-between items-center mb-2.5">
+                              <Text className="text-white text-xs font-bold">{cat.name}</Text>
+                              <TouchableOpacity
+                                onPress={() => setSelectedCategories(prev => prev.filter(c => c.category_id !== selectedCat.category_id))}
+                                className="text-gray-500"
+                              >
+                                <X size={14} color="#6B7280" />
+                              </TouchableOpacity>
+                            </View>
+
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
+                              <TouchableOpacity
+                                onPress={() => {
+                                  setSelectedCategories(prev => prev.map(c => c.category_id === selectedCat.category_id ? { ...c, subcategory_id: null } : c));
+                                }}
+                                className={`px-3 py-2 rounded-lg mr-2 border ${selectedCat.subcategory_id === null ? 'bg-white/10 border-white/20' : 'bg-transparent border-white/5'}`}
+                              >
+                                <Text className={`text-[10px] font-bold ${selectedCat.subcategory_id === null ? 'text-white' : 'text-gray-500'}`}>Keine</Text>
+                              </TouchableOpacity>
+
+                              {cat.subcategories.map((sub: any) => {
+                                const isSubSelected = selectedCat.subcategory_id === sub.id;
+                                return (
+                                  <TouchableOpacity
+                                    key={sub.id}
+                                    onPress={() => {
+                                      setSelectedCategories(prev => prev.map(c => c.category_id === selectedCat.category_id ? { ...c, subcategory_id: sub.id } : c));
+                                    }}
+                                    className={`px-3 py-2 rounded-lg mr-2 border ${isSubSelected ? 'bg-brand-blue border-brand-blue' : 'bg-transparent border-white/5'}`}
+                                  >
+                                    <Text className={`text-[10px] font-bold ${isSubSelected ? 'text-white' : 'text-gray-500'}`}>{sub.name}</Text>
+                                  </TouchableOpacity>
+                                );
+                              })}
+                            </ScrollView>
+                          </GlassCard>
+                        );
+                      })}
+                    </View>
+                  )}
+                </View>
 
                 {/* Dates & Budget */}
                 <View className="flex-row justify-between">
@@ -2432,6 +2624,112 @@ export default function ProjectDetailScreen() {
                   </GlassCard>
                 </View>
 
+                {/* Abweichender Ansprechpartner Toggle */}
+                <View className="flex-row justify-between items-center bg-white/5 border border-white/5 p-4 rounded-2xl mt-4">
+                  <View className="flex-1 pr-3">
+                    <Text className="text-white text-xs font-bold">Abweichender Ansprechpartner / Endkunde</Text>
+                    <Text className="text-gray-500 text-[10px] mt-0.5">Spezifischen Kontakt für dieses Projekt hinterlegen</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setIsCustomClientEnabled(!isCustomClientEnabled)}
+                    className={`w-12 h-6 rounded-full p-0.5 justify-center ${isCustomClientEnabled ? 'bg-emerald-500 items-end' : 'bg-gray-600 items-start'}`}
+                  >
+                    <View className="w-5 h-5 rounded-full bg-white shadow" />
+                  </TouchableOpacity>
+                </View>
+
+                {isCustomClientEnabled && (
+                  <View className="mt-4 p-4 border border-emerald-500/10 bg-emerald-500/5 rounded-2xl space-y-4">
+                    <Text className="text-emerald-400 font-bold uppercase tracking-widest text-[9px] mb-1">
+                      Kontakt-Details des Endkunden
+                    </Text>
+
+                    <View className="flex-row gap-x-2">
+                      <View className="flex-1">
+                        <Text className="text-gray-500 text-[9px] font-bold uppercase tracking-widest mb-1.5 ml-1">Vorname</Text>
+                        <GlassCard className="p-0 overflow-hidden bg-black/40 border border-white/5">
+                          <TextInput
+                            value={editFormData.client_first_name}
+                            onChangeText={(txt) => setEditFormData({ ...editFormData, client_first_name: txt })}
+                            className="p-3.5 text-white text-xs"
+                            placeholder="Vorname..."
+                            placeholderTextColor="#4B5563"
+                          />
+                        </GlassCard>
+                      </View>
+                      <View className="flex-1">
+                        <Text className="text-gray-500 text-[9px] font-bold uppercase tracking-widest mb-1.5 ml-1">Nachname</Text>
+                        <GlassCard className="p-0 overflow-hidden bg-black/40 border border-white/5">
+                          <TextInput
+                            value={editFormData.client_last_name}
+                            onChangeText={(txt) => setEditFormData({ ...editFormData, client_last_name: txt })}
+                            className="p-3.5 text-white text-xs"
+                            placeholder="Nachname..."
+                            placeholderTextColor="#4B5563"
+                          />
+                        </GlassCard>
+                      </View>
+                    </View>
+
+                    <View className="flex-row gap-x-2">
+                      <View className="flex-1">
+                        <Text className="text-gray-500 text-[9px] font-bold uppercase tracking-widest mb-1.5 ml-1">Telefon</Text>
+                        <GlassCard className="p-0 overflow-hidden bg-black/40 border border-white/5">
+                          <TextInput
+                            value={editFormData.client_phone}
+                            onChangeText={(txt) => setEditFormData({ ...editFormData, client_phone: txt })}
+                            className="p-3.5 text-white text-xs"
+                            placeholder="Telefon..."
+                            placeholderTextColor="#4B5563"
+                          />
+                        </GlassCard>
+                      </View>
+                      <View className="flex-1">
+                        <Text className="text-gray-500 text-[9px] font-bold uppercase tracking-widest mb-1.5 ml-1">E-Mail</Text>
+                        <GlassCard className="p-0 overflow-hidden bg-black/40 border border-white/5">
+                          <TextInput
+                            value={editFormData.client_email}
+                            onChangeText={(txt) => setEditFormData({ ...editFormData, client_email: txt })}
+                            className="p-3.5 text-white text-xs"
+                            placeholder="E-Mail..."
+                            placeholderTextColor="#4B5563"
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                          />
+                        </GlassCard>
+                      </View>
+                    </View>
+
+                    <View>
+                      <Text className="text-gray-500 text-[9px] font-bold uppercase tracking-widest mb-1.5 ml-1">Adresse</Text>
+                      <GlassCard className="p-0 overflow-hidden bg-black/40 border border-white/5">
+                        <TextInput
+                          value={editFormData.client_address}
+                          onChangeText={(txt) => setEditFormData({ ...editFormData, client_address: txt })}
+                          className="p-3.5 text-white text-xs"
+                          placeholder="Adresse..."
+                          placeholderTextColor="#4B5563"
+                        />
+                      </GlassCard>
+                    </View>
+
+                    <View>
+                      <Text className="text-gray-500 text-[9px] font-bold uppercase tracking-widest mb-1.5 ml-1">Interne Notizen zum Endkunden</Text>
+                      <GlassCard className="p-0 overflow-hidden bg-black/40 border border-white/5">
+                        <TextInput
+                          value={editFormData.client_notes}
+                          onChangeText={(txt) => setEditFormData({ ...editFormData, client_notes: txt })}
+                          multiline
+                          numberOfLines={3}
+                          className="p-3.5 text-white text-xs min-h-[60px] text-left align-top"
+                          placeholder="Interne Notizen..."
+                          placeholderTextColor="#4B5563"
+                        />
+                      </GlassCard>
+                    </View>
+                  </View>
+                )}
+
                 {/* Team Assignment */}
                 <View className="pt-4 mt-4 border-t border-white/5">
                   <View className="flex-row items-center mb-6">
@@ -2443,24 +2741,55 @@ export default function ProjectDetailScreen() {
                   {['Projektleiter', 'Gruppenleiter', 'Worker'].map((roleName) => (
                     <View key={roleName} className="mb-6">
                       <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">{roleName}</Text>
-                      <GlassCard className="p-2 bg-black/40 border border-white/5">
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
-                          {(allUsersRes || []).filter((u: any) => u.role?.name?.toLowerCase() === roleName.toLowerCase()).map((u: any) => {
-                            const roleId = roleName.toLowerCase() as any;
-                            const isAssigned = assignedUsers.some(au => au.user_id === u.id && au.role === roleId);
-                            return (
-                              <TouchableOpacity
-                                key={u.id}
-                                onPress={() => handleTogglePersonnel(u.id, roleId)}
-                                className={`px-3 py-2 rounded-lg mr-2 border flex-row items-center ${isAssigned ? 'bg-brand-blue border-brand-blue' : 'bg-white/5 border-white/5'}`}
-                              >
-                                <User size={12} color={isAssigned ? 'white' : '#6B7280'} className="mr-1.5" />
-                                <Text className={`text-[10px] font-bold ${isAssigned ? 'text-white' : 'text-gray-400'}`}>{u.name}</Text>
-                              </TouchableOpacity>
-                            );
-                          })}
-                        </ScrollView>
-                      </GlassCard>
+                      <View className="space-y-2">
+                        {(allUsersRes || []).filter((u: any) => {
+                          const userRole = u.role?.name?.toLowerCase();
+                          const currentRoleMatch = roleName.toLowerCase();
+                          if (currentRoleMatch === 'projektleiter') {
+                            return userRole === 'projektleiter' || userRole === 'pl' || userRole === 'admin' || userRole === 'büro' || userRole === 'buero';
+                          }
+                          return userRole === currentRoleMatch || (currentRoleMatch === 'worker' && userRole === 'arbeiter');
+                        }).map((u: any) => {
+                          const roleId = roleName.toLowerCase() as any;
+                          const isAssigned = assignedUsers.some(au => au.user_id === u.id && au.role === roleId);
+                          return (
+                            <TouchableOpacity
+                              key={u.id}
+                              onPress={() => handleTogglePersonnel(u.id, roleId)}
+                              className={`p-3.5 rounded-2xl border flex-row items-center justify-between ${isAssigned ? 'bg-brand-blue/20 border-brand-blue' : 'bg-black/40 border-white/5'}`}
+                            >
+                              <View className="flex-row items-center flex-1 pr-3">
+                                <User size={16} color={isAssigned ? '#3B82F6' : '#6B7280'} className="mr-3" />
+                                <View className="flex-1">
+                                  <Text className={`text-xs font-bold ${isAssigned ? 'text-white' : 'text-gray-300'}`}>
+                                    {u.name} {u.role?.name ? `(${u.role.name})` : ''}
+                                  </Text>
+                                  {u.specialty ? <Text className="text-[10px] text-gray-500 mt-0.5">{u.specialty}</Text> : null}
+                                  {(u.phone || u.email) && (
+                                    <View className="mt-1.5 pt-1.5 border-t border-white/5 space-y-1">
+                                      {u.phone && (
+                                        <View className="flex-row items-center">
+                                          <Phone size={10} color="#4B5563" className="mr-1.5" />
+                                          <Text className="text-[10px] text-gray-400">{u.phone}</Text>
+                                        </View>
+                                      )}
+                                      {u.email && (
+                                        <View className="flex-row items-center">
+                                          <Mail size={10} color="#4B5563" className="mr-1.5" />
+                                          <Text className="text-[10px] text-gray-400">{u.email}</Text>
+                                        </View>
+                                      )}
+                                    </View>
+                                  )}
+                                </View>
+                              </View>
+                              <View className={`w-5 h-5 rounded-full items-center justify-center border ${isAssigned ? 'bg-brand-blue border-brand-blue' : 'border-white/20'}`}>
+                                {isAssigned && <Check size={10} color="white" />}
+                              </View>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
                     </View>
                   ))}
 

@@ -26,6 +26,16 @@ const EmailMessages = () => {
     const [selectedClientId, setSelectedClientId] = useState(null);
     const [selectedClientEmail, setSelectedClientEmail] = useState(null);
 
+    // Custom select dropdown state hooks
+    const [isSenderSelectOpen, setIsSenderSelectOpen] = useState(false);
+    const [selectedSender, setSelectedSender] = useState('');
+
+    useEffect(() => {
+        if (!selectedSender && accounts.length > 0) {
+            setSelectedSender(accountFilter || accounts[0]?.email);
+        }
+    }, [accounts, accountFilter]);
+
     // Gallery State
     const [isGalleryOpen, setIsGalleryOpen] = useState(false);
     const [galleryItems, setGalleryItems] = useState([]);
@@ -48,6 +58,22 @@ const EmailMessages = () => {
         socketService.on('new_email', handleNewEmail);
         return () => socketService.off('new_email', handleNewEmail);
     }, []);
+
+    useEffect(() => {
+        const toParam = searchParams.get('to');
+        if (toParam) {
+            setComposeData(prev => ({
+                ...prev,
+                to: decodeURIComponent(toParam)
+            }));
+            setView('compose');
+            
+            // Clean 'to' param so it doesn't trigger again on component re-render or internal navigation
+            const newParams = new URLSearchParams(searchParams);
+            newParams.delete('to');
+            setSearchParams(newParams, { replace: true });
+        }
+    }, [searchParams, setSearchParams]);
 
     const fetchData = async () => {
         try {
@@ -352,17 +378,43 @@ const EmailMessages = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label className="block text-sm text-gray-400 mb-2 font-semibold">Von</label>
-                        <select 
-                            name="from"
-                            defaultValue={accountFilter || accounts[0]?.email}
-                            className="w-full glass-input rounded-xl px-4 py-3 text-white font-semibold"
-                        >
-                            {accounts.map(acc => (
-                                <option key={acc.id} value={acc.email} className="bg-gray-900">
-                                    {acc.display_name ? `${acc.display_name} <${acc.email}>` : acc.email}
-                                </option>
-                            ))}
-                        </select>
+                        <div className="relative">
+                            <input type="hidden" name="from" value={selectedSender || accountFilter || accounts[0]?.email || ''} />
+                            <button
+                                type="button"
+                                onClick={() => setIsSenderSelectOpen(!isSenderSelectOpen)}
+                                className="w-full glass-input rounded-xl px-4 py-3 text-white font-semibold text-left flex items-center justify-between"
+                            >
+                                <span className="truncate">
+                                    {(() => {
+                                        const currentVal = selectedSender || accountFilter || accounts[0]?.email;
+                                        const acc = accounts.find(a => String(a.email) === String(currentVal));
+                                        return acc ? (acc.display_name ? `${acc.display_name} <${acc.email}>` : acc.email) : 'Absender wählen...';
+                                    })()}
+                                </span>
+                                <i className={`fa-solid fa-chevron-down text-gray-400 text-xs transition-transform duration-200 ${isSenderSelectOpen ? 'rotate-180' : ''}`}></i>
+                            </button>
+                            {isSenderSelectOpen && (
+                                <>
+                                    <div className="fixed inset-0 z-40" onClick={() => setIsSenderSelectOpen(false)} />
+                                    <div className="absolute left-0 right-0 mt-1 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar text-left font-normal">
+                                        {accounts.map(acc => (
+                                            <button
+                                                key={acc.id}
+                                                type="button"
+                                                onClick={() => {
+                                                    setSelectedSender(acc.email);
+                                                    setIsSenderSelectOpen(false);
+                                                }}
+                                                className={`w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate ${String(selectedSender || accountFilter || accounts[0]?.email) === String(acc.email) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                            >
+                                                {acc.display_name ? `${acc.display_name} <${acc.email}>` : acc.email}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </div>
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Empfänger</label>

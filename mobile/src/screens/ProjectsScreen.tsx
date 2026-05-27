@@ -94,6 +94,16 @@ export default function ProjectsScreen() {
   const [clientZip, setClientZip] = useState('');
   const [clientCity, setClientCity] = useState('');
 
+  // Custom project client contacts
+  const [isCustomClientEnabled, setIsCustomClientEnabled] = useState(false);
+  const [customClientFirstName, setCustomClientFirstName] = useState('');
+  const [customClientLastName, setCustomClientLastName] = useState('');
+  const [customClientPhone, setCustomClientPhone] = useState('');
+  const [customClientEmail, setCustomClientEmail] = useState('');
+  const [customClientAddress, setCustomClientAddress] = useState('');
+  const [customClientNotes, setCustomClientNotes] = useState('');
+  const [selectedCategories, setSelectedCategories] = useState<{ category_id: number; subcategory_id: number | null }[]>([]);
+
   // Classification
   const [categoryId, setCategoryId] = useState('');
   const [subcategoryId, setSubcategoryId] = useState('');
@@ -124,7 +134,10 @@ export default function ProjectsScreen() {
     queryFn: fetchUsers,
     enabled: isCreateOpen,
   });
-  const plList = useMemo(() => (users || []).filter((u: any) => u.role?.name?.toLowerCase() === 'projektleiter' || u.role?.name?.toLowerCase() === 'pl'), [users]);
+  const plList = useMemo(() => (users || []).filter((u: any) => {
+    const roleName = u.role?.name?.toLowerCase();
+    return roleName === 'projektleiter' || roleName === 'pl' || roleName === 'admin' || roleName === 'büro' || roleName === 'buero';
+  }), [users]);
   const glList = useMemo(() => (users || []).filter((u: any) => u.role?.name?.toLowerCase() === 'gruppenleiter' || u.role?.name?.toLowerCase() === 'gl'), [users]);
   const workerList = useMemo(() => (users || []).filter((u: any) => u.role?.name?.toLowerCase() === 'worker' || u.role?.name?.toLowerCase() === 'arbeiter'), [users]);
 
@@ -193,6 +206,14 @@ export default function ProjectsScreen() {
     setSelectedGL('');
     setSelectedWorkers([]);
     setSelectedSubcontractors([]);
+    setIsCustomClientEnabled(false);
+    setCustomClientFirstName('');
+    setCustomClientLastName('');
+    setCustomClientPhone('');
+    setCustomClientEmail('');
+    setCustomClientAddress('');
+    setCustomClientNotes('');
+    setSelectedCategories([]);
   };
 
   const createProjectMutation = useMutation({
@@ -239,6 +260,29 @@ export default function ProjectsScreen() {
         assignedUsersArray.push({ user_id: wId, role: 'worker' });
       });
 
+      const finalClientData = isCustomClientEnabled ? {
+        client_first_name: customClientFirstName,
+        client_last_name: customClientLastName,
+        client_phone: customClientPhone,
+        client_email: customClientEmail,
+        client_address: customClientAddress,
+        client_notes: customClientNotes
+      } : {
+        client_first_name: '',
+        client_last_name: '',
+        client_phone: '',
+        client_email: '',
+        client_address: '',
+        client_notes: ''
+      };
+
+      const firstCat = selectedCategories[0] || null;
+      const legacyCategoryData = {
+        category_id: firstCat ? firstCat.category_id : null,
+        subcategory_id: firstCat ? firstCat.subcategory_id : null,
+        categories_json: JSON.stringify(selectedCategories)
+      };
+
       const bodyPayload = {
         title,
         description,
@@ -247,11 +291,11 @@ export default function ProjectsScreen() {
         start_date: startDate || null,
         end_date: endDate || null,
         client_id: finalClientId,
-        category_id: categoryId ? parseInt(categoryId) : null,
-        subcategory_id: subcategoryId ? parseInt(subcategoryId) : null,
         assigned_users: JSON.stringify(assignedUsersArray),
         assigned_subcontractors: JSON.stringify(selectedSubcontractors),
-        status: 'Aktiv'
+        status: 'Aktiv',
+        ...finalClientData,
+        ...legacyCategoryData
       };
 
       return createProject(bodyPayload);
@@ -736,51 +780,197 @@ export default function ProjectsScreen() {
                 </GlassCard>
               </View>
 
-              {/* SECTION 3: CLASSIFICATION */}
+              {/* Abweichender Ansprechpartner Toggle */}
               <View className="mb-6">
-                <Text className="text-gray-400 text-[11px] font-bold uppercase tracking-widest mb-3 ml-1">Klassifizierung</Text>
+                <View className="flex-row justify-between items-center bg-white/5 border border-white/5 p-4 rounded-2xl">
+                  <View className="flex-1 pr-3">
+                    <Text className="text-white text-xs font-bold">Abweichender Ansprechpartner / Endkunde</Text>
+                    <Text className="text-gray-500 text-[10px] mt-0.5">Spezifischen Kontakt für dieses Projekt hinterlegen</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setIsCustomClientEnabled(!isCustomClientEnabled)}
+                    className={`w-12 h-6 rounded-full p-0.5 justify-center ${isCustomClientEnabled ? 'bg-emerald-500 items-end' : 'bg-gray-600 items-start'}`}
+                  >
+                    <View className="w-5 h-5 rounded-full bg-white shadow" />
+                  </TouchableOpacity>
+                </View>
+
+                {isCustomClientEnabled && (
+                  <View className="mt-4 p-4 border border-emerald-500/10 bg-emerald-500/5 rounded-2xl space-y-4">
+                    <Text className="text-emerald-400 font-bold uppercase tracking-widest text-[9px] mb-1">
+                      Kontakt-Details des Endkunden
+                    </Text>
+
+                    <View className="flex-row gap-x-2">
+                      <View className="flex-1">
+                        <Text className="text-gray-500 text-[9px] font-bold uppercase tracking-widest mb-1.5 ml-1">Vorname</Text>
+                        <GlassCard className="p-0 overflow-hidden bg-black/40 border border-white/5">
+                          <TextInput
+                            value={customClientFirstName}
+                            onChangeText={setCustomClientFirstName}
+                            className="p-3.5 text-white text-xs"
+                            placeholder="Vorname..."
+                            placeholderTextColor="#4B5563"
+                          />
+                        </GlassCard>
+                      </View>
+                      <View className="flex-1">
+                        <Text className="text-gray-500 text-[9px] font-bold uppercase tracking-widest mb-1.5 ml-1">Nachname</Text>
+                        <GlassCard className="p-0 overflow-hidden bg-black/40 border border-white/5">
+                          <TextInput
+                            value={customClientLastName}
+                            onChangeText={setCustomClientLastName}
+                            className="p-3.5 text-white text-xs"
+                            placeholder="Nachname..."
+                            placeholderTextColor="#4B5563"
+                          />
+                        </GlassCard>
+                      </View>
+                    </View>
+
+                    <View className="flex-row gap-x-2">
+                      <View className="flex-1">
+                        <Text className="text-gray-500 text-[9px] font-bold uppercase tracking-widest mb-1.5 ml-1">Telefon</Text>
+                        <GlassCard className="p-0 overflow-hidden bg-black/40 border border-white/5">
+                          <TextInput
+                            value={customClientPhone}
+                            onChangeText={setCustomClientPhone}
+                            className="p-3.5 text-white text-xs"
+                            placeholder="Telefon..."
+                            placeholderTextColor="#4B5563"
+                          />
+                        </GlassCard>
+                      </View>
+                      <View className="flex-1">
+                        <Text className="text-gray-500 text-[9px] font-bold uppercase tracking-widest mb-1.5 ml-1">E-Mail</Text>
+                        <GlassCard className="p-0 overflow-hidden bg-black/40 border border-white/5">
+                          <TextInput
+                            value={customClientEmail}
+                            onChangeText={setCustomClientEmail}
+                            className="p-3.5 text-white text-xs"
+                            placeholder="E-Mail..."
+                            placeholderTextColor="#4B5563"
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                          />
+                        </GlassCard>
+                      </View>
+                    </View>
+
+                    <View>
+                      <Text className="text-gray-500 text-[9px] font-bold uppercase tracking-widest mb-1.5 ml-1">Adresse</Text>
+                      <GlassCard className="p-0 overflow-hidden bg-black/40 border border-white/5">
+                        <TextInput
+                          value={customClientAddress}
+                          onChangeText={setCustomClientAddress}
+                          className="p-3.5 text-white text-xs"
+                          placeholder="Adresse..."
+                          placeholderTextColor="#4B5563"
+                        />
+                      </GlassCard>
+                    </View>
+
+                    <View>
+                      <Text className="text-gray-500 text-[9px] font-bold uppercase tracking-widest mb-1.5 ml-1">Interne Notizen zum Endkunden</Text>
+                      <GlassCard className="p-0 overflow-hidden bg-black/40 border border-white/5">
+                        <TextInput
+                          value={customClientNotes}
+                          onChangeText={setCustomClientNotes}
+                          multiline
+                          numberOfLines={3}
+                          className="p-3.5 text-white text-xs min-h-[60px] text-left align-top"
+                          placeholder="Interne Notizen..."
+                          placeholderTextColor="#4B5563"
+                        />
+                      </GlassCard>
+                    </View>
+                  </View>
+                )}
+              </View>
+
+              {/* SECTION 3: CLASSIFICATION (Mehrfachauswahl) */}
+              <View className="mb-6">
+                <Text className="text-gray-400 text-[11px] font-bold uppercase tracking-widest mb-3 ml-1">Klassifizierung (Mehrfachauswahl)</Text>
                 
-                {/* Horizontal Scroll Categories */}
-                <Text className="text-gray-500 text-[9px] font-bold uppercase tracking-widest mb-2 ml-1">Kategorie</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row mb-3">
+                {/* Hauptkategorien */}
+                <Text className="text-gray-500 text-[9px] font-bold uppercase tracking-widest mb-2 ml-1">Hauptkategorien</Text>
+                
+                <View className="flex-row flex-wrap gap-2 mb-4">
                   {categories.map((cat: any) => {
                     if (!cat || !cat.id) return null;
-                    const isSelected = categoryId === cat.id.toString();
+                    const isSelected = selectedCategories.some(c => c.category_id === cat.id);
                     return (
                       <TouchableOpacity
                         key={cat.id}
                         onPress={() => {
-                          setCategoryId(cat.id.toString());
-                          setSubcategoryId(''); // Reset subcat
+                          setSelectedCategories(prev => {
+                            const exists = prev.some(c => c.category_id === cat.id);
+                            if (exists) {
+                              return prev.filter(c => c.category_id !== cat.id);
+                            } else {
+                              return [...prev, { category_id: cat.id, subcategory_id: null }];
+                            }
+                          });
                         }}
-                        className={`px-3 py-2.5 rounded-xl mr-2 border flex-row items-center bg-black/40 ${isSelected ? 'border-brand-blue bg-brand-blue/15' : 'border-white/5'}`}
+                        className={`px-3.5 py-2.5 rounded-xl border flex-row items-center mb-1 bg-black/40 ${isSelected ? 'border-brand-blue bg-brand-blue/15' : 'border-white/5'}`}
                       >
-                        <Tag size={12} color={isSelected ? '#3B82F6' : '#6B7280'} className="mr-1.5" />
+                        <View className={`w-4 h-4 rounded border mr-2 items-center justify-center ${isSelected ? 'bg-brand-blue border-brand-blue' : 'border-white/20'}`}>
+                          {isSelected && <Check size={10} color="white" />}
+                        </View>
                         <Text className={`text-xs font-bold ${isSelected ? 'text-brand-blue' : 'text-gray-400'}`}>{cat.name}</Text>
                       </TouchableOpacity>
                     );
                   })}
-                </ScrollView>
+                </View>
 
-                {/* Subcategories scroll if selected */}
-                {selectedCategory?.subcategories?.length > 0 && (
-                  <View>
-                    <Text className="text-gray-500 text-[9px] font-bold uppercase tracking-widest mb-2 ml-1">Unterkategorie</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row mb-2">
-                      {selectedCategory.subcategories.map((sub: any) => {
-                        if (!sub || !sub.id) return null;
-                        const isSelected = subcategoryId === sub.id.toString();
-                        return (
-                          <TouchableOpacity
-                            key={sub.id}
-                            onPress={() => setSubcategoryId(sub.id.toString())}
-                            className={`px-3 py-2 rounded-xl mr-2 border flex-row items-center bg-black/40 ${isSelected ? 'border-brand-blue bg-brand-blue/15' : 'border-white/5'}`}
-                          >
-                            <Text className={`text-[11px] font-bold ${isSelected ? 'text-brand-blue' : 'text-gray-400'}`}>{sub.name}</Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
+                {/* Selected Categories with subcategory selects */}
+                {selectedCategories.length > 0 && (
+                  <View className="space-y-3">
+                    <Text className="text-gray-500 text-[9px] font-bold uppercase tracking-widest mb-1.5 ml-1">Unterkategorien zuweisen</Text>
+                    {selectedCategories.map((selectedCat) => {
+                      const cat = categories.find((c: any) => c.id === selectedCat.category_id);
+                      if (!cat || !cat.subcategories || cat.subcategories.length === 0) return null;
+                      
+                      return (
+                        <GlassCard key={selectedCat.category_id} className="p-4 bg-black/40 border border-white/5 mb-2.5">
+                          <View className="flex-row justify-between items-center mb-2.5">
+                            <Text className="text-white text-xs font-bold">{cat.name}</Text>
+                            <TouchableOpacity
+                              onPress={() => setSelectedCategories(prev => prev.filter(c => c.category_id !== selectedCat.category_id))}
+                              className="text-gray-500"
+                            >
+                              <X size={14} color="#6B7280" />
+                            </TouchableOpacity>
+                          </View>
+
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
+                            <TouchableOpacity
+                              onPress={() => {
+                                setSelectedCategories(prev => prev.map(c => c.category_id === selectedCat.category_id ? { ...c, subcategory_id: null } : c));
+                              }}
+                              className={`px-3 py-2 rounded-lg mr-2 border ${selectedCat.subcategory_id === null ? 'bg-white/10 border-white/20' : 'bg-transparent border-white/5'}`}
+                            >
+                              <Text className={`text-[10px] font-bold ${selectedCat.subcategory_id === null ? 'text-white' : 'text-gray-500'}`}>Keine</Text>
+                            </TouchableOpacity>
+
+                            {cat.subcategories.map((sub: any) => {
+                              const isSubSelected = selectedCat.subcategory_id === sub.id;
+                              return (
+                                <TouchableOpacity
+                                  key={sub.id}
+                                  onPress={() => {
+                                    setSelectedCategories(prev => prev.map(c => c.category_id === selectedCat.category_id ? { ...c, subcategory_id: sub.id } : c));
+                                  }}
+                                  className={`px-3 py-2 rounded-lg mr-2 border ${isSubSelected ? 'bg-brand-blue border-brand-blue' : 'bg-transparent border-white/5'}`}
+                                >
+                                  <Text className={`text-[10px] font-bold ${isSubSelected ? 'text-white' : 'text-gray-500'}`}>{sub.name}</Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </ScrollView>
+                        </GlassCard>
+                      );
+                    })}
                   </View>
                 )}
               </View>

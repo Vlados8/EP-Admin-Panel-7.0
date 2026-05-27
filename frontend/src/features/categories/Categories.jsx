@@ -1,8 +1,22 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import api from '../../services/api';
 import usePermission from '../../hooks/usePermission';
 
 const Categories = () => {
+    const navigate = useNavigate();
+    const { user } = useSelector(state => state.auth);
+
+    useEffect(() => {
+        if (user) {
+            const role = user.role?.name || user.role;
+            if (role !== 'Admin' && role !== 'Büro') {
+                navigate('/dashboard');
+            }
+        }
+    }, [user, navigate]);
+
     // Basic States
     const canManage = usePermission('MANAGE_CATEGORIES');
     const [categories, setCategories] = useState([]);

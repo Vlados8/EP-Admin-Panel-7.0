@@ -84,6 +84,10 @@ const Project = sequelize.define('Project', {
             key: 'id'
         }
     },
+    categories_json: {
+        type: DataTypes.TEXT,
+        allowNull: true
+    },
     created_by: {
         type: DataTypes.UUID,
         allowNull: true,
@@ -91,6 +95,30 @@ const Project = sequelize.define('Project', {
             model: 'users',
             key: 'id'
         }
+    },
+    client_first_name: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    client_last_name: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    client_phone: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    client_email: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    client_address: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    client_notes: {
+        type: DataTypes.TEXT,
+        allowNull: true
     }
 }, {
     tableName: 'projects',

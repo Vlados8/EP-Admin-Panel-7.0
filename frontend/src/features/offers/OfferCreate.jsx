@@ -39,6 +39,11 @@ const OfferCreate = () => {
     // Tax Toggle
     const [includeTax, setIncludeTax] = useState(true);
 
+    // Custom select dropdown state hooks
+    const [isClientSelectOpen, setIsClientSelectOpen] = useState(false);
+    const [isNewClientTypeSelectOpen, setIsNewClientTypeSelectOpen] = useState(false);
+    const [isSenderSelectOpen, setIsSenderSelectOpen] = useState(false);
+
     // New Client Modal State
     const [clientModalOpen, setClientModalOpen] = useState(
         !!location.state?.inquiry && !location.state?.inquiry?.client_id && !location.state?.clientId
@@ -585,18 +590,51 @@ const OfferCreate = () => {
                         <h3 className="text-sm font-bold text-blue-400 uppercase tracking-widest pl-1">Empfänger</h3>
                         <div className="glass-panel bg-black/20 rounded-2xl p-4 border-white/5 hover:border-blue-500/30 transition-all group relative">
                             <div className="flex gap-2 items-center">
-                                <select
-                                    className="bg-transparent border-none outline-none text-white w-full text-lg font-bold appearance-none cursor-pointer flex-1"
-                                    value={offerData.client_id}
-                                    onChange={(e) => setOfferData(prev => ({ ...prev, client_id: e.target.value }))}
+                                <button
+                                    type="button"
+                                    onClick={() => setIsClientSelectOpen(!isClientSelectOpen)}
+                                    className="bg-transparent border-none outline-none text-white w-full text-lg font-bold cursor-pointer flex-1 text-left flex items-center justify-between"
                                 >
-                                    <option value="" className="bg-[#1a1a1c]">Kunde auswählen...</option>
-                                    {clients.map(c => (
-                                        <option key={c.id} value={c.id} className="bg-[#1a1a1c]">
-                                            {c.company_name || c.name}
-                                        </option>
-                                    ))}
-                                </select>
+                                    <span className="truncate">
+                                        {offerData.client_id 
+                                            ? (() => {
+                                                const c = clients.find(cl => String(cl.id) === String(offerData.client_id));
+                                                return c ? (c.company_name || c.name) : 'Kunde auswählen...';
+                                              })()
+                                            : 'Kunde auswählen...'}
+                                    </span>
+                                    <i className={`fa-solid fa-chevron-down text-gray-400 text-xs transition-transform duration-200 ${isClientSelectOpen ? 'rotate-180' : ''}`}></i>
+                                </button>
+                                {isClientSelectOpen && (
+                                    <>
+                                        <div className="fixed inset-0 z-40" onClick={() => setIsClientSelectOpen(false)} />
+                                        <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar text-left font-normal">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setOfferData(prev => ({ ...prev, client_id: '' }));
+                                                    setIsClientSelectOpen(false);
+                                                }}
+                                                className="w-full text-left px-4 py-2.5 text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+                                            >
+                                                Kunde auswählen...
+                                            </button>
+                                            {clients.map(c => (
+                                                <button
+                                                    key={c.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setOfferData(prev => ({ ...prev, client_id: c.id }));
+                                                        setIsClientSelectOpen(false);
+                                                    }}
+                                                    className={`w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate ${String(offerData.client_id) === String(c.id) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                >
+                                                    {c.company_name || c.name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </>
+                                )}
                                 <button
                                     onClick={() => setClientModalOpen(true)}
                                     className="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-400 hover:bg-blue-500 hover:text-white transition-all flex items-center justify-center flex-shrink-0"
@@ -765,14 +803,45 @@ const OfferCreate = () => {
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Kunden-Typ</label>
-                                <select
-                                    className="glass-panel bg-black/20 rounded-xl p-3 border-white/5 w-full text-sm text-white focus:border-blue-500/50 outline-none"
-                                    value={newClientForm.type}
-                                    onChange={e => setNewClientForm(prev => ({ ...prev, type: e.target.value }))}
-                                >
-                                    <option value="company" className="bg-[#1a1a1c]">Firma</option>
-                                    <option value="private" className="bg-[#1a1a1c]">Privatkunde</option>
-                                </select>
+                                <div className="relative">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsNewClientTypeSelectOpen(!isNewClientTypeSelectOpen)}
+                                        className="glass-panel bg-black/20 rounded-xl p-3 border-white/5 w-full text-sm text-white focus:border-blue-500/50 outline-none text-left flex items-center justify-between"
+                                    >
+                                        <span>
+                                            {newClientForm.type === 'private' ? 'Privatkunde' : 'Firma'}
+                                        </span>
+                                        <i className={`fa-solid fa-chevron-down text-gray-400 text-xs transition-transform duration-200 ${isNewClientTypeSelectOpen ? 'rotate-180' : ''}`}></i>
+                                    </button>
+                                    {isNewClientTypeSelectOpen && (
+                                        <>
+                                            <div className="fixed inset-0 z-40" onClick={() => setIsNewClientTypeSelectOpen(false)} />
+                                            <div className="absolute left-0 right-0 mt-1 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] text-left">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setNewClientForm(prev => ({ ...prev, type: 'company' }));
+                                                        setIsNewClientTypeSelectOpen(false);
+                                                    }}
+                                                    className={`w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors ${newClientForm.type === 'company' ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                >
+                                                    Firma
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setNewClientForm(prev => ({ ...prev, type: 'private' }));
+                                                        setIsNewClientTypeSelectOpen(false);
+                                                    }}
+                                                    className={`w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors ${newClientForm.type === 'private' ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                >
+                                                    Privatkunde
+                                                </button>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
                             </div>
                             
                             {newClientForm.type === 'company' && (
@@ -891,18 +960,53 @@ const OfferCreate = () => {
                             <div className="space-y-4 flex-1">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Von</label>
-                                    <select
-                                        className="glass-panel bg-black/20 rounded-xl p-3 border-white/5 w-full text-sm text-white outline-none focus:border-blue-500/50"
-                                        value={emailForm.from}
-                                        onChange={e => setEmailForm(prev => ({ ...prev, from: e.target.value }))}
-                                    >
-                                        <option value="" className="bg-[#1a1a1c]">Wählen Sie einen Absender...</option>
-                                        {emailAccounts.map(acc => (
-                                            <option key={acc.id} value={acc.email} className="bg-[#1a1a1c]">
-                                                {acc.display_name || acc.assigned_user?.name} ({acc.email})
-                                            </option>
-                                        ))}
-                                    </select>
+                                    <div className="relative">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsSenderSelectOpen(!isSenderSelectOpen)}
+                                            className="glass-panel bg-black/20 rounded-xl p-3 border-white/5 w-full text-sm text-white outline-none focus:border-blue-500/50 text-left flex items-center justify-between"
+                                        >
+                                            <span className="truncate">
+                                                {emailForm.from 
+                                                    ? (() => {
+                                                        const acc = emailAccounts.find(a => String(a.email) === String(emailForm.from));
+                                                        return acc ? `${acc.display_name || acc.assigned_user?.name} (${acc.email})` : emailForm.from;
+                                                      })()
+                                                    : 'Wählen Sie einen Absender...'}
+                                            </span>
+                                            <i className={`fa-solid fa-chevron-down text-gray-400 text-xs transition-transform duration-200 ${isSenderSelectOpen ? 'rotate-180' : ''}`}></i>
+                                        </button>
+                                        {isSenderSelectOpen && (
+                                            <>
+                                                <div className="fixed inset-0 z-40" onClick={() => setIsSenderSelectOpen(false)} />
+                                                <div className="absolute left-0 right-0 mt-1 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar text-left font-normal">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setEmailForm(prev => ({ ...prev, from: '' }));
+                                                            setIsSenderSelectOpen(false);
+                                                        }}
+                                                        className="w-full text-left px-4 py-2 text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+                                                    >
+                                                        Wählen Sie einen Absender...
+                                                    </button>
+                                                    {emailAccounts.map(acc => (
+                                                        <button
+                                                            key={acc.id}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setEmailForm(prev => ({ ...prev, from: acc.email }));
+                                                                setIsSenderSelectOpen(false);
+                                                            }}
+                                                            className={`w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate ${String(emailForm.from) === String(acc.email) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                        >
+                                                            {acc.display_name || acc.assigned_user?.name} ({acc.email})
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
 
                                 <div>

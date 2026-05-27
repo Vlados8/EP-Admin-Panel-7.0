@@ -687,6 +687,18 @@ exports.receiveWebhook = async (req, res, next) => {
                 account: recipientEmail,
                 sender_name: senderName
             });
+
+            // Trigger granular in-app and push notification if account belongs to a user
+            if (account && account.user_id) {
+                const NotificationService = require('../../utils/notificationService');
+                await NotificationService.createNotification(
+                    account.user_id,
+                    'Neue E-Mail erhalten ✉️',
+                    `E-Mail von ${senderName || senderEmail}: "${subject}"`,
+                    'email',
+                    { emailId: savedEmail.id }
+                );
+            }
         }
 
         // Handle attachments if any

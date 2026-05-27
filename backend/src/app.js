@@ -22,7 +22,9 @@ app.use(helmet({
             "img-src": ["'self'", "data:", "blob:", "http://localhost:3001", "http://localhost:3000", "https://ui-avatars.com", "https://*.empire-premium.de", "https://*.empire-premium-bau.de", "https://*.railway.app", "https://*.r2.dev", "https://*.cloudflarestorage.com", "https://*.jsdelivr.net"],
             "script-src": ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
             "style-src": ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com", "https://fonts.googleapis.com"],
-            "connect-src": ["'self'", "ws:", "wss:", "http:", "https:"]
+            "connect-src": ["'self'", "ws:", "wss:", "http:", "https:"],
+            "frame-src": ["'self'", "https://maps.google.com", "https://www.google.com", "https://maps.google.de", "https://www.google.de"],
+            "child-src": ["'self'", "https://maps.google.com", "https://www.google.com", "https://maps.google.de", "https://www.google.de"]
         }
     }
 }));
@@ -128,6 +130,7 @@ try {
     const timeTrackingRoutes = require('./infrastructure/routes/timeTrackingRoutes');
     const reonicRoutes = require('./infrastructure/routes/reonicRoutes');
     const systemRoutes = require('./infrastructure/routes/systemRoutes');
+    const notificationRoutes = require('./infrastructure/routes/notificationRoutes');
 
     // --- PUBLIC WEBHOOKS ---
     // CRM Integrations (e.g. MyGo) - Uses simple multer for attachments
@@ -166,6 +169,7 @@ try {
     app.use('/api/v1/time-tracking', timeTrackingRoutes);
     app.use('/api/v1/reonic', reonicRoutes);
     app.use('/api/v1/system', systemRoutes);
+    app.use('/api/v1/notifications', notificationRoutes);
 
     // The problematic route
     const apiKeyRoutes = require(apiKeyRoutesPath);
@@ -232,6 +236,14 @@ if (require.main === module) {
         server.listen(PORT, async () => {
             console.log(`Server is now listening on port ${PORT}`);
             logger.info(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+
+            // Start the periodic task & note reminder scanner daemon in the background
+            try {
+                const startReminderDaemon = require('./utils/reminderDaemon');
+                startReminderDaemon();
+            } catch (daemonErr) {
+                console.error('[ReminderDaemon] Failed to start daemon:', daemonErr.message);
+            }
 
             // Perform DB sync/seed in background/after listen
             const sequelize = require('./config/database');
@@ -656,6 +668,89 @@ if (require.main === module) {
                         await ReonicLead.sync({ alter: true });
                     }
 
+                    console.log('Verifying notifications schema...');
+                    const [notificationTables] = await sequelize.query("SHOW TABLES LIKE 'notifications'");
+                    if (notificationTables.length === 0) {
+                        console.log('Creating notifications table...');
+                        const Notification = require('./domain/models/Notification');
+                        await Notification.sync({ alter: true });
+                    }
+
+                    console.log('Verifying notification_settings schema...');
+                    const [notificationSettingTables] = await sequelize.query("SHOW TABLES LIKE 'notification_settings'");
+                    if (notificationSettingTables.length === 0) {
+                        console.log('Creating notification_settings table...');
+                        const NotificationSetting = require('./domain/models/NotificationSetting');
+                        await NotificationSetting.sync({ alter: true });
+                    }
+
+                    console.log('Verifying users push token column...');
+                    const [userPushTokenCols] = await sequelize.query("SHOW COLUMNS FROM users LIKE 'expo_push_token'");
+                    if (userPushTokenCols.length === 0) {
+                        console.log('Adding expo_push_token column to users...');
+                        await sequelize.query("ALTER TABLE users ADD COLUMN expo_push_token VARCHAR(255) NULL");
+                    }
+
+                    console.log('Verifying notes reminder column...');
+                    const [noteReminderCols] = await sequelize.query("SHOW COLUMNS FROM notes LIKE 'reminder_notified'");
+                    if (noteReminderCols.length === 0) {
+                        console.log('Adding reminder_notified column to notes...');
+                        await sequelize.query("ALTER TABLE notes ADD COLUMN reminder_notified BOOLEAN DEFAULT 0");
+                    }
+
+                    console.log('Verifying tasks reminder column...');
+                    const [taskReminderCols] = await sequelize.query("SHOW COLUMNS FROM tasks LIKE 'reminder_notified'");
+                    if (taskReminderCols.length === 0) {
+                        console.log('Adding reminder_notified column to tasks...');
+                        await sequelize.query("ALTER TABLE tasks ADD COLUMN reminder_notified BOOLEAN DEFAULT 0");
+                    }
+
+                    console.log('Verifying projects schema for custom client info...');
+                    const [projectFirstNameCols] = await sequelize.query("SHOW COLUMNS FROM projects LIKE 'client_first_name'");
+                    if (projectFirstNameCols.length === 0) {
+                        console.log('Adding client_first_name column to projects...');
+                        await sequelize.query("ALTER TABLE projects ADD COLUMN client_first_name VARCHAR(255) NULL");
+                    }
+                    const [projectLastNameCols] = await sequelize.query("SHOW COLUMNS FROM projects LIKE 'client_last_name'");
+                    if (projectLastNameCols.length === 0) {
+                        console.log('Adding client_last_name column to projects...');
+                        await sequelize.query("ALTER TABLE projects ADD COLUMN client_last_name VARCHAR(255) NULL");
+                    }
+                    const [projectPhoneCols] = await sequelize.query("SHOW COLUMNS FROM projects LIKE 'client_phone'");
+                    if (projectPhoneCols.length === 0) {
+                        console.log('Adding client_phone column to projects...');
+                        await sequelize.query("ALTER TABLE projects ADD COLUMN client_phone VARCHAR(255) NULL");
+                    }
+                    const [projectEmailCols] = await sequelize.query("SHOW COLUMNS FROM projects LIKE 'client_email'");
+                    if (projectEmailCols.length === 0) {
+                        console.log('Adding client_email column to projects...');
+                        await sequelize.query("ALTER TABLE projects ADD COLUMN client_email VARCHAR(255) NULL");
+                    }
+                    const [projectAddressCols] = await sequelize.query("SHOW COLUMNS FROM projects LIKE 'client_address'");
+                    if (projectAddressCols.length === 0) {
+                        console.log('Adding client_address column to projects...');
+                        await sequelize.query("ALTER TABLE projects ADD COLUMN client_address VARCHAR(255) NULL");
+                    }
+                    const [projectNotesCols] = await sequelize.query("SHOW COLUMNS FROM projects LIKE 'client_notes'");
+                    if (projectNotesCols.length === 0) {
+                        console.log('Adding client_notes column to projects...');
+                        await sequelize.query("ALTER TABLE projects ADD COLUMN client_notes TEXT NULL");
+                    }
+
+                    console.log('Verifying projects schema for categories_json...');
+                    let hasCategoriesJson = false;
+                    try {
+                        const [cols] = await sequelize.query("PRAGMA table_info(projects)");
+                        hasCategoriesJson = cols.some(c => c.name === 'categories_json');
+                    } catch (err) {
+                        const [cols] = await sequelize.query("SHOW COLUMNS FROM projects LIKE 'categories_json'");
+                        hasCategoriesJson = cols.length > 0;
+                    }
+                    if (!hasCategoriesJson) {
+                        console.log('Adding categories_json column to projects...');
+                        await sequelize.query("ALTER TABLE projects ADD COLUMN categories_json TEXT NULL");
+                    }
+
                     console.log('Schema verification complete.');
                 } catch (schemaErr) {
                     console.warn('Non-critical: Schema fix failed (columns might already exist):', schemaErr.message);
@@ -664,6 +759,24 @@ if (require.main === module) {
                 console.log('Running initial seeding...');
                 await seedDatabase();
                 console.log('Initial seeding check finished.');
+
+                // Ensure Projektleiter role in DB does not have VIEW_CATEGORIES or VIEW_INQUIRIES permissions
+                try {
+                    const { Role } = require('./domain/models');
+                    const plRole = await Role.findOne({ where: { name: 'Projektleiter' } });
+                    if (plRole && plRole.permissions && Array.isArray(plRole.permissions)) {
+                        const updatedPermissions = plRole.permissions.filter(
+                            p => p !== 'VIEW_CATEGORIES' && p !== 'VIEW_INQUIRIES'
+                        );
+                        if (updatedPermissions.length !== plRole.permissions.length) {
+                            plRole.permissions = updatedPermissions;
+                            await plRole.save();
+                            console.log('Successfully updated Projektleiter permissions in database to remove categories and inquiries.');
+                        }
+                    }
+                } catch (dbErr) {
+                    console.error('Non-critical: Failed to update database Projektleiter permissions:', dbErr.message);
+                }
             } catch (err) {
                 console.error('CRITICAL: Failed to sync/seed database:', err.message);
                 // Keep the server running so we can still access it for debugging

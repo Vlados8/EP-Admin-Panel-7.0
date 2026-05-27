@@ -28,8 +28,10 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
     const [selectedCategory, setSelectedCategory] = useState(null);
     const [selectedSubcategory, setSelectedSubcategory] = useState(null);
     const [currentQuestion, setCurrentQuestion] = useState(null);
+    const [selectedCategories, setSelectedCategories] = useState([]); // [{ category_id, subcategory_id }]
     const [dynamicAnswers, setDynamicAnswers] = useState({});
     const [checkboxSelections, setCheckboxSelections] = useState([]);
+    const [expandedCategoryQuestions, setExpandedCategoryQuestions] = useState({}); // { [category_id]: boolean }
 
     // Helper to know if we are in the main category view, subcategory view, or questioning
     const [catViewLevel, setCatViewLevel] = useState('main'); // main, sub, questions
@@ -47,6 +49,20 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
     const [photos, setPhotos] = useState([]); // Files array
 
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isClientSelectOpen, setIsClientSelectOpen] = useState(false);
+    const [isClientTypeSelectOpen, setIsClientTypeSelectOpen] = useState(false);
+    const [isTopUserSelectOpen, setIsTopUserSelectOpen] = useState(false);
+    const [isGLSelectOpen, setIsGLSelectOpen] = useState(false);
+    const [isWorkerSelectOpen, setIsWorkerSelectOpen] = useState(false);
+
+    // Dynamic Client-Custom Project Fields
+    const [showAdditionalClient, setShowAdditionalClient] = useState(false);
+    const [clientFirstName, setClientFirstName] = useState('');
+    const [clientLastName, setClientLastName] = useState('');
+    const [clientPhone, setClientPhone] = useState('');
+    const [clientEmail, setClientEmail] = useState('');
+    const [clientAddress, setClientAddress] = useState('');
+    const [clientNotes, setClientNotes] = useState('');
 
     useEffect(() => {
         if (isOpen) {
@@ -59,8 +75,24 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
             setDynamicAnswers({}); setCatViewLevel('main');
             setAssignedUsers([]); setAssignedSubcontractors([]);
             setTreeTopUser(''); setTreeGL(''); setTreeWorker('');
+            setSelectedCategories([]);
+            setExpandedCategoryQuestions({});
             setMainPhoto(null);
             setPhotos([]);
+            
+            setShowAdditionalClient(false);
+            setClientFirstName('');
+            setClientLastName('');
+            setClientPhone('');
+            setClientEmail('');
+            setClientAddress('');
+            setClientNotes('');
+            setIsClientSelectOpen(false);
+            setIsClientTypeSelectOpen(false);
+            setIsTopUserSelectOpen(false);
+            setIsGLSelectOpen(false);
+            setIsWorkerSelectOpen(false);
+
             if (initialData) {
                 // Prefill from Inquiry
                 setNewClientData({
@@ -73,6 +105,25 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
                     description: initialData.notes || '', start_date: '', end_date: '', budget: ''
                 });
 
+                let fName = '';
+                let lName = '';
+                if (initialData.contact_name) {
+                    const nameParts = initialData.contact_name.trim().split(/\s+/);
+                    if (nameParts.length > 1) {
+                        fName = nameParts[0];
+                        lName = nameParts.slice(1).join(' ');
+                    } else {
+                        fName = nameParts[0];
+                    }
+                    setShowAdditionalClient(true);
+                }
+                setClientFirstName(fName);
+                setClientLastName(lName);
+                setClientPhone(initialData.contact_phone || '');
+                setClientEmail(initialData.contact_email || '');
+                setClientAddress(initialData.location || '');
+                setClientNotes('');
+
                 // Set answers if available
                 if (initialData.answers && initialData.answers.length > 0) {
                     const presetAnswers = {};
@@ -80,6 +131,13 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
                         presetAnswers[ans.question_id] = { value: ans.answer_value, answerId: ans.answer_id };
                     });
                     setDynamicAnswers(presetAnswers);
+                }
+
+                if (initialData.category_id) {
+                    setSelectedCategories([{
+                        category_id: parseInt(initialData.category_id),
+                        subcategory_id: initialData.subcategory_id ? parseInt(initialData.subcategory_id) : ''
+                    }]);
                 }
 
                 // If inquiry already has a client_id, use it
@@ -299,8 +357,19 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
             if (basicInfo.end_date) formData.append('end_date', basicInfo.end_date);
             formData.append('budget', basicInfo.budget || 0);
             formData.append('client_id', selectedClientId);
-            if (selectedCategory) formData.append('category_id', selectedCategory.id);
-            if (selectedSubcategory) formData.append('subcategory_id', selectedSubcategory.id);
+            
+            const firstCategory = selectedCategories[0];
+            formData.append('category_id', firstCategory?.category_id || '');
+            formData.append('subcategory_id', firstCategory?.subcategory_id || '');
+            formData.append('categories_json', JSON.stringify(selectedCategories));
+
+            // Append custom client fields
+            formData.append('client_first_name', showAdditionalClient ? (clientFirstName || '') : '');
+            formData.append('client_last_name', showAdditionalClient ? (clientLastName || '') : '');
+            formData.append('client_phone', showAdditionalClient ? (clientPhone || '') : '');
+            formData.append('client_email', showAdditionalClient ? (clientEmail || '') : '');
+            formData.append('client_address', showAdditionalClient ? (clientAddress || '') : '');
+            formData.append('client_notes', showAdditionalClient ? (clientNotes || '') : '');
 
             // Format assignments
             formData.append('assigned_users', JSON.stringify(assignedUsers));
@@ -387,18 +456,47 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
                                     {!isNewClient ? (
                                         <div className="mt-6 w-full max-w-md mx-auto">
                                             <label className="block text-sm font-medium text-gray-400 mb-2 text-center">Kunde wählen <span className="text-red-400">*</span></label>
-                                            <select
-                                                value={selectedClientId}
-                                                onChange={(e) => setSelectedClientId(e.target.value)}
-                                                className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors text-center [&>option]:bg-slate-900"
-                                            >
-                                                <option value="" className="bg-slate-900 text-white">-- Bitte wählen --</option>
-                                                {clients.map(c => (
-                                                    <option key={c.id} value={c.id} className="bg-slate-900 text-white">
-                                                        {c.name} {c.contact_person ? `(${c.contact_person})` : ''}
-                                                    </option>
-                                                ))}
-                                            </select>
+                                            <div className="relative">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsClientSelectOpen(!isClientSelectOpen)}
+                                                    className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors flex items-center justify-between text-center"
+                                                >
+                                                    <span className="w-full text-center">
+                                                        {selectedClientId 
+                                                            ? (() => {
+                                                                const c = clients.find(cl => String(cl.id) === String(selectedClientId));
+                                                                return c ? `${c.name} ${c.contact_person ? `(${c.contact_person})` : ''}` : '-- Bitte wählen --';
+                                                              })()
+                                                            : '-- Bitte wählen --'}
+                                                    </span>
+                                                    <i className={`fa-solid fa-chevron-down text-gray-500 text-xs transition-transform duration-200 ${isClientSelectOpen ? 'rotate-180' : ''}`}></i>
+                                                </button>
+
+                                                {isClientSelectOpen && (
+                                                    <>
+                                                        <div 
+                                                            className="fixed inset-0 z-40" 
+                                                            onClick={() => setIsClientSelectOpen(false)}
+                                                        />
+                                                        <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar text-left">
+                                                            {clients.map(c => (
+                                                                <button
+                                                                    key={c.id}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setSelectedClientId(c.id.toString());
+                                                                        setIsClientSelectOpen(false);
+                                                                    }}
+                                                                    className={`w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate ${String(selectedClientId) === String(c.id) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                                >
+                                                                    {c.name} {c.contact_person ? `(${c.contact_person})` : ''}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </div>
                                         </div>
                                     ) : (
                                         <div className="grid grid-cols-2 gap-4 mt-6 max-w-2xl mx-auto">
@@ -408,10 +506,49 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
                                             </div>
                                             <div className="col-span-2 md:col-span-1">
                                                 <label className="block text-sm font-medium text-gray-400 mb-2 text-center">Kundentyp</label>
-                                                <select value={newClientData.type} onChange={e => setNewClientData({ ...newClientData, type: e.target.value })} className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-blue-500 focus:outline-none text-center [&>option]:bg-slate-900">
-                                                    <option value="company" className="bg-slate-900 text-white">Firma</option>
-                                                    <option value="private" className="bg-slate-900 text-white">Privatperson</option>
-                                                </select>
+                                                <div className="relative">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setIsClientTypeSelectOpen(!isClientTypeSelectOpen)}
+                                                        className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors flex items-center justify-between text-center"
+                                                    >
+                                                        <span className="w-full text-center">
+                                                            {newClientData.type === 'company' ? 'Firma' : 'Privatperson'}
+                                                        </span>
+                                                        <i className={`fa-solid fa-chevron-down text-gray-500 text-xs transition-transform duration-200 ${isClientTypeSelectOpen ? 'rotate-180' : ''}`}></i>
+                                                    </button>
+
+                                                    {isClientTypeSelectOpen && (
+                                                        <>
+                                                            <div 
+                                                                className="fixed inset-0 z-40" 
+                                                                onClick={() => setIsClientTypeSelectOpen(false)}
+                                                            />
+                                                            <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] text-left">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setNewClientData({ ...newClientData, type: 'company' });
+                                                                        setIsClientTypeSelectOpen(false);
+                                                                    }}
+                                                                    className={`w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors ${newClientData.type === 'company' ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                                >
+                                                                    Firma
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setNewClientData({ ...newClientData, type: 'private' });
+                                                                        setIsClientTypeSelectOpen(false);
+                                                                    }}
+                                                                    className={`w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors ${newClientData.type === 'private' ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                                >
+                                                                    Privatperson
+                                                                </button>
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </div>
                                             </div>
                                             <div className="col-span-2 md:col-span-1">
                                                 <label className="block text-sm font-medium text-gray-400 mb-2 text-center">Ansprechpartner</label>
@@ -441,6 +578,98 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
                                             <div className="col-span-2 md:col-span-1">
                                                 <label className="block text-sm font-medium text-gray-400 mb-2 text-center">Stadt</label>
                                                 <input type="text" value={newClientData.city} onChange={e => setNewClientData({ ...newClientData, city: e.target.value })} className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-blue-500 focus:outline-none text-center" placeholder="Musterstadt" />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Toggle Additional Client Form */}
+                                    <div className="flex items-center justify-between bg-white/[0.02] border border-white/5 rounded-xl px-4 py-3 mt-6 select-none w-full max-w-2xl mx-auto">
+                                        <div className="flex flex-col text-left">
+                                            <span className="text-sm font-semibold text-white">Abweichender Ansprechpartner / Endkunde</span>
+                                            <span className="text-xs text-gray-400">Falls die Arbeit für einen abweichenden Endkunden ausgeführt wird</span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const nextState = !showAdditionalClient;
+                                                setShowAdditionalClient(nextState);
+                                            }}
+                                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${showAdditionalClient ? 'bg-emerald-500' : 'bg-white/10'}`}
+                                        >
+                                            <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${showAdditionalClient ? 'translate-x-5' : 'translate-x-0'}`} />
+                                        </button>
+                                    </div>
+
+                                    {/* Per-Project Client / Auftraggeber Details */}
+                                    {showAdditionalClient && (
+                                        <div className="bg-white/5 border border-white/10 rounded-xl p-5 space-y-4 mt-4 animate-[fadeIn_0.3s_ease-out] w-full max-w-2xl mx-auto text-left">
+                                            <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                                                <h4 className="text-sm font-semibold text-emerald-400 flex items-center gap-2">
+                                                    <i className="fa-solid fa-user-tie"></i> Ansprechpartner & Endkunde für dieses Projekt
+                                                </h4>
+                                                <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full uppercase tracking-wider">Spezifisch</span>
+                                            </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="text-xs text-gray-400 block mb-1">Vorname</label>
+                                                    <input
+                                                        type="text"
+                                                        value={clientFirstName}
+                                                        onChange={e => setClientFirstName(e.target.value)}
+                                                        className="w-full bg-slate-800 border border-white/10 rounded-lg p-2.5 text-white text-sm focus:border-emerald-500 transition-colors"
+                                                        placeholder="z.B. Max"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs text-gray-400 block mb-1">Nachname</label>
+                                                    <input
+                                                        type="text"
+                                                        value={clientLastName}
+                                                        onChange={e => setClientLastName(e.target.value)}
+                                                        className="w-full bg-slate-800 border border-white/10 rounded-lg p-2.5 text-white text-sm focus:border-emerald-500 transition-colors"
+                                                        placeholder="z.B. Mustermann"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs text-gray-400 block mb-1">Telefonnummer</label>
+                                                    <input
+                                                        type="text"
+                                                        value={clientPhone}
+                                                        onChange={e => setClientPhone(e.target.value)}
+                                                        className="w-full bg-slate-800 border border-white/10 rounded-lg p-2.5 text-white text-sm focus:border-emerald-500 transition-colors"
+                                                        placeholder="z.B. +49 123 456789"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs text-gray-400 block mb-1">E-Mail-Adresse</label>
+                                                    <input
+                                                        type="email"
+                                                        value={clientEmail}
+                                                        onChange={e => setClientEmail(e.target.value)}
+                                                        className="w-full bg-slate-800 border border-white/10 rounded-lg p-2.5 text-white text-sm focus:border-emerald-500 transition-colors"
+                                                        placeholder="z.B. info@firma.de"
+                                                    />
+                                                </div>
+                                                <div className="col-span-1 md:col-span-2">
+                                                    <label className="text-xs text-gray-400 block mb-1">Adresse</label>
+                                                    <input
+                                                        type="text"
+                                                        value={clientAddress}
+                                                        onChange={e => setClientAddress(e.target.value)}
+                                                        className="w-full bg-slate-800 border border-white/10 rounded-lg p-2.5 text-white text-sm focus:border-emerald-500 transition-colors"
+                                                        placeholder="Straße, Hausnummer, PLZ, Ort"
+                                                    />
+                                                </div>
+                                                <div className="col-span-1 md:col-span-2">
+                                                    <label className="text-xs text-gray-400 block mb-1">Kunden-Notizen / Bemerkungen (intern)</label>
+                                                    <textarea
+                                                        value={clientNotes}
+                                                        onChange={e => setClientNotes(e.target.value)}
+                                                        rows="2"
+                                                        className="w-full bg-slate-800 border border-white/10 rounded-lg p-2.5 text-white text-sm focus:border-emerald-500 transition-colors resize-none"
+                                                        placeholder="Besondere Absprachen, Wünsche oder Anforderungen des Auftraggebers..."
+                                                    />
+                                                </div>
                                             </div>
                                         </div>
                                     )}
@@ -492,170 +721,330 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
                                 </div>
                             )}
 
-                            {/* STEP 3: CATEGORIES & QUESTIONS */}
+                            {/* STEP 3: CATEGORIES & SPECIFICATIONS */}
                             {step === 3 && (
-                                <div className="space-y-6 animate-[fadeIn_0.3s_ease-out] flex flex-col items-center">
+                                <div className="space-y-6 animate-[fadeIn_0.3s_ease-out] w-full max-w-4xl mx-auto text-left">
                                     <h3 className="text-xl font-bold text-white mb-4 text-center">3. Kategorisierung & Spezifikationen</h3>
 
-                                    {initialData && initialData.category_id && catViewLevel === 'main' && (
-                                        <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-4 rounded-xl max-w-2xl mx-auto text-center mb-6">
-                                            <i className="fa-solid fa-check-circle mr-2"></i>
-                                            Die Antworten aus की Anfrage wurden bereits übernommen.
-                                            <button
-                                                onClick={() => setStep(4)}
-                                                className="ml-4 underline hover:text-white transition-colors text-sm font-medium"
-                                            >
-                                                Direkt zu Schritt 4 (Zuweisungen)
-                                            </button>
-                                        </div>
-                                    )}
-
-                                    {catViewLevel === 'main' && (
-                                        <div className="grid grid-cols-2 gap-4 max-w-3xl mx-auto">
-                                            {categories.map(c => (
-                                                <button key={c.id} onClick={() => handleCategorySelect(c)} className="bg-slate-800 border border-white/10 p-6 rounded-xl text-center hover:bg-slate-700 hover:border-blue-500/50 transition-all group flex flex-col items-center gap-3">
-                                                    <div className="w-16 h-16 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400 text-2xl group-hover:scale-110 group-hover:bg-blue-500/20 transition-all">
-                                                        <i className={`fa-solid ${c.icon || 'fa-folder'}`}></i>
-                                                    </div>
-                                                    <span className="text-white font-medium text-lg">{c.name}</span>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    {catViewLevel === 'sub' && (
-                                        <div className="animate-[fadeIn_0.3s_ease-out]">
-                                            <button onClick={handleBackCat} className="text-gray-400 hover:text-white mb-6 flex items-center gap-2 mx-auto"><i className="fa-solid fa-arrow-left"></i> Zurück zu Hauptkategorien</button>
-                                            <div className="grid grid-cols-2 gap-4 max-w-3xl mx-auto justify-center">
-                                                {selectedCategory?.subcategories?.map(s => (
-                                                    <button key={s.id} onClick={() => handleSubcategorySelect(s)} className="bg-slate-800 border border-white/10 p-5 rounded-xl text-center hover:bg-slate-700 hover:border-blue-500/50 transition-all group flex flex-col items-center gap-4">
-                                                        <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-gray-400 group-hover:text-blue-400 transition-colors">
-                                                            <i className={`fa-solid ${s.icon || 'fa-layer-group'}`}></i>
+                                    {/* Multi-Category Selection Grid */}
+                                    <div className="space-y-4">
+                                        <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 block text-center md:text-left">Kategorien auswählen</label>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                                            {categories.map(c => {
+                                                const isSelected = selectedCategories.some(sc => sc.category_id === c.id);
+                                                return (
+                                                    <button
+                                                        key={c.id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (isSelected) {
+                                                                setSelectedCategories(prev => prev.filter(sc => sc.category_id !== c.id));
+                                                            } else {
+                                                                setSelectedCategories(prev => [...prev, { category_id: c.id, subcategory_id: '' }]);
+                                                            }
+                                                        }}
+                                                        className={`p-4 rounded-xl border text-left font-medium transition-all flex items-center gap-3 ${isSelected ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'bg-slate-800/40 border-white/10 text-white hover:bg-slate-800'}`}
+                                                    >
+                                                        <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-500'}`}>
+                                                            {isSelected && <i className="fa-solid fa-check text-white text-xs"></i>}
                                                         </div>
-                                                        <span className="text-white font-medium">{s.name}</span>
+                                                        <div className="flex items-center gap-2">
+                                                            <i className={`fa-solid ${c.icon || 'fa-folder'} text-lg ${isSelected ? 'text-blue-400' : 'text-gray-400'}`}></i>
+                                                            <span className="text-sm font-semibold text-gray-200">{c.name}</span>
+                                                        </div>
                                                     </button>
-                                                ))}
-                                                {(!selectedCategory?.subcategories || selectedCategory.subcategories.length === 0) && (
-                                                    <div className="text-gray-400 text-center py-6 col-span-2">Keine Unterkategorien verfügbar. Sie können zum nächsten Schritt gehen.</div>
-                                                )}
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* Selected Categories with Subcategory Dropdowns */}
+                                    {selectedCategories.length > 0 && (
+                                        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4 animate-[fadeIn_0.3s_ease-out] mt-6">
+                                            <h4 className="text-sm font-semibold text-blue-400 flex items-center gap-2 border-b border-white/10 pb-2">
+                                                <i className="fa-solid fa-layer-group"></i> Unterkategorien zuweisen
+                                            </h4>
+                                            <div className="space-y-4">
+                                                {selectedCategories.map(sc => {
+                                                    const category = categories.find(c => c.id === sc.category_id);
+                                                    if (!category) return null;
+
+                                                    // Helper to get questions for this category and subcategory combo
+                                                    const getCategoryQuestions = () => {
+                                                        let qList = [...(category.questions || [])];
+                                                        if (sc.subcategory_id) {
+                                                            const sub = category.subcategories?.find(s => s.id === sc.subcategory_id);
+                                                            if (sub && sub.questions) {
+                                                                qList = [...qList, ...sub.questions];
+                                                            }
+                                                        }
+                                                        return qList;
+                                                    };
+
+                                                    const qList = getCategoryQuestions();
+                                                    const answeredCount = qList.filter(q => !!dynamicAnswers[q.id]?.value).length;
+                                                    const isExpanded = !!expandedCategoryQuestions[sc.category_id];
+
+                                                    return (
+                                                        <div key={sc.category_id} className="bg-slate-800/40 p-4 rounded-xl border border-white/5 space-y-4 animate-[fadeIn_0.2s_ease-out]">
+                                                            {/* Card Header Row */}
+                                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                                                <div className="font-semibold text-white flex items-center gap-2 text-sm">
+                                                                    <i className={`fa-solid ${category.icon || 'fa-folder'} text-blue-400`}></i>
+                                                                    {category.name}
+                                                                </div>
+                                                                <div className="flex items-center gap-3">
+                                                                    <select
+                                                                        value={sc.subcategory_id || ''}
+                                                                        onChange={e => {
+                                                                            const val = e.target.value;
+                                                                            setSelectedCategories(prev => prev.map(item => item.category_id === sc.category_id ? { ...item, subcategory_id: val ? parseInt(val) : '' } : item));
+                                                                        }}
+                                                                        className="bg-slate-900 border border-white/10 rounded-xl px-4 py-2.5 text-white text-xs focus:border-blue-500 focus:outline-none [&>option]:bg-slate-900"
+                                                                    >
+                                                                        <option value="">-- Keine Unterkategorie --</option>
+                                                                        {category.subcategories?.map(sub => (
+                                                                            <option key={sub.id} value={sub.id}>{sub.name}</option>
+                                                                        ))}
+                                                                    </select>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setSelectedCategories(prev => prev.filter(item => item.category_id !== sc.category_id))}
+                                                                        className="text-gray-400 hover:text-red-400 transition-colors p-1"
+                                                                    >
+                                                                        <i className="fa-solid fa-trash-can text-sm"></i>
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Accordion Toggle (only show if there are questions) */}
+                                                            {qList.length > 0 && (
+                                                                <div className="pt-2 border-t border-white/5 flex items-center justify-center gap-4">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setExpandedCategoryQuestions(prev => ({ ...prev, [sc.category_id]: !isExpanded }))}
+                                                                        className="text-xs text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1.5 transition-colors"
+                                                                    >
+                                                                        <i className={`fa-solid ${isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'}`}></i>
+                                                                        {isExpanded ? 'Spezifische Fragen schließen' : `Spezifische Fragen beantworten (${answeredCount}/${qList.length} beantwortet)`}
+                                                                    </button>
+                                                                    {answeredCount > 0 && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                if (window.confirm("Möchten Sie wirklich alle Antworten für diese Kategorie zurücksetzen?")) {
+                                                                                    setDynamicAnswers(prev => {
+                                                                                        const copy = { ...prev };
+                                                                                        qList.forEach(q => delete copy[q.id]);
+                                                                                        return copy;
+                                                                                    });
+                                                                                }
+                                                                            }}
+                                                                            className="text-[10px] text-red-400 hover:text-red-300 font-bold flex items-center gap-1.5 transition-colors border border-red-500/20 bg-red-500/5 px-2.5 py-1 rounded-lg"
+                                                                        >
+                                                                            <i className="fa-solid fa-trash-can"></i>
+                                                                            Antworten zurücksetzen
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            )}
+
+                                                            {/* Expanded Questions Form */}
+                                                            {isExpanded && qList.length > 0 && (
+                                                                <div className="space-y-4 pt-3 border-t border-white/5 animate-[slideDown_0.2s_ease-out]">
+                                                                    {qList.map(q => {
+                                                                        return (
+                                                                            <div key={q.id} className="bg-slate-900 border border-white/5 p-3.5 rounded-lg space-y-2">
+                                                                                <div className="flex justify-between items-center mb-1">
+                                                                                    <label className="block text-xs font-bold text-gray-300">{q.question_text}</label>
+                                                                                    {dynamicAnswers[q.id] && (
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => setDynamicAnswers(prev => {
+                                                                                                const copy = { ...prev };
+                                                                                                delete copy[q.id];
+                                                                                                return copy;
+                                                                                            })}
+                                                                                            className="text-[10px] text-gray-400 hover:text-red-400 transition-colors flex items-center gap-1 font-semibold"
+                                                                                        >
+                                                                                            <i className="fa-solid fa-rotate-left"></i> Auswahl aufheben
+                                                                                        </button>
+                                                                                    )}
+                                                                                </div>
+                                                                                
+                                                                                {/* 1. BUTTONS/RADIO (Default) */}
+                                                                                {(!q.type || q.type === 'buttons' || q.type === 'radio') && (
+                                                                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
+                                                                                        {q.answers?.map(ans => {
+                                                                                            const isSelected = dynamicAnswers[q.id]?.answerId === ans.id;
+                                                                                            return (
+                                                                                                <button
+                                                                                                    key={ans.id}
+                                                                                                    type="button"
+                                                                                                    onClick={() => setDynamicAnswers(prev => ({ ...prev, [q.id]: { value: ans.answer_text, answerId: ans.id } }))}
+                                                                                                    className={`p-2 rounded-lg border text-[10px] text-center font-medium transition-all ${isSelected ? 'bg-blue-600/20 border-blue-500 text-blue-400 shadow-[0_0_10px_rgba(59,130,246,0.15)]' : 'bg-black/40 border-white/10 text-gray-300 hover:border-blue-500/30'}`}
+                                                                                                >
+                                                                                                    {ans.answer_text}
+                                                                                                </button>
+                                                                                            );
+                                                                                        })}
+                                                                                    </div>
+                                                                                )}
+
+                                                                                {/* 2. SELECT */}
+                                                                                {q.type === 'select' && (
+                                                                                    <select
+                                                                                        value={dynamicAnswers[q.id]?.answerId || ''}
+                                                                                        onChange={e => {
+                                                                                            const ansId = parseInt(e.target.value);
+                                                                                            const ans = q.answers?.find(a => a.id === ansId);
+                                                                                            if (ans) {
+                                                                                                setDynamicAnswers(prev => ({ ...prev, [q.id]: { value: ans.answer_text, answerId: ansId } }));
+                                                                                            } else {
+                                                                                                setDynamicAnswers(prev => {
+                                                                                                    const copy = { ...prev };
+                                                                                                    delete copy[q.id];
+                                                                                                    return copy;
+                                                                                                });
+                                                                                            }
+                                                                                        }}
+                                                                                        className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-2 [&>option]:bg-slate-900"
+                                                                                    >
+                                                                                        <option value="">-- Bitte wählen --</option>
+                                                                                        {q.answers?.map(ans => (
+                                                                                            <option key={ans.id} value={ans.id}>{ans.answer_text}</option>
+                                                                                        ))}
+                                                                                    </select>
+                                                                                )}
+
+                                                                                {/* 3. SLIDER */}
+                                                                                {q.type === 'slider' && (
+                                                                                    <div className="space-y-2 mt-2">
+                                                                                        <div className="flex justify-between items-center text-xs">
+                                                                                            <span className="text-gray-400">Wert wählen:</span>
+                                                                                            <span className="text-blue-400 font-bold font-mono">
+                                                                                                {dynamicAnswers[q.id]?.value || `${q.config?.min || 0} ${q.unit || ''}`}
+                                                                                            </span>
+                                                                                        </div>
+                                                                                        <input
+                                                                                            type="range"
+                                                                                            min={q.config?.min || 0}
+                                                                                            max={q.config?.max || 100}
+                                                                                            step={q.config?.step || 1}
+                                                                                            value={parseInt(dynamicAnswers[q.id]?.value) || q.config?.min || 0}
+                                                                                            onChange={e => {
+                                                                                                const val = e.target.value;
+                                                                                                setDynamicAnswers(prev => ({ ...prev, [q.id]: { value: `${val} ${q.unit || ''}`, answerId: null } }));
+                                                                                            }}
+                                                                                            className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                                                                                        />
+                                                                                    </div>
+                                                                                )}
+
+                                                                                {/* 4. INPUT */}
+                                                                                {q.type === 'input' && (
+                                                                                    <input
+                                                                                        type="text"
+                                                                                        value={dynamicAnswers[q.id]?.value || ''}
+                                                                                        onChange={e => {
+                                                                                            const val = e.target.value;
+                                                                                            setDynamicAnswers(prev => ({ ...prev, [q.id]: { value: val, answerId: null } }));
+                                                                                        }}
+                                                                                        placeholder="Wert eingeben..."
+                                                                                        className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-2"
+                                                                                    />
+                                                                                )}
+
+                                                                                {/* 5. CHECKBOX */}
+                                                                                {q.type === 'checkbox' && (
+                                                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                                                                                        {q.answers?.map(ans => {
+                                                                                            const currentVal = dynamicAnswers[q.id]?.value || '';
+                                                                                            const selectedValues = currentVal ? currentVal.split(', ') : [];
+                                                                                            const isChecked = selectedValues.includes(ans.answer_text);
+                                                                                            return (
+                                                                                                <button
+                                                                                                    key={ans.id}
+                                                                                                    type="button"
+                                                                                                    onClick={() => {
+                                                                                                        let nextValues;
+                                                                                                        if (isChecked) {
+                                                                                                            nextValues = selectedValues.filter(v => v !== ans.answer_text);
+                                                                                                        } else {
+                                                                                                            nextValues = [...selectedValues, ans.answer_text];
+                                                                                                        }
+                                                                                                        if (nextValues.length > 0) {
+                                                                                                            setDynamicAnswers(prev => ({ ...prev, [q.id]: { value: nextValues.join(', '), answerId: null } }));
+                                                                                                        } else {
+                                                                                                            setDynamicAnswers(prev => {
+                                                                                                                const copy = { ...prev };
+                                                                                                                delete copy[q.id];
+                                                                                                                return copy;
+                                                                                                            });
+                                                                                                        }
+                                                                                                    }}
+                                                                                                    className={`p-2 rounded-lg border text-left text-[10px] transition-all flex items-center gap-2 ${isChecked ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'bg-black/40 border-white/10 text-gray-300'}`}
+                                                                                                >
+                                                                                                    <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${isChecked ? 'bg-blue-500 border-blue-500' : 'border-gray-500'}`}>
+                                                                                                        {isChecked && <i className="fa-solid fa-check text-white text-[8px]"></i>}
+                                                                                                    </div>
+                                                                                                    <span className="truncate">{ans.answer_text}</span>
+                                                                                                </button>
+                                                                                            );
+                                                                                        })}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                         </div>
                                     )}
 
-                                    {catViewLevel === 'questions' && currentQuestion && (
-                                        <div className="max-w-xl mx-auto animate-[fadeIn_0.3s_ease-out]">
-                                            <h4 className="text-2xl font-bold text-white mb-8 text-center">{currentQuestion.question_text}</h4>
-
-                                            {(!currentQuestion.type || currentQuestion.type === 'buttons' || currentQuestion.type === 'radio') && (
-                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                                    {currentQuestion.answers?.map(ans => (
-                                                        <button
-                                                            key={ans.id}
-                                                            onClick={() => handleAnswerQuestion(currentQuestion, ans.answer_text, ans.id, ans.next_question_id)}
-                                                            className="bg-slate-800 border-2 border-white/10 rounded-xl p-6 text-center hover:border-blue-500 hover:bg-blue-500/5 hover:-translate-y-1 transition-all shadow-lg min-h-[100px] flex items-center justify-center group"
-                                                        >
-                                                            <span className="text-lg text-gray-300 font-medium group-hover:text-white transition-colors">{ans.answer_text}</span>
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            )}
-
-                                            {currentQuestion.type === 'select' && (
-                                                <div className="max-w-md mx-auto">
-                                                    <select
-                                                        onChange={(e) => {
-                                                            const selectedAns = currentQuestion.answers?.find(a => a.id === parseInt(e.target.value));
-                                                            if (selectedAns) handleAnswerQuestion(currentQuestion, selectedAns.answer_text, selectedAns.id, selectedAns.next_question_id);
-                                                        }}
-                                                        className="w-full bg-slate-800 border-2 border-white/10 rounded-xl p-4 text-lg text-white appearance-none cursor-pointer hover:border-blue-500/50 transition-colors text-center focus:outline-none focus:border-blue-500 [&>option]:bg-slate-900"
-                                                    >
-                                                        <option value="" className="bg-slate-900 text-white">-- Bitte wählen --</option>
-                                                        {currentQuestion.answers?.map(ans => (
-                                                            <option key={ans.id} value={ans.id} className="bg-slate-900 text-white">{ans.answer_text}</option>
-                                                        ))}
-                                                    </select>
-                                                    <div className="mt-4 flex justify-center text-gray-500">
-                                                        <i className="fa-solid fa-chevron-down animate-bounce"></i>
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {currentQuestion.type === 'slider' && (
-                                                <div className="max-w-xl mx-auto bg-slate-800 border border-white/10 p-8 rounded-2xl shadow-lg">
-                                                    <input
-                                                        type="range"
-                                                        min={currentQuestion.config?.min || 0}
-                                                        max={currentQuestion.config?.max || 100}
-                                                        step={currentQuestion.config?.step || 1}
-                                                        defaultValue={currentQuestion.config?.min || 0}
-                                                        onChange={(e) => {
-                                                            document.getElementById('slider-val-display-proj').innerText = `${e.target.value} ${currentQuestion.unit || ''}`;
-                                                        }}
-                                                        id="temp-slider-proj"
-                                                        className="w-full h-3 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500 mb-6"
-                                                    />
-                                                    <div id="slider-val-display-proj" className="text-4xl font-bold text-blue-400 mb-8">{currentQuestion.config?.min || 0} {currentQuestion.unit || ''}</div>
-                                                    <button
-                                                        onClick={() => {
-                                                            const val = document.getElementById('temp-slider-proj').value;
-                                                            // Pass nulls to trigger the fallback logic in handleAnswerQuestion
-                                                            handleAnswerQuestion(currentQuestion, `${val} ${currentQuestion.unit || ''}`, null, null);
-                                                        }}
-                                                        className="bg-blue-600 hover:bg-blue-500 text-white font-medium px-8 py-3 rounded-xl transition-colors shadow-lg w-full"
-                                                    >Weiter</button>
-                                                </div>
-                                            )}
-
-                                            {currentQuestion.type === 'input' && (
-                                                <div className="space-y-4">
-                                                    <input type="text" className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-4 text-white text-lg focus:border-blue-500 focus:outline-none text-center" placeholder="Wert eingeben..." onKeyDown={(e) => {
-                                                        if (e.key === 'Enter') {
-                                                            const fallbackNext = currentQuestion.answers && currentQuestion.answers.length > 0 ? currentQuestion.answers[0].next_question_id : null;
-                                                            handleAnswerQuestion(currentQuestion, e.target.value, null, fallbackNext);
-                                                        }
-                                                    }} />
-                                                    <p className="text-center text-gray-500 text-sm">Drücken Sie Enter zum Bestätigen</p>
-                                                </div>
-                                            )}
-
-                                            {currentQuestion.type === 'checkbox' && (
-                                                <div className="space-y-4">
-                                                    <div className="grid grid-cols-1 gap-3">
-                                                        {currentQuestion.answers?.map(ans => {
-                                                            const isSelected = checkboxSelections.some(s => s.id === ans.id);
-                                                            return (
-                                                                <button key={ans.id} onClick={() => {
-                                                                    if (isSelected) setCheckboxSelections(prev => prev.filter(s => s.id !== ans.id));
-                                                                    else setCheckboxSelections(prev => [...prev, ans]);
-                                                                }} className={`p-4 rounded-xl border text-left font-medium transition-all flex items-center gap-3 ${isSelected ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'bg-slate-800 border-white/10 text-white hover:bg-slate-700'}`}>
-                                                                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-500'}`}>
-                                                                        {isSelected && <i className="fa-solid fa-check text-white text-xs"></i>}
-                                                                    </div>
-                                                                    {ans.answer_text}
-                                                                </button>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                    <button onClick={submitCheckboxes} disabled={checkboxSelections.length === 0} className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 disabled:text-gray-500 text-white font-bold py-4 rounded-xl transition-all mt-6 shadow-[0_0_15px_rgba(16,185,129,0.3)] disabled:shadow-none">
-                                                        Weiter
-                                                    </button>
-                                                </div>
-                                            )}
-
-                                            {(!currentQuestion.answers || currentQuestion.answers.length === 0) && currentQuestion.type !== 'input' && (
-                                                <div className="text-center text-gray-400 mt-6 bg-white/5 border border-white/10 rounded-xl p-6">
-                                                    <p className="mb-4">Es wurden noch keine Antworten für diese Frage konfiguriert.</p>
-                                                    <button onClick={() => setStep(4)} className="bg-slate-800 hover:bg-slate-700 text-white px-6 py-2.5 rounded-xl border border-white/10 transition-colors">
-                                                        Frage überspringen
-                                                    </button>
-                                                </div>
-                                            )}
+                                    {/* Summary of Questions from Inquiry */}
+                                    {Object.keys(dynamicAnswers).length > 0 && (
+                                        <div className="bg-purple-900/20 border border-purple-500/30 p-6 rounded-2xl mt-6">
+                                            <h4 className="text-purple-300 font-semibold mb-2 flex items-center gap-2">
+                                                <i className="fa-solid fa-check-circle"></i> Antworten aus der Anfrage übernommen
+                                            </h4>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                                                {Object.keys(dynamicAnswers).map(qId => {
+                                                    let qText = "Frage " + qId;
+                                                    let subName = "";
+                                                    categories.forEach(c => {
+                                                        c.questions?.forEach(q => { if (q.id === parseInt(qId)) qText = q.question_text });
+                                                        c.subcategories?.forEach(s => {
+                                                            s.questions?.forEach(q => {
+                                                                if (q.id === parseInt(qId)) {
+                                                                    qText = q.question_text;
+                                                                    subName = s.name;
+                                                                }
+                                                            });
+                                                        });
+                                                    })
+                                                    return (
+                                                        <div key={qId} className="bg-black/30 p-3 rounded-xl text-sm border border-white/5">
+                                                            <div className="text-gray-400 text-xs mb-1 flex justify-between items-center">
+                                                                <span className="truncate max-w-[70%]">{qText}</span>
+                                                                {subName && <span className="bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider">{subName}</span>}
+                                                            </div>
+                                                            <div className="text-white font-medium">{dynamicAnswers[qId].value}</div>
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
                                         </div>
                                     )}
 
-                                    {catViewLevel !== 'main' && (
-                                        <div className="flex justify-between items-center mt-10">
-                                            <button onClick={() => setStep(4)} className="text-gray-500 hover:text-white px-4 py-2 text-sm transition-colors">Fragen überspringen</button>
+                                    {selectedCategories.length === 0 && (
+                                        <div className="text-center py-10 text-gray-500 text-sm">
+                                            <i className="fa-solid fa-circle-info text-blue-400 mr-2 text-base"></i>
+                                            Wählen Sie mindestens eine Kategorie aus, um fortzufahren.
                                         </div>
                                     )}
                                 </div>
@@ -676,18 +1065,52 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
                                                 <div className="flex gap-4 justify-center">
                                                     <div className="flex-1 max-w-md mx-auto">
                                                         <label className="block text-sm font-medium text-gray-400 mb-2 text-center">Person wählen</label>
-                                                        <select value={treeTopUser} onChange={e => {
-                                                            setTreeTopUser(e.target.value);
-                                                            setTreeGL('');
-                                                            setTreeWorker('');
-                                                        }} className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 text-center [&>option]:bg-slate-900">
-                                                            <option value="" className="bg-slate-900 text-white">-- Person wählen --</option>
-                                                            {users.filter(u => u.role?.name?.toLowerCase() === 'projektleiter').map(u => (
-                                                                <option key={u.id} value={u.id} className="bg-slate-900 text-white">
-                                                                    {u.name} {u.specialty ? `(${u.specialty})` : ''}
-                                                                </option>
-                                                            ))}
-                                                        </select>
+                                                        <div className="relative">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setIsTopUserSelectOpen(!isTopUserSelectOpen)}
+                                                                className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 transition-colors flex items-center justify-between text-center"
+                                                            >
+                                                                <span className="w-full text-center">
+                                                                    {treeTopUser
+                                                                        ? (() => {
+                                                                            const u = users.find(usr => String(usr.id) === String(treeTopUser));
+                                                                            return u ? `${u.name} ${u.specialty ? `(${u.specialty})` : ''} (${u.role?.name || 'Keine Rolle'})` : '-- Person wählen --';
+                                                                          })()
+                                                                        : '-- Person wählen --'}
+                                                                </span>
+                                                                <i className={`fa-solid fa-chevron-down text-gray-500 text-xs transition-transform duration-200 ${isTopUserSelectOpen ? 'rotate-180' : ''}`}></i>
+                                                            </button>
+
+                                                            {isTopUserSelectOpen && (
+                                                                <>
+                                                                    <div 
+                                                                        className="fixed inset-0 z-40" 
+                                                                        onClick={() => setIsTopUserSelectOpen(false)}
+                                                                    />
+                                                                    <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar text-left">
+                                                                        {users.filter(u => {
+                                                                            const roleName = u.role?.name?.toLowerCase();
+                                                                            return roleName === 'projektleiter' || roleName === 'pl' || roleName === 'admin' || roleName === 'büro' || roleName === 'buero';
+                                                                        }).map(u => (
+                                                                            <button
+                                                                                key={u.id}
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    setTreeTopUser(u.id.toString());
+                                                                                    setTreeGL('');
+                                                                                    setTreeWorker('');
+                                                                                    setIsTopUserSelectOpen(false);
+                                                                                }}
+                                                                                className={`w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate ${String(treeTopUser) === String(u.id) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                                            >
+                                                                                {u.name} {u.specialty ? `(${u.specialty})` : ''} ({u.role?.name || 'Keine Rolle'})
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                </>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
                                                 <div className="flex justify-center mt-4">
@@ -744,17 +1167,48 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
                                                 <div className="flex gap-4 justify-center">
                                                     <div className="flex-1 max-w-md mx-auto">
                                                         <label className="block text-sm font-medium text-gray-400 mb-2 text-center">Person wählen</label>
-                                                        <select value={treeGL} onChange={e => {
-                                                            setTreeGL(e.target.value);
-                                                            setTreeWorker('');
-                                                        }} className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 text-center [&>option]:bg-slate-900">
-                                                            <option value="" className="bg-slate-900 text-white">-- Person wählen --</option>
-                                                            {users.filter(u => u.role?.name?.toLowerCase() === 'gruppenleiter').map(u => (
-                                                                <option key={u.id} value={u.id} className="bg-slate-900 text-white">
-                                                                    {u.name} {u.specialty ? `(${u.specialty})` : ''} - Manager: {users.find(m => m.id === u.manager_id)?.name || 'N/A'}
-                                                                </option>
-                                                            ))}
-                                                        </select>
+                                                        <div className="relative">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setIsGLSelectOpen(!isGLSelectOpen)}
+                                                                className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 transition-colors flex items-center justify-between text-center"
+                                                            >
+                                                                <span className="w-full text-center">
+                                                                    {treeGL
+                                                                        ? (() => {
+                                                                            const u = users.find(usr => String(usr.id) === String(treeGL));
+                                                                            return u ? `${u.name} ${u.specialty ? `(${u.specialty})` : ''}` : '-- Person wählen --';
+                                                                          })()
+                                                                        : '-- Person wählen --'}
+                                                                </span>
+                                                                <i className={`fa-solid fa-chevron-down text-gray-500 text-xs transition-transform duration-200 ${isGLSelectOpen ? 'rotate-180' : ''}`}></i>
+                                                            </button>
+
+                                                            {isGLSelectOpen && (
+                                                                <>
+                                                                    <div 
+                                                                        className="fixed inset-0 z-40" 
+                                                                        onClick={() => setIsGLSelectOpen(false)}
+                                                                    />
+                                                                    <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar text-left">
+                                                                        {users.filter(u => u.role?.name?.toLowerCase() === 'gruppenleiter').map(u => (
+                                                                            <button
+                                                                                key={u.id}
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    setTreeGL(u.id.toString());
+                                                                                    setTreeWorker('');
+                                                                                    setIsGLSelectOpen(false);
+                                                                                }}
+                                                                                className={`w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate ${String(treeGL) === String(u.id) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                                            >
+                                                                                {u.name} {u.specialty ? `(${u.specialty})` : ''} - Manager: {users.find(m => m.id === u.manager_id)?.name || 'N/A'}
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                </>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
                                                 <div className="flex justify-center mt-4">
@@ -812,14 +1266,47 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
                                                 <div className="flex gap-4 justify-center">
                                                     <div className="flex-1 max-w-md mx-auto">
                                                         <label className="block text-sm font-medium text-gray-400 mb-2 text-center">Person wählen</label>
-                                                        <select value={treeWorker} onChange={e => setTreeWorker(e.target.value)} className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 text-center [&>option]:bg-slate-900">
-                                                            <option value="" className="bg-slate-900 text-white">-- Person wählen --</option>
-                                                            {users.filter(u => u.role?.name?.toLowerCase() === 'worker').map(u => (
-                                                                <option key={u.id} value={u.id} className="bg-slate-900 text-white">
-                                                                    {u.name} {u.specialty ? `(${u.specialty})` : ''} - Manager: {users.find(m => m.id === u.manager_id)?.name || 'N/A'}
-                                                                </option>
-                                                            ))}
-                                                        </select>
+                                                        <div className="relative">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setIsWorkerSelectOpen(!isWorkerSelectOpen)}
+                                                                className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 transition-colors flex items-center justify-between text-center"
+                                                            >
+                                                                <span className="w-full text-center">
+                                                                    {treeWorker
+                                                                        ? (() => {
+                                                                            const u = users.find(usr => String(usr.id) === String(treeWorker));
+                                                                            return u ? `${u.name} ${u.specialty ? `(${u.specialty})` : ''}` : '-- Person wählen --';
+                                                                          })()
+                                                                        : '-- Person wählen --'}
+                                                                </span>
+                                                                <i className={`fa-solid fa-chevron-down text-gray-500 text-xs transition-transform duration-200 ${isWorkerSelectOpen ? 'rotate-180' : ''}`}></i>
+                                                            </button>
+
+                                                            {isWorkerSelectOpen && (
+                                                                <>
+                                                                    <div 
+                                                                        className="fixed inset-0 z-40" 
+                                                                        onClick={() => setIsWorkerSelectOpen(false)}
+                                                                    />
+                                                                    <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar text-left">
+                                                                        {users.filter(u => u.role?.name?.toLowerCase() === 'worker').map(u => (
+                                                                            <button
+                                                                                key={u.id}
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    setTreeWorker(u.id.toString());
+                                                                                    setIsWorkerSelectOpen(false);
+                                                                                }}
+                                                                                className={`w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate ${String(treeWorker) === String(u.id) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                                            >
+                                                                                {u.name} {u.specialty ? `(${u.specialty})` : ''} - Manager: {users.find(m => m.id === u.manager_id)?.name || 'N/A'}
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                </>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
                                                 <div className="flex justify-center mt-4">

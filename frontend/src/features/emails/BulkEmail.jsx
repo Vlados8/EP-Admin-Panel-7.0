@@ -23,6 +23,9 @@ const BulkEmail = () => {
     const [results, setResults] = useState({ success: [], failed: [] });
     const [status, setStatus] = useState('idle'); // idle, sending, completed
 
+    // Custom select dropdown state hooks
+    const [isSenderSelectOpen, setIsSenderSelectOpen] = useState(false);
+
     const jobIdRef = useRef(null);
 
     useEffect(() => {
@@ -284,18 +287,44 @@ const BulkEmail = () => {
                             
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Absender</label>
-                                <select 
-                                    className="w-full glass-input rounded-2xl px-4 py-4 text-white font-bold"
-                                    value={formData.from}
-                                    onChange={(e) => setFormData({ ...formData, from: e.target.value })}
-                                    disabled={sending}
-                                >
-                                    {accounts.map(acc => (
-                                        <option key={acc.id} value={acc.email} className="bg-[#121212]">
-                                            {acc.display_name || acc.email}
-                                        </option>
-                                    ))}
-                                </select>
+                                <div className="relative">
+                                    <button
+                                        type="button"
+                                        disabled={sending}
+                                        onClick={() => setIsSenderSelectOpen(!isSenderSelectOpen)}
+                                        className="w-full glass-input rounded-2xl px-4 py-4 text-white font-bold text-left flex items-center justify-between disabled:opacity-50"
+                                    >
+                                        <span className="truncate">
+                                            {formData.from 
+                                                ? (() => {
+                                                    const acc = accounts.find(a => String(a.email) === String(formData.from));
+                                                    return acc ? (acc.display_name ? `${acc.display_name} <${acc.email}>` : acc.email) : formData.from;
+                                                  })()
+                                                : 'Absender wählen...'}
+                                        </span>
+                                        <i className={`fa-solid fa-chevron-down text-gray-400 text-xs transition-transform duration-200 ${isSenderSelectOpen ? 'rotate-180' : ''}`}></i>
+                                    </button>
+                                    {isSenderSelectOpen && (
+                                        <>
+                                            <div className="fixed inset-0 z-40" onClick={() => setIsSenderSelectOpen(false)} />
+                                            <div className="absolute left-0 right-0 mt-1 bg-[#121212]/95 border border-white/10 rounded-2xl shadow-2xl z-50 max-h-60 overflow-y-auto py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar text-left font-normal">
+                                                {accounts.map(acc => (
+                                                    <button
+                                                        key={acc.id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setFormData({ ...formData, from: acc.email });
+                                                            setIsSenderSelectOpen(false);
+                                                        }}
+                                                        className={`w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate ${String(formData.from) === String(acc.email) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                    >
+                                                        {acc.display_name ? `${acc.display_name} <${acc.email}>` : acc.email}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
                             </div>
 
                             <div>

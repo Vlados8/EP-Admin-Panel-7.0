@@ -537,6 +537,13 @@ const ProjectDetails = () => {
         }
     };
 
+    const handleEmailClick = (email, e) => {
+        if (e) e.preventDefault();
+        if (email) {
+            navigate(`/email-messages?to=${encodeURIComponent(email)}`);
+        }
+    };
+
     if (loading) {
         return <div className="text-gray-400 text-center py-20 flex-1">Lade Projektdetails...</div>;
     }
@@ -969,54 +976,149 @@ const ProjectDetails = () => {
                                     <i className="fa-solid fa-clipboard-list text-blue-400"></i> Projekt-Klassifizierung & Antworten
                                 </h3>
 
-                                {/* Category Headers */}
-                                {(project.category || project.subcategory) && (
-                                    <div className="flex flex-wrap gap-3 mb-6">
-                                        {project.category && (
-                                            <div className="flex items-center gap-3 bg-blue-500/10 border border-blue-500/20 px-4 py-2 rounded-xl">
-                                                <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400">
-                                                    <i className={`fa-solid ${project.category.icon || 'fa-folder'}`}></i>
+                                {/* Category Headers (Multi-Category Support) */}
+                                {((project.categories_list && project.categories_list.length > 0) || project.category || project.subcategory) && (
+                                    <div className="flex flex-wrap gap-4 mb-6">
+                                        {project.categories_list && project.categories_list.length > 0 ? (
+                                            project.categories_list.map((catItem, idx) => (
+                                                <div key={idx} className="flex flex-wrap items-center gap-2 bg-white/5 border border-white/10 p-3 rounded-2xl animate-[fadeIn_0.3s_ease-out]">
+                                                    {catItem.category && (
+                                                        <div className="flex items-center gap-2.5 bg-blue-500/10 border border-blue-500/20 px-3 py-1.5 rounded-xl">
+                                                            <div className="w-6 h-6 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400 text-xs">
+                                                                <i className={`fa-solid ${catItem.category.icon || 'fa-folder'}`}></i>
+                                                            </div>
+                                                            <div>
+                                                                <div className="text-[9px] text-blue-400/80 uppercase tracking-wider font-bold">Hauptkategorie</div>
+                                                                <div className="text-xs font-semibold text-blue-100">{catItem.category.name}</div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    {catItem.subcategory && (
+                                                        <div className="flex items-center gap-2.5 bg-purple-500/10 border border-purple-500/20 px-3 py-1.5 rounded-xl">
+                                                            <div className="w-6 h-6 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-400 text-xs">
+                                                                <i className="fa-solid fa-layer-group"></i>
+                                                            </div>
+                                                            <div>
+                                                                <div className="text-[9px] text-purple-400/80 uppercase tracking-wider font-bold">Unterkategorie</div>
+                                                                <div className="text-xs font-semibold text-purple-100">{catItem.subcategory.name}</div>
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                <div>
-                                                    <div className="text-[10px] text-blue-400/80 uppercase tracking-wider font-bold mb-0.5">Hauptkategorie</div>
-                                                    <div className="text-sm font-semibold text-blue-100">{project.category.name}</div>
-                                                </div>
-                                            </div>
-                                        )}
-                                        {project.subcategory && (
-                                            <div className="flex items-center gap-3 bg-purple-500/10 border border-purple-500/20 px-4 py-2 rounded-xl">
-                                                <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-400">
-                                                    <i className="fa-solid fa-layer-group"></i>
-                                                </div>
-                                                <div>
-                                                    <div className="text-[10px] text-purple-400/80 uppercase tracking-wider font-bold mb-0.5">Unterkategorie</div>
-                                                    <div className="text-sm font-semibold text-purple-100">{project.subcategory.name}</div>
-                                                </div>
-                                            </div>
+                                            ))
+                                        ) : (
+                                            <>
+                                                {project.category && (
+                                                    <div className="flex items-center gap-3 bg-blue-500/10 border border-blue-500/20 px-4 py-2 rounded-xl">
+                                                        <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400">
+                                                            <i className={`fa-solid ${project.category.icon || 'fa-folder'}`}></i>
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-[10px] text-blue-400/80 uppercase tracking-wider font-bold mb-0.5">Hauptkategorie</div>
+                                                            <div className="text-sm font-semibold text-blue-100">{project.category.name}</div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {project.subcategory && (
+                                                    <div className="flex items-center gap-3 bg-purple-500/10 border border-purple-500/20 px-4 py-2 rounded-xl">
+                                                        <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-400">
+                                                            <i className="fa-solid fa-layer-group"></i>
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-[10px] text-purple-400/80 uppercase tracking-wider font-bold mb-0.5">Unterkategorie</div>
+                                                            <div className="text-sm font-semibold text-purple-100">{project.subcategory.name}</div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </>
                                         )}
                                     </div>
                                 )}
 
-                                {/* Projekt-Klassifizierung & Antworten */}
-                                {project.answers && project.answers.length > 0 && (
-                                    <div className="space-y-4">
-                                        <h3 className="text-sm font-semibold text-blue-400 uppercase tracking-wider flex items-center gap-2">
-                                            <i className="fa-solid fa-list-check"></i> Projekt-Klassifizierung & Antworten
-                                        </h3>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            {project.answers.map((ans) => (
-                                                <div key={ans.id} className="bg-white/5 p-4 rounded-xl border border-white/5 group hover:border-blue-500/30 transition-all">
-                                                    <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1 group-hover:text-blue-400/80 transition-colors">
-                                                        {ans.question?.question_text || 'Unbekannte Frage'}
+                                {/* Projekt-Klassifizierung & Antworten (Grouped by Category/Subcategory) */}
+                                {(() => {
+                                    if (!project.answers || project.answers.length === 0) return null;
+                                    
+                                    const groups = {};
+                                    project.answers.forEach(ans => {
+                                        const subId = ans.question?.subcategory_id;
+                                        let groupKey = "Sonstiges";
+                                        let categoryName = "";
+                                        let subcategoryName = "";
+                                        let categoryIcon = "fa-clipboard-list";
+                                        
+                                        if (project.categories_list && project.categories_list.length > 0) {
+                                            const match = project.categories_list.find(item => item.subcategory?.id === subId);
+                                            if (match) {
+                                                categoryName = match.category?.name || "";
+                                                subcategoryName = match.subcategory?.name || "";
+                                                categoryIcon = match.category?.icon || "fa-folder";
+                                            }
+                                        }
+                                        
+                                        if (!categoryName && project.category) {
+                                            if (project.subcategory?.id === subId || !subId) {
+                                                categoryName = project.category.name || "";
+                                                subcategoryName = project.subcategory?.name || "";
+                                                categoryIcon = project.category.icon || "fa-folder";
+                                            }
+                                        }
+                                        
+                                        if (categoryName) {
+                                            groupKey = subcategoryName ? `${categoryName} - ${subcategoryName}` : categoryName;
+                                        }
+                                        
+                                        if (!groups[groupKey]) {
+                                            groups[groupKey] = {
+                                                categoryName,
+                                                subcategoryName,
+                                                categoryIcon,
+                                                answers: []
+                                            };
+                                        }
+                                        groups[groupKey].answers.push(ans);
+                                    });
+
+                                    return (
+                                        <div className="space-y-6">
+                                            <h3 className="text-sm font-semibold text-blue-400 uppercase tracking-wider flex items-center gap-2 border-b border-white/5 pb-2 mb-2">
+                                                <i className="fa-solid fa-list-check"></i> Spezifische Fragen & Antworten
+                                            </h3>
+                                            
+                                            {Object.keys(groups).map((groupKey, gIdx) => {
+                                                const group = groups[groupKey];
+                                                return (
+                                                    <div key={gIdx} className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 space-y-4 animate-[fadeIn_0.3s_ease-out]">
+                                                        {/* Group Header Card */}
+                                                        <div className="flex items-center gap-3 bg-blue-500/10 border border-blue-500/20 px-4 py-3 rounded-xl">
+                                                            <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400">
+                                                                <i className={`fa-solid ${group.categoryIcon || 'fa-folder'}`}></i>
+                                                            </div>
+                                                            <div>
+                                                                <div className="text-[9px] text-blue-400 uppercase tracking-widest font-black">Hauptkategorie: {group.categoryName || 'Sonstiges'}</div>
+                                                                <div className="text-xs font-semibold text-white">{group.subcategoryName || 'Allgemeine Angaben'}</div>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Question Answers Grid */}
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                            {group.answers.map((ans) => (
+                                                                <div key={ans.id} className="bg-[#0a101d]/60 p-4 rounded-xl border border-white/5 group hover:border-blue-500/30 transition-all">
+                                                                    <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1.5 group-hover:text-blue-400/80 transition-colors">
+                                                                        {ans.question?.question_text || 'Unbekannte Frage'}
+                                                                    </div>
+                                                                    <div className="text-sm font-semibold text-white group-hover:text-blue-50">
+                                                                        {ans.custom_value ? ans.custom_value : (ans.answer?.answer_text || '-')}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
                                                     </div>
-                                                    <div className="text-sm font-semibold text-white group-hover:text-blue-50">
-                                                        {ans.custom_value ? ans.custom_value : (ans.answer?.answer_text || '-')}
-                                                    </div>
-                                                </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
-                                    </div>
-                                )}
+                                    );
+                                })()}
                             </div>
                         )}
                     </div>
@@ -1058,20 +1160,94 @@ const ProjectDetails = () => {
 
                         {/* Client Info */}
                         <div className="glass-card rounded-2xl p-6">
-                            <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4 border-b border-white/10 pb-3">Kundeninformationen</h3>
-                            {project.client ? (
-                                <div className="flex items-start gap-4">
-                                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-white/10 flex items-center justify-center text-blue-400 text-xl font-bold">
-                                        {(project.client.name || project.client.company_name)?.charAt(0).toUpperCase()}
+                            <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4 border-b border-white/10 pb-3 flex items-center justify-between">
+                                <span>Auftraggeber & Kontakt</span>
+                                <i className="fa-solid fa-user-tie text-emerald-400"></i>
+                            </h3>
+                            
+                            {project.client && (
+                                <div className="flex items-start gap-4 mb-4 pb-4 border-b border-white/5">
+                                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-white/10 flex items-center justify-center text-blue-400 text-sm font-bold shrink-0">
+                                        <i className="fa-solid fa-building"></i>
                                     </div>
-                                    <div>
-                                        <div className="font-semibold text-white">{project.client.company_name || project.client.name}</div>
-                                        <div className="text-xs text-gray-400 mt-1">{project.client.email}</div>
-                                        <div className="text-xs text-gray-400 mt-0.5">{project.client.phone}</div>
+                                    <div className="min-w-0 flex-1">
+                                        <div className="text-[10px] text-gray-500 uppercase font-bold mb-0.5">Kundenfirma</div>
+                                        <div className="font-semibold text-white truncate">{project.client.company_name || project.client.name}</div>
+                                        {project.client.contact_person && (
+                                            <div className="text-xs text-emerald-400 font-medium mt-0.5 flex items-center gap-1.5">
+                                                <i className="fa-regular fa-user text-emerald-400/80 text-[10px]"></i>
+                                                {project.client.contact_person}
+                                            </div>
+                                        )}
+                                        {project.client.email ? (
+                                            <button 
+                                                onClick={(e) => handleEmailClick(project.client.email, e)}
+                                                className="text-xs text-blue-400 hover:underline truncate mt-0.5 block text-left"
+                                            >
+                                                {project.client.email}
+                                            </button>
+                                        ) : null}
+                                        {project.client.phone && (
+                                            <div className="text-xs text-gray-400 truncate mt-0.5">{project.client.phone}</div>
+                                        )}
                                     </div>
                                 </div>
+                            )}
+
+                            {(project.client_first_name || project.client_last_name || project.client_phone || project.client_email) ? (
+                                <div className="space-y-3">
+                                    <div>
+                                        <div className="text-[10px] text-emerald-400 uppercase font-bold mb-0.5">Projekt-Ansprechpartner</div>
+                                        <div className="font-semibold text-white flex items-center gap-2">
+                                            <i className="fa-regular fa-user text-gray-400"></i>
+                                            {project.client_first_name || ''} {project.client_last_name || ''}
+                                        </div>
+                                    </div>
+                                    
+                                    {project.client_phone && (
+                                        <div>
+                                            <div className="text-[10px] text-gray-500 uppercase font-bold mb-0.5">Telefon</div>
+                                            <a href={`tel:${project.client_phone}`} className="text-sm text-blue-400 hover:underline flex items-center gap-2">
+                                                <i className="fa-solid fa-phone text-gray-400 text-xs"></i>
+                                                {project.client_phone}
+                                            </a>
+                                        </div>
+                                    )}
+                                    
+                                    {project.client_email && (
+                                        <div>
+                                            <div className="text-[10px] text-gray-500 uppercase font-bold mb-0.5">E-Mail</div>
+                                            <button 
+                                                onClick={(e) => handleEmailClick(project.client_email, e)}
+                                                className="text-sm text-blue-400 hover:underline flex items-center gap-2 truncate block text-left w-full"
+                                            >
+                                                <i className="fa-solid fa-envelope text-gray-400 text-xs"></i>
+                                                {project.client_email}
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {project.client_address && (
+                                        <div>
+                                            <div className="text-[10px] text-gray-500 uppercase font-bold mb-0.5">Kontakt-Adresse</div>
+                                            <div className="text-xs text-gray-300 flex items-start gap-2">
+                                                <i className="fa-solid fa-location-dot text-gray-400 text-xs mt-0.5"></i>
+                                                <span>{project.client_address}</span>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {project.client_notes && (
+                                        <div className="pt-2 border-t border-white/5">
+                                            <div className="text-[10px] text-emerald-400 uppercase font-bold mb-1">Kunden-Notizen (intern)</div>
+                                            <div className="text-xs text-gray-300 bg-emerald-500/5 border border-emerald-500/10 p-2.5 rounded-lg leading-relaxed whitespace-pre-wrap">
+                                                {project.client_notes}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             ) : (
-                                <div className="text-sm text-gray-400 italic">Kein Kunde zugewiesen.</div>
+                                !project.client && <div className="text-sm text-gray-400 italic">Keine Ansprechpartner-Informationen hinterlegt.</div>
                             )}
                         </div>
 
@@ -1083,11 +1259,36 @@ const ProjectDetails = () => {
                                     <div>
                                         <div className="text-xs text-gray-500 mb-2 uppercase select-none">Projektleiter</div>
                                         {managers.map(m => (
-                                            <div key={m.id} className="flex items-center gap-3 mb-2">
-                                                <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400 text-xs font-bold border border-blue-500/20">
-                                                    {m.user?.name?.charAt(0)}
+                                            <div key={m.id} className="flex items-center justify-between bg-white/[0.02] border border-white/5 p-3 rounded-xl hover:bg-white/[0.05] transition-all mb-2.5">
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400 text-xs font-bold border border-blue-500/20 shrink-0">
+                                                        {m.user?.name?.charAt(0)}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <div className="text-sm font-semibold text-white truncate">{m.user?.name}</div>
+                                                        {m.user?.specialty && <div className="text-[10px] text-gray-400 truncate">{m.user.specialty}</div>}
+                                                    </div>
                                                 </div>
-                                                <div className="text-sm text-gray-300">{m.user?.name}</div>
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    {m.user?.phone && (
+                                                        <a 
+                                                            href={`tel:${m.user.phone}`} 
+                                                            className="w-7 h-7 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 flex items-center justify-center transition-colors text-xs"
+                                                            title={`Telefon: ${m.user.phone}`}
+                                                        >
+                                                            <i className="fa-solid fa-phone"></i>
+                                                        </a>
+                                                    )}
+                                                    {m.user?.email && (
+                                                        <button 
+                                                            onClick={(e) => handleEmailClick(m.user.email, e)}
+                                                            className="w-7 h-7 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 flex items-center justify-center transition-colors text-xs"
+                                                            title={`E-Mail compose: ${m.user.email}`}
+                                                        >
+                                                            <i className="fa-solid fa-envelope"></i>
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
@@ -1096,11 +1297,36 @@ const ProjectDetails = () => {
                                     <div>
                                         <div className="text-xs text-gray-500 mb-2 uppercase select-none">Gruppenleiter</div>
                                         {groupLeaders.map(gl => (
-                                            <div key={gl.id} className="flex items-center gap-3 mb-2">
-                                                <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400 text-xs font-bold border border-emerald-500/20">
-                                                    {gl.user?.name?.charAt(0)}
+                                            <div key={gl.id} className="flex items-center justify-between bg-white/[0.02] border border-white/5 p-3 rounded-xl hover:bg-white/[0.05] transition-all mb-2.5">
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400 text-xs font-bold border border-emerald-500/20 shrink-0">
+                                                        {gl.user?.name?.charAt(0)}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <div className="text-sm font-semibold text-white truncate">{gl.user?.name}</div>
+                                                        {gl.user?.specialty && <div className="text-[10px] text-gray-400 truncate">{gl.user.specialty}</div>}
+                                                    </div>
                                                 </div>
-                                                <div className="text-sm text-gray-300">{gl.user?.name}</div>
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    {gl.user?.phone && (
+                                                        <a 
+                                                            href={`tel:${gl.user.phone}`} 
+                                                            className="w-7 h-7 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 flex items-center justify-center transition-colors text-xs"
+                                                            title={`Telefon: ${gl.user.phone}`}
+                                                        >
+                                                            <i className="fa-solid fa-phone"></i>
+                                                        </a>
+                                                    )}
+                                                    {gl.user?.email && (
+                                                        <button 
+                                                            onClick={(e) => handleEmailClick(gl.user.email, e)}
+                                                            className="w-7 h-7 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 flex items-center justify-center transition-colors text-xs"
+                                                            title={`E-Mail compose: ${gl.user.email}`}
+                                                        >
+                                                            <i className="fa-solid fa-envelope"></i>
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
@@ -1109,11 +1335,36 @@ const ProjectDetails = () => {
                                     <div>
                                         <div className="text-xs text-gray-500 mb-2 uppercase select-none">Mitarbeiter</div>
                                         {workers.map(w => (
-                                            <div key={w.id} className="flex items-center gap-3 mb-2">
-                                                <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-400 text-xs font-bold border border-amber-500/20">
-                                                    {w.user?.name?.charAt(0)}
+                                            <div key={w.id} className="flex items-center justify-between bg-white/[0.02] border border-white/5 p-3 rounded-xl hover:bg-white/[0.05] transition-all mb-2.5">
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-400 text-xs font-bold border border-amber-500/20 shrink-0">
+                                                        {w.user?.name?.charAt(0)}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <div className="text-sm font-semibold text-white truncate">{w.user?.name}</div>
+                                                        {w.user?.specialty && <div className="text-[10px] text-gray-400 truncate">{w.user.specialty}</div>}
+                                                    </div>
                                                 </div>
-                                                <div className="text-sm text-gray-300">{w.user?.name}</div>
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    {w.user?.phone && (
+                                                        <a 
+                                                            href={`tel:${w.user.phone}`} 
+                                                            className="w-7 h-7 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 flex items-center justify-center transition-colors text-xs"
+                                                            title={`Telefon: ${w.user.phone}`}
+                                                        >
+                                                            <i className="fa-solid fa-phone"></i>
+                                                        </a>
+                                                    )}
+                                                    {w.user?.email && (
+                                                        <button 
+                                                            onClick={(e) => handleEmailClick(w.user.email, e)}
+                                                            className="w-7 h-7 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 flex items-center justify-center transition-colors text-xs"
+                                                            title={`E-Mail compose: ${w.user.email}`}
+                                                        >
+                                                            <i className="fa-solid fa-envelope"></i>
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
@@ -1159,7 +1410,12 @@ const ProjectDetails = () => {
                                                 {as.subcontractor?.email && (
                                                     <div className="flex items-center gap-2 text-[11px] text-blue-400 hover:underline cursor-pointer">
                                                         <i className="fa-solid fa-envelope text-gray-500 w-3"></i>
-                                                        <a href={`mailto:${as.subcontractor.email}`}>{as.subcontractor.email}</a>
+                                                        <button 
+                                                            onClick={(e) => handleEmailClick(as.subcontractor.email, e)}
+                                                            className="hover:underline text-left font-medium"
+                                                        >
+                                                            {as.subcontractor.email}
+                                                        </button>
                                                     </div>
                                                 )}
                                             </div>

@@ -19,6 +19,10 @@ const Emails = () => {
     const [quickUser, setQuickUser] = useState({ name: '', password: '', role_id: '', phone: '', specialty: '' });
     const [newAccount, setNewAccount] = useState({ email: '', type: 'smtp', user_id: '', is_shared: true, display_name: '' });
 
+    // Custom select dropdown state hooks
+    const [isUserSelectOpen, setIsUserSelectOpen] = useState(false);
+    const [isRoleSelectOpen, setIsRoleSelectOpen] = useState(false);
+
     const [domain, setDomain] = useState('empire-premium.de'); // Default if fetch fails
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -106,6 +110,8 @@ const Emails = () => {
             await api.post('/emails', { ...newAccount, email: emailFull });
             setShowAddModal(false);
             setNewAccount({ email: '', type: 'smtp', user_id: '', is_shared: true, display_name: '' });
+            setIsUserSelectOpen(false);
+            setIsRoleSelectOpen(false);
             fetchAccounts();
             fetchStats();
         } catch (err) {
@@ -417,28 +423,56 @@ const Emails = () => {
                                 {!newAccount.is_shared && (
                                     <div className="animate-[slideDown_0.3s_ease-out] space-y-4">
                                         <div className="flex justify-between items-end gap-2">
-                                            <div className="flex-1">
+                                            <div className="flex-1 relative">
                                                 <label className="block text-xs text-gray-500 mb-2 uppercase tracking-widest font-bold text-[10px]">Nutzer auswählen</label>
-                                                <select
-                                                    required={!showQuickUser && !newAccount.user_id}
-                                                    className="w-full glass-input rounded-xl px-4 py-3 text-white font-semibold text-sm disabled:opacity-50"
-                                                    value={newAccount.user_id}
-                                                    onChange={(e) => setNewAccount({ ...newAccount, user_id: e.target.value })}
+                                                <button
+                                                    type="button"
                                                     disabled={loading}
+                                                    onClick={() => setIsUserSelectOpen(!isUserSelectOpen)}
+                                                    className="w-full glass-input rounded-xl px-4 py-3 text-white font-semibold text-sm disabled:opacity-50 text-left flex items-center justify-between animate-[fadeIn_0.15s_ease-out]"
                                                 >
-                                                    {loading ? (
-                                                        <option>Lade Nutzer...</option>
-                                                    ) : users.length === 0 ? (
-                                                        <option value="">Keine Nutzer gefunden</option>
-                                                    ) : (
-                                                        <>
-                                                            <option value="">Wählen Sie einen Nutzer...</option>
+                                                    <span className="truncate">
+                                                        {loading 
+                                                            ? 'Lade Nutzer...' 
+                                                            : newAccount.user_id 
+                                                                ? (() => {
+                                                                    const u = users.find(usr => String(usr.id) === String(newAccount.user_id));
+                                                                    return u ? `${u.name} (${u.role?.name || 'Gast'})` : 'Wählen Sie einen Nutzer...';
+                                                                  })()
+                                                                : 'Wählen Sie einen Nutzer...'}
+                                                    </span>
+                                                    <i className={`fa-solid fa-chevron-down text-gray-400 text-xs transition-transform duration-200 ${isUserSelectOpen ? 'rotate-180' : ''}`}></i>
+                                                </button>
+                                                {isUserSelectOpen && !loading && (
+                                                    <>
+                                                        <div className="fixed inset-0 z-40" onClick={() => setIsUserSelectOpen(false)} />
+                                                        <div className="absolute left-0 right-0 mt-1 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar text-left font-normal">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setNewAccount({ ...newAccount, user_id: '' });
+                                                                    setIsUserSelectOpen(false);
+                                                                }}
+                                                                className="w-full text-left px-4 py-2.5 text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+                                                            >
+                                                                Wählen Sie einen Nutzer...
+                                                            </button>
                                                             {users.map(user => (
-                                                                <option key={user.id} value={user.id}>{user.name} ({user.role?.name || 'Gast'})</option>
+                                                                <button
+                                                                    key={user.id}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setNewAccount({ ...newAccount, user_id: user.id });
+                                                                        setIsUserSelectOpen(false);
+                                                                    }}
+                                                                    className={`w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate ${String(newAccount.user_id) === String(user.id) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                                >
+                                                                    {user.name} <span className="text-xs text-gray-500">({user.role?.name || 'Gast'})</span>
+                                                                </button>
                                                             ))}
-                                                        </>
-                                                    )}
-                                                </select>
+                                                        </div>
+                                                    </>
+                                                )}
                                             </div>
                                             <button
                                                 type="button"
@@ -483,25 +517,53 @@ const Emails = () => {
                                                         onChange={(e) => setQuickUser({ ...quickUser, specialty: e.target.value })}
                                                     />
                                                 </div>
-                                                <select
-                                                    className="w-full glass-input rounded-lg px-3 py-2 text-xs text-white disabled:opacity-50"
-                                                    value={quickUser.role_id}
-                                                    onChange={(e) => setQuickUser({ ...quickUser, role_id: e.target.value })}
-                                                    disabled={loading}
-                                                >
-                                                    {loading ? (
-                                                        <option>Lade Rollen...</option>
-                                                    ) : roles.length === 0 ? (
-                                                        <option value="">Keine Rollen gefunden</option>
-                                                    ) : (
+                                                <div className="relative">
+                                                    <button
+                                                        type="button"
+                                                        disabled={loading}
+                                                        onClick={() => setIsRoleSelectOpen(!isRoleSelectOpen)}
+                                                        className="w-full glass-input rounded-lg px-3 py-2 text-xs text-white disabled:opacity-50 text-left flex items-center justify-between"
+                                                    >
+                                                        <span className="truncate">
+                                                            {loading 
+                                                                ? 'Lade Rollen...' 
+                                                                : quickUser.role_id 
+                                                                    ? roles.find(r => String(r.id) === String(quickUser.role_id))?.name || 'Rolle wählen...'
+                                                                    : 'Rolle wählen...'}
+                                                        </span>
+                                                        <i className={`fa-solid fa-chevron-down text-gray-400 text-xs transition-transform duration-200 ${isRoleSelectOpen ? 'rotate-180' : ''}`}></i>
+                                                    </button>
+                                                    {isRoleSelectOpen && !loading && (
                                                         <>
-                                                            <option value="">Rolle wählen...</option>
-                                                            {roles.map(role => (
-                                                                <option key={role.id} value={role.id}>{role.name}</option>
-                                                            ))}
+                                                            <div className="fixed inset-0 z-40" onClick={() => setIsRoleSelectOpen(false)} />
+                                                            <div className="absolute left-0 right-0 mt-1 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-40 overflow-y-auto py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar text-left font-normal">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setQuickUser({ ...quickUser, role_id: '' });
+                                                                        setIsRoleSelectOpen(false);
+                                                                    }}
+                                                                    className="w-full text-left px-3 py-1.5 text-xs text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+                                                                >
+                                                                    Rolle wählen...
+                                                                </button>
+                                                                {roles.map(role => (
+                                                                    <button
+                                                                        key={role.id}
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setQuickUser({ ...quickUser, role_id: role.id });
+                                                                            setIsRoleSelectOpen(false);
+                                                                        }}
+                                                                        className={`w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate ${String(quickUser.role_id) === String(role.id) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                                    >
+                                                                        {role.name}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
                                                         </>
                                                     )}
-                                                </select>
+                                                </div>
                                                 <button
                                                     type="button"
                                                     onClick={handleQuickCreateUser}

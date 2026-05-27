@@ -16,6 +16,13 @@ const Users = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [filterRole, setFilterRole] = useState('Alle');
     
+    // Custom select dropdown state hooks
+    const [isRoleSelectOpen, setIsRoleSelectOpen] = useState(false);
+    const [isManagerSelectOpen, setIsManagerSelectOpen] = useState(false);
+    const [isEditRoleSelectOpen, setIsEditRoleSelectOpen] = useState(false);
+    const [isEditStatusSelectOpen, setIsEditStatusSelectOpen] = useState(false);
+    const [isEditManagerSelectOpen, setIsEditManagerSelectOpen] = useState(false);
+    
     // Telephony expansion
     const [activeTab, setActiveTab] = useState('details'); // 'details' or 'history'
     const [userHistory, setUserHistory] = useState([]);
@@ -64,6 +71,11 @@ const Users = () => {
         setEditUserId(null);
         setActiveTab('details');
         setUserHistory([]);
+        setIsRoleSelectOpen(false);
+        setIsManagerSelectOpen(false);
+        setIsEditRoleSelectOpen(false);
+        setIsEditStatusSelectOpen(false);
+        setIsEditManagerSelectOpen(false);
     };
 
     const getInitials = (name) => {
@@ -585,19 +597,39 @@ const Users = () => {
                                 <div className="space-y-1">
                                     <label className="text-xs font-medium text-gray-400 pl-1 uppercase tracking-wider">System-Rolle</label>
                                     <div className="relative">
-                                        <i className="fa-solid fa-id-badge absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
-                                        <select
-                                            required
-                                            value={formData.role_id}
-                                            onChange={(e) => setFormData({ ...formData, role_id: e.target.value, manager_id: '' })}
-                                            className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-3 py-2.5 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all appearance-none [&>option]:bg-gray-900"
+                                        <i className="fa-solid fa-id-badge absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 z-10"></i>
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsRoleSelectOpen(!isRoleSelectOpen)}
+                                            className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-10 py-2.5 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-left flex items-center justify-between"
                                         >
-                                            <option value="" disabled>Bitte wählen...</option>
-                                            {roles.map(r => (
-                                                <option key={r.id} value={r.id}>{r.name}</option>
-                                            ))}
-                                        </select>
-                                        <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none text-xs"></i>
+                                            <span className="truncate">
+                                                {formData.role_id 
+                                                    ? roles.find(r => String(r.id) === String(formData.role_id))?.name || 'Bitte wählen...' 
+                                                    : 'Bitte wählen...'}
+                                            </span>
+                                            <i className={`fa-solid fa-chevron-down text-gray-500 text-xs transition-transform duration-200 ${isRoleSelectOpen ? 'rotate-180' : ''}`}></i>
+                                        </button>
+                                        {isRoleSelectOpen && (
+                                            <>
+                                                <div className="fixed inset-0 z-40" onClick={() => setIsRoleSelectOpen(false)} />
+                                                <div className="absolute left-0 right-0 mt-1 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar text-left">
+                                                    {roles.map(r => (
+                                                        <button
+                                                            key={r.id}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setFormData({ ...formData, role_id: r.id, manager_id: '' });
+                                                                setIsRoleSelectOpen(false);
+                                                            }}
+                                                            className={`w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors ${String(formData.role_id) === String(r.id) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                        >
+                                                            {r.name}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="col-span-2 space-y-1">
@@ -647,21 +679,42 @@ const Users = () => {
                                             Zuständiger Vorgesetzter
                                         </label>
                                         <div className="relative">
-                                            <i className="fa-solid fa-sitemap absolute left-3 top-1/2 -translate-y-1/2 text-blue-400"></i>
-                                            <select
-                                                required
-                                                value={formData.manager_id}
-                                                onChange={(e) => setFormData({ ...formData, manager_id: e.target.value })}
-                                                className="w-full bg-blue-500/10 border border-blue-500/30 rounded-xl pl-10 pr-3 py-2.5 text-blue-100 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-all appearance-none [&>option]:bg-gray-900"
+                                            <i className="fa-solid fa-sitemap absolute left-3 top-1/2 -translate-y-1/2 text-blue-400 z-10"></i>
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsManagerSelectOpen(!isManagerSelectOpen)}
+                                                className="w-full bg-blue-500/10 border border-blue-500/30 rounded-xl pl-10 pr-10 py-2.5 text-blue-100 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-all text-left flex items-center justify-between"
                                             >
-                                                <option value="" disabled>Vorgesetzten wählen...</option>
-                                                {availableManagers.map(mgr => (
-                                                    <option key={mgr.id} value={mgr.id}>
-                                                        {mgr.name} ({mgr.role?.name})
-                                                    </option>
-                                                ))}
-                                            </select>
-                                            <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-blue-400 pointer-events-none text-xs"></i>
+                                                <span className="truncate">
+                                                    {formData.manager_id 
+                                                        ? (() => {
+                                                            const mgr = availableManagers.find(m => String(m.id) === String(formData.manager_id));
+                                                            return mgr ? `${mgr.name} (${mgr.role?.name})` : 'Vorgesetzten wählen...';
+                                                          })()
+                                                        : 'Vorgesetzten wählen...'}
+                                                </span>
+                                                <i className={`fa-solid fa-chevron-down text-blue-400 text-xs transition-transform duration-200 ${isManagerSelectOpen ? 'rotate-180' : ''}`}></i>
+                                            </button>
+                                            {isManagerSelectOpen && (
+                                                <>
+                                                    <div className="fixed inset-0 z-40" onClick={() => setIsManagerSelectOpen(false)} />
+                                                    <div className="absolute left-0 right-0 mt-1 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar text-left">
+                                                        {availableManagers.map(mgr => (
+                                                            <button
+                                                                key={mgr.id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setFormData({ ...formData, manager_id: mgr.id });
+                                                                    setIsManagerSelectOpen(false);
+                                                                }}
+                                                                className={`w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors ${String(formData.manager_id) === String(mgr.id) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                            >
+                                                                {mgr.name} <span className="text-xs text-gray-400">({mgr.role?.name})</span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </>
+                                            )}
                                         </div>
                                     </div>
                                 )}
@@ -809,19 +862,39 @@ const Users = () => {
                                     <div className="space-y-1">
                                         <label className="text-xs font-medium text-gray-400 pl-1">System-Rolle</label>
                                         <div className="relative">
-                                            <i className="fa-solid fa-id-badge absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
-                                            <select
-                                                required
-                                                value={formData.role_id}
-                                                onChange={(e) => setFormData({ ...formData, role_id: e.target.value, manager_id: '' })}
-                                                className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-3 py-2.5 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all appearance-none [&>option]:bg-gray-900"
+                                            <i className="fa-solid fa-id-badge absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 z-10"></i>
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsEditRoleSelectOpen(!isEditRoleSelectOpen)}
+                                                className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-10 py-2.5 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-left flex items-center justify-between"
                                             >
-                                                <option value="" disabled>Bitte wählen...</option>
-                                                {roles.map(r => (
-                                                    <option key={r.id} value={r.id}>{r.name}</option>
-                                                ))}
-                                            </select>
-                                            <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none text-xs"></i>
+                                                <span className="truncate">
+                                                    {formData.role_id 
+                                                        ? roles.find(r => String(r.id) === String(formData.role_id))?.name || 'Bitte wählen...' 
+                                                        : 'Bitte wählen...'}
+                                                </span>
+                                                <i className={`fa-solid fa-chevron-down text-gray-500 text-xs transition-transform duration-200 ${isEditRoleSelectOpen ? 'rotate-180' : ''}`}></i>
+                                            </button>
+                                            {isEditRoleSelectOpen && (
+                                                <>
+                                                    <div className="fixed inset-0 z-40" onClick={() => setIsEditRoleSelectOpen(false)} />
+                                                    <div className="absolute left-0 right-0 mt-1 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar text-left">
+                                                        {roles.map(r => (
+                                                            <button
+                                                                key={r.id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setFormData({ ...formData, role_id: r.id, manager_id: '' });
+                                                                    setIsEditRoleSelectOpen(false);
+                                                                }}
+                                                                className={`w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors ${String(formData.role_id) === String(r.id) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                            >
+                                                                {r.name}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </>
+                                            )}
                                         </div>
                                     </div>
 
@@ -842,17 +915,56 @@ const Users = () => {
                                     <div className="space-y-1 col-span-2 md:col-span-1">
                                         <label className="text-xs font-medium text-gray-400 pl-1">Status</label>
                                         <div className="relative">
-                                            <i className="fa-solid fa-circle-check absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
-                                            <select
-                                                value={formData.status}
-                                                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                                                className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-3 py-2.5 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all appearance-none [&>option]:bg-gray-900"
+                                            <i className="fa-solid fa-circle-check absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 z-10"></i>
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsEditStatusSelectOpen(!isEditStatusSelectOpen)}
+                                                className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-10 py-2.5 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-left flex items-center justify-between"
                                             >
-                                                <option value="active">Aktiv</option>
-                                                <option value="inactive">Inaktiv</option>
-                                                <option value="suspended">Gesperrt</option>
-                                            </select>
-                                            <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none text-xs"></i>
+                                                <span className="truncate">
+                                                    {formData.status === 'active' ? 'Aktiv' : 
+                                                     formData.status === 'inactive' ? 'Inaktiv' : 
+                                                     formData.status === 'suspended' ? 'Gesperrt' : formData.status}
+                                                </span>
+                                                <i className={`fa-solid fa-chevron-down text-gray-500 text-xs transition-transform duration-200 ${isEditStatusSelectOpen ? 'rotate-180' : ''}`}></i>
+                                            </button>
+                                            {isEditStatusSelectOpen && (
+                                                <>
+                                                    <div className="fixed inset-0 z-40" onClick={() => setIsEditStatusSelectOpen(false)} />
+                                                    <div className="absolute left-0 right-0 mt-1 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar text-left">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setFormData({ ...formData, status: 'active' });
+                                                                setIsEditStatusSelectOpen(false);
+                                                            }}
+                                                            className={`w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors ${formData.status === 'active' ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                        >
+                                                            Aktiv
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setFormData({ ...formData, status: 'inactive' });
+                                                                setIsEditStatusSelectOpen(false);
+                                                            }}
+                                                            className={`w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors ${formData.status === 'inactive' ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                        >
+                                                            Inaktiv
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setFormData({ ...formData, status: 'suspended' });
+                                                                setIsEditStatusSelectOpen(false);
+                                                            }}
+                                                            className={`w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors ${formData.status === 'suspended' ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                        >
+                                                            Gesperrt
+                                                        </button>
+                                                    </div>
+                                                </>
+                                            )}
                                         </div>
                                     </div>
 
@@ -972,21 +1084,39 @@ const Users = () => {
                                                 Vorgesetzter
                                             </label>
                                             <div className="relative">
-                                                <i className="fa-solid fa-sitemap absolute left-3 top-1/2 -translate-y-1/2 text-blue-400"></i>
-                                                <select
-                                                    required
-                                                    value={formData.manager_id}
-                                                    onChange={(e) => setFormData({ ...formData, manager_id: e.target.value })}
-                                                    className="w-full bg-blue-500/10 border border-blue-500/30 rounded-xl pl-10 pr-3 py-2.5 text-blue-100 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-all appearance-none [&>option]:bg-gray-900"
+                                                <i className="fa-solid fa-sitemap absolute left-3 top-1/2 -translate-y-1/2 text-blue-400 z-10"></i>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsEditManagerSelectOpen(!isEditManagerSelectOpen)}
+                                                    className="w-full bg-blue-500/10 border border-blue-500/30 rounded-xl pl-10 pr-10 py-2.5 text-blue-100 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-all text-left flex items-center justify-between"
                                                 >
-                                                    <option value="" disabled>Wählen...</option>
-                                                    {availableManagers.map(mgr => (
-                                                        <option key={mgr.id} value={mgr.id}>
-                                                            {mgr.name}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                                <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-blue-400 pointer-events-none text-xs"></i>
+                                                    <span className="truncate">
+                                                        {formData.manager_id 
+                                                            ? availableManagers.find(m => String(m.id) === String(formData.manager_id))?.name || 'Wählen...' 
+                                                            : 'Wählen...'}
+                                                    </span>
+                                                    <i className={`fa-solid fa-chevron-down text-blue-400 text-xs transition-transform duration-200 ${isEditManagerSelectOpen ? 'rotate-180' : ''}`}></i>
+                                                </button>
+                                                {isEditManagerSelectOpen && (
+                                                    <>
+                                                        <div className="fixed inset-0 z-40" onClick={() => setIsEditManagerSelectOpen(false)} />
+                                                        <div className="absolute left-0 right-0 mt-1 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar text-left">
+                                                            {availableManagers.map(mgr => (
+                                                                <button
+                                                                    key={mgr.id}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setFormData({ ...formData, manager_id: mgr.id });
+                                                                        setIsEditManagerSelectOpen(false);
+                                                                    }}
+                                                                    className={`w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors ${String(formData.manager_id) === String(mgr.id) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                                >
+                                                                    {mgr.name}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
                                     )}

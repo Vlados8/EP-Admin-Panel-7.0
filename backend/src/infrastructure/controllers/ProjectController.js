@@ -44,7 +44,7 @@ exports.getAllProjects = async (req, res) => {
                 {
                     model: ProjectUser,
                     as: 'assigned_personnel',
-                    include: [{ model: User, as: 'user', attributes: ['id', 'name', 'specialty'] }]
+                    include: [{ model: User, as: 'user', attributes: ['id', 'name', 'specialty', 'email', 'phone'] }]
                 },
                 {
                     model: ProjectSubcontractor,
@@ -76,7 +76,7 @@ exports.getProjectById = async (req, res) => {
                 {
                     model: ProjectUser,
                     as: 'assigned_personnel',
-                    include: [{ model: User, as: 'user', attributes: ['id', 'name', 'specialty'] }]
+                    include: [{ model: User, as: 'user', attributes: ['id', 'name', 'specialty', 'email', 'phone'] }]
                 },
                 {
                     model: ProjectStage,
@@ -106,6 +106,30 @@ exports.getProjectById = async (req, res) => {
             ]
         });
         if (!project) return res.status(404).json({ error: 'Project not found' });
+
+        let categoriesList = [];
+        if (project.categories_json) {
+            try {
+                const parsed = JSON.parse(project.categories_json);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    for (const item of parsed) {
+                        const cat = await Category.findByPk(item.category_id, {
+                            include: [{ model: Subcategory, as: 'subcategories' }]
+                        });
+                        const sub = item.subcategory_id ? await Subcategory.findByPk(item.subcategory_id) : null;
+                        if (cat) {
+                            categoriesList.push({
+                                category: cat,
+                                subcategory: sub
+                            });
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('Error parsing categories_json in getProjectById:', err);
+            }
+        }
+        project.setDataValue('categories_list', categoriesList);
 
         const userRole = req.user.role?.name || req.user.role;
         if (!hasPermission(req.user, 'MANAGE_API_KEYS')) {
@@ -146,7 +170,12 @@ exports.createProject = async (req, res) => {
     // Local directory creation removed - everything on R2
 
     try {
-        const { title, description, address, status, progress, start_date, end_date, budget, client_id, category_id, subcategory_id, inquiry_id } = req.body;
+        const {
+            title, description, address, status, progress, start_date, end_date, budget,
+            client_id, category_id, subcategory_id, inquiry_id,
+            client_first_name, client_last_name, client_phone, client_email, client_address, client_notes,
+            categories_json
+        } = req.body;
 
         // Fetch all project numbers to find the true max
         const allProjects = await Project.findAll({
@@ -194,7 +223,14 @@ exports.createProject = async (req, res) => {
             client_id: parseId(client_id),
             category_id: parseId(category_id),
             subcategory_id: parseId(subcategory_id),
-            created_by: creatorId
+            categories_json: categories_json || null,
+            created_by: creatorId,
+            client_first_name: client_first_name || null,
+            client_last_name: client_last_name || null,
+            client_phone: client_phone || null,
+            client_email: client_email || null,
+            client_address: client_address || null,
+            client_notes: client_notes || null
         }, { transaction: t });
 
         // --- Handle Assignments (Users & Roles) ---

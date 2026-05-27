@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, RefreshControl, Modal, TextInput, ActivityIndicator, Alert } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { MessageCircle, Users, Plus, X, Search } from 'lucide-react-native';
+import { MessageCircle, Users, Plus, X, Search, Settings } from 'lucide-react-native';
 import { apiClient } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import socketService from '../services/socket';
@@ -273,12 +273,22 @@ export default function ChatListScreen() {
                     <View className="w-1 h-6 bg-brand-blue rounded-full mr-3" />
                     <Text className="text-white font-bold text-2xl uppercase tracking-widest">Chats</Text>
                 </View>
-                <TouchableOpacity 
-                    onPress={openNewChatModal}
-                    className="p-2 bg-white/5 rounded-xl border border-white/10"
-                >
-                    <Users size={20} color="#3B82F6" />
-                </TouchableOpacity>
+                <View className="flex-row items-center">
+                    <TouchableOpacity 
+                        onPress={() => (navigation as any).navigate('NotificationSettings')}
+                        className="p-2 bg-white/5 rounded-xl border border-white/10 mr-3"
+                        activeOpacity={0.7}
+                    >
+                        <Settings size={20} color="#3B82F6" />
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                        onPress={openNewChatModal}
+                        className="p-2 bg-white/5 rounded-xl border border-white/10"
+                        activeOpacity={0.7}
+                    >
+                        <Users size={20} color="#3B82F6" />
+                    </TouchableOpacity>
+                </View>
             </View>
 
             <FlatList

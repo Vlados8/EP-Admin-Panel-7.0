@@ -106,10 +106,23 @@ exports.getSharedFolder = async (req, res) => {
                 items: formattedItems,
                 project: folder.project ? {
                     title: folder.project.title,
+                    description: folder.project.description,
                     address: folder.project.address,
                     clientName: folder.project.client 
                         ? folder.project.client.name 
-                        : 'Unbekannter Kunde'
+                        : 'Unbekannter Kunde',
+                    clientPhone: folder.project.client ? folder.project.client.phone : null,
+                    clientEmail: folder.project.client ? folder.project.client.email : null,
+                    clientAddress: folder.project.client ? `${folder.project.client.address || ''}, ${folder.project.client.city || ''}`.replace(/^, /, '') : null,
+                    
+                    subClientFirstName: folder.project.client_first_name,
+                    subClientLastName: folder.project.client_last_name,
+                    subClientPhone: folder.project.client_phone,
+                    subClientEmail: folder.project.client_email,
+                    subClientAddress: folder.project.client_address,
+                    
+                    startDate: folder.project.start_date,
+                    endDate: folder.project.end_date
                 } : null
             }
         });

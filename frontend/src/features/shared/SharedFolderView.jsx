@@ -15,6 +15,7 @@ import {
     Image as ImageIcon,
     Loader2
 } from 'lucide-react';
+import { getImageUrl } from '../../utils/config';
 
 const SharedFolderView = () => {
     const { token } = useParams();
@@ -23,11 +24,23 @@ const SharedFolderView = () => {
     const [breadcrumbs, setBreadcrumbs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [companyInfo, setCompanyInfo] = useState(null);
     
     // Gallery State
     const [isGalleryOpen, setIsGalleryOpen] = useState(false);
     const [galleryItems, setGalleryItems] = useState([]);
     const [galleryIndex, setGalleryIndex] = useState(0);
+
+    const fetchCompanyInfo = async () => {
+        try {
+            const res = await api.get('/company/public');
+            if (res.data?.status === 'success') {
+                setCompanyInfo(res.data.data);
+            }
+        } catch (err) {
+            console.error('Error fetching company info:', err);
+        }
+    };
 
     const fetchSharedContent = async () => {
         setLoading(true);
@@ -68,6 +81,10 @@ const SharedFolderView = () => {
             setLoading(false);
         }
     };
+
+    useEffect(() => {
+        fetchCompanyInfo();
+    }, []);
 
     useEffect(() => {
         fetchSharedContent();
@@ -151,7 +168,7 @@ const SharedFolderView = () => {
         return (
             <div className="min-h-screen bg-[#0b0c14] py-20 px-6 flex items-center justify-center">
                 <div className="max-w-xl w-full">
-                    <BrandingHeader />
+                    <BrandingHeader companyInfo={companyInfo} />
                     <div className="bg-gradient-to-br from-white/[0.05] to-transparent border border-white/10 rounded-3xl p-10 shadow-2xl backdrop-blur-3xl text-center relative overflow-hidden group">
                         <div className="absolute -top-24 -right-24 w-60 h-60 bg-blue-500/10 blur-[80px] rounded-full pointer-events-none" />
                         
@@ -172,7 +189,7 @@ const SharedFolderView = () => {
                             Datei Herunterladen
                         </button>
                     </div>
-                    <BrandingFooter />
+                    <BrandingFooter companyInfo={companyInfo} />
                 </div>
             </div>
         );
@@ -185,7 +202,119 @@ const SharedFolderView = () => {
                 <BrandingHeader 
                     title={contentData?.isLegacy ? contentData?.project?.title : contentData?.folderName} 
                     subtitle={contentData?.isLegacy ? contentData?.project?.address : "Geteilte Inhalte"}
+                    companyInfo={companyInfo}
                 />
+
+                {/* Premium Project & Client Details Card */}
+                {contentData?.project && (
+                    <div className="mb-8 bg-[#0f1322]/70 backdrop-blur-md rounded-2xl border border-white/10 p-6 shadow-2xl relative overflow-hidden animate-[fadeIn_0.4s_ease-out]">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-purple-500/10 to-transparent blur-2xl pointer-events-none rounded-full" />
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Column 1: Client & Subclient Info */}
+                            <div className="space-y-3">
+                                <h3 className="text-[10px] font-black text-white/30 uppercase tracking-[0.25em] mb-2 flex items-center gap-1.5">
+                                    <i className="fa-solid fa-user-tie text-purple-400"></i> Kundeninformationen
+                                </h3>
+                                
+                                <div className="space-y-2">
+                                    <p className="text-sm text-gray-400 flex items-center gap-2">
+                                        <span className="text-white/60 font-semibold min-w-[100px]">Hauptkunde:</span>
+                                        <span className="text-white font-bold">{contentData.project.clientName}</span>
+                                    </p>
+                                    
+                                    {/* Subclient / Underclient detailed fields */}
+                                    {(contentData.project.subClientFirstName || contentData.project.subClientLastName) && (
+                                        <p className="text-sm text-gray-400 flex items-center gap-2">
+                                            <span className="text-white/60 font-semibold min-w-[100px]">Sub-Kunde:</span>
+                                            <span className="text-white font-bold">
+                                                {contentData.project.subClientFirstName || ''} {contentData.project.subClientLastName || ''}
+                                            </span>
+                                        </p>
+                                    )}
+
+                                    {/* Subclient Address */}
+                                    {contentData.project.subClientAddress && (
+                                        <p className="text-sm text-gray-400 flex items-center gap-2">
+                                            <span className="text-white/60 font-semibold min-w-[100px]">Anschrift:</span>
+                                            <span className="text-gray-300 font-medium">{contentData.project.subClientAddress}</span>
+                                        </p>
+                                    )}
+
+                                    {/* Subclient Contacts */}
+                                    {(contentData.project.subClientPhone || contentData.project.subClientEmail) && (
+                                        <div className="pl-[108px] space-y-1">
+                                            {contentData.project.subClientPhone && (
+                                                <p className="text-xs text-gray-400 flex items-center gap-1.5">
+                                                    <i className="fa-solid fa-phone text-purple-400/60 text-[10px]"></i>
+                                                    <span className="font-mono">{contentData.project.subClientPhone}</span>
+                                                </p>
+                                            )}
+                                            {contentData.project.subClientEmail && (
+                                                <p className="text-xs text-gray-400 flex items-center gap-1.5">
+                                                    <i className="fa-solid fa-envelope text-purple-400/60 text-[10px]"></i>
+                                                    <span className="font-mono">{contentData.project.subClientEmail}</span>
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            
+                            {/* Column 2: Project Scheduled Durations */}
+                            <div className="space-y-3">
+                                <h3 className="text-[10px] font-black text-white/30 uppercase tracking-[0.25em] mb-2 flex items-center gap-1.5">
+                                    <i className="fa-solid fa-calendar-days text-blue-400"></i> Projekt-Zeitplan
+                                </h3>
+                                
+                                <div className="space-y-2">
+                                    {/* Start & End Date Badge */}
+                                    <div className="text-sm text-gray-400 flex items-center gap-2">
+                                        <span className="text-white/60 font-semibold min-w-[100px]">Zeitraum:</span>
+                                        <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2.5 py-1 rounded-lg text-xs font-mono font-bold shadow-[0_0_12px_rgba(59,130,246,0.15)] flex items-center gap-1.5">
+                                            <i className="fa-regular fa-calendar"></i>
+                                            {(() => {
+                                                const fmt = (dStr) => {
+                                                    if (!dStr) return '';
+                                                    const clean = dStr.includes('T') ? dStr.split('T')[0] : dStr;
+                                                    const [y, m, d] = clean.split('-');
+                                                    return `${d}.${m}.${y}`;
+                                                };
+                                                const s = fmt(contentData.project.startDate);
+                                                const e = fmt(contentData.project.endDate);
+                                                if (!s && !e) return 'Laufendes Projekt';
+                                                if (s && !e) return `Ab ${s}`;
+                                                if (!s && e) return `Bis ${e}`;
+                                                return `${s} - ${e}`;
+                                            })()}
+                                        </span>
+                                    </div>
+
+                                    {/* Location details */}
+                                    <div className="text-sm text-gray-400 flex items-center gap-2">
+                                        <span className="text-white/60 font-semibold min-w-[100px]">Bauort:</span>
+                                        <span className="text-gray-300 font-medium flex items-center gap-1.5">
+                                            <i className="fa-solid fa-location-dot text-red-400 text-xs"></i>
+                                            {contentData.project.address}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Project Description Section */}
+                        {contentData.project.description && (
+                            <div className="mt-6 pt-5 border-t border-white/5 space-y-2">
+                                <h3 className="text-[10px] font-black text-white/30 uppercase tracking-[0.25em] flex items-center gap-1.5">
+                                    <i className="fa-solid fa-circle-info text-blue-400"></i> Projektbeschreibung
+                                </h3>
+                                <p className="text-sm text-gray-300 font-medium leading-relaxed whitespace-pre-line">
+                                    {contentData.project.description}
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {/* Breadcrumbs */}
                 {!contentData?.isLegacy && (
@@ -264,7 +393,7 @@ const SharedFolderView = () => {
                     </div>
                 </div>
                 
-                <BrandingFooter />
+                <BrandingFooter companyInfo={companyInfo} />
             </div>
 
             <MediaViewer 
@@ -277,46 +406,127 @@ const SharedFolderView = () => {
     );
 };
 
-const BrandingHeader = ({ title, subtitle }) => (
-    <div className="mb-12 text-center md:text-left flex flex-col md:flex-row justify-between items-end gap-6">
-        <div>
-            <div className="flex items-center gap-3 mb-4 justify-center md:justify-start">
-                <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/20">
-                    <span className="text-white font-black text-xs">EP</span>
-                </div>
-                <span className="text-white font-black text-xl italic tracking-tighter">EMPIRE PREMIUM</span>
-            </div>
-            {title && (
-                <>
-                    <h1 className="text-3xl md:text-5xl font-black text-white italic uppercase tracking-tighter mb-2">{title}</h1>
-                    <p className="text-white/40 font-medium tracking-widest text-[10px] uppercase flex items-center justify-center md:justify-start gap-2">
-                        <Globe className="w-3 h-3 text-blue-500" /> {subtitle || 'Externer Zugriff'}
-                    </p>
-                </>
-            )}
-        </div>
-        <div className="hidden md:block">
-            <div className="bg-white/5 border border-white/10 px-6 py-4 rounded-2xl backdrop-blur-xl">
-                <p className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-1">Sicherheitsstatus</p>
-                <div className="flex items-center gap-2 text-blue-400">
-                    <ShieldCheck className="w-4 h-4" />
-                    <span className="text-xs font-bold uppercase tracking-wider">End-to-End Verschlüsselt</span>
-                </div>
-            </div>
-        </div>
-    </div>
-);
+const BrandingHeader = ({ title, subtitle, companyInfo }) => {
+    const settings = companyInfo?.settings || {};
+    const logoUpperText = settings.logoUpperText || 'EMPIRE';
+    const logoLowerText = settings.logoLowerText || 'PREMIUM';
+    const firmName = settings.firmName || companyInfo?.name || 'EMPIRE PREMIUM';
 
-const BrandingFooter = () => (
-    <div className="mt-20 pt-10 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-8 opacity-40 hover:opacity-100 transition-opacity duration-700">
-        <div className="flex items-center gap-4">
-            <div className="w-8 h-8 bg-blue-600/20 rounded-lg flex items-center justify-center">
-                <ShieldCheck className="w-4 h-4 text-blue-500" />
+    // Prefer Logo Small White or Logo Large White for dark theme of shared view, fallback to standard small logo or dynamic text
+    const logoUrl = settings.logoSmallWhite || settings.logoLargeWhite || settings.logoSmall || settings.logoLarge;
+
+    return (
+        <div className="mb-12 text-center md:text-left flex flex-col md:flex-row justify-between items-end gap-6">
+            <div>
+                <div className="flex items-center gap-4 mb-4 justify-center md:justify-start">
+                    {logoUrl ? (
+                        <div className="flex items-center gap-3.5">
+                            <img 
+                                src={getImageUrl(logoUrl)} 
+                                alt={firmName} 
+                                className="h-10 object-contain max-w-[120px]" 
+                            />
+                            <div className="h-6 w-[1px] bg-white/20 hidden sm:block"></div>
+                            <span className="text-white font-black text-xl italic tracking-tighter uppercase">
+                                {logoUpperText} <span className="text-blue-500 font-extrabold">{logoLowerText}</span>
+                            </span>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/20">
+                                <span className="text-white font-black text-xs">
+                                    {logoUpperText.substring(0, 2).toUpperCase()}
+                                </span>
+                            </div>
+                            <span className="text-white font-black text-xl italic tracking-tighter uppercase">
+                                {logoUpperText} <span className="text-blue-500 font-extrabold">{logoLowerText}</span>
+                            </span>
+                        </>
+                    )}
+                </div>
+                {title && (
+                    <>
+                        <h1 className="text-3xl md:text-5xl font-black text-white italic uppercase tracking-tighter mb-2">{title}</h1>
+                        <p className="text-white/40 font-medium tracking-widest text-[10px] uppercase flex items-center justify-center md:justify-start gap-2">
+                            <Globe className="w-3 h-3 text-blue-500" /> {subtitle || 'Externer Zugriff'}
+                        </p>
+                    </>
+                )}
             </div>
-            <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest">Sichere Übertragung via Empire Premium Cloud</p>
+            <div className="hidden md:block">
+                <div className="bg-white/5 border border-white/10 px-6 py-4 rounded-2xl backdrop-blur-xl">
+                    <p className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-1">Sicherheitsstatus</p>
+                    <div className="flex items-center gap-2 text-blue-400">
+                        <ShieldCheck className="w-4 h-4" />
+                        <span className="text-xs font-bold uppercase tracking-wider">End-to-End Verschlüsselt</span>
+                    </div>
+                </div>
+            </div>
         </div>
-        <p className="text-[9px] text-white/20 font-mono">© {new Date().getFullYear()} EMPIRE PREMIUM BAU • ALL RIGHTS RESERVED</p>
-    </div>
-);
+    );
+};
+
+const BrandingFooter = ({ companyInfo }) => {
+    const settings = companyInfo?.settings || {};
+    const firmName = settings.firmName || companyInfo?.name || 'EMPIRE PREMIUM BAU';
+    const email = settings.email;
+    const phone = settings.phone;
+    const address = settings.address;
+    const zipCity = settings.zipCity;
+    const website = settings.website;
+
+    return (
+        <div className="mt-20 pt-10 border-t border-white/5 flex flex-col gap-8 opacity-60 hover:opacity-100 transition-opacity duration-700">
+            {/* Top row of footer with address & contacts if available */}
+            {(address || email || phone || website) && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs text-white/50 border-b border-white/5 pb-8">
+                    {address && (
+                        <div>
+                            <p className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-1.5">Firmensitz</p>
+                            <p className="font-semibold text-gray-300">{firmName}</p>
+                            <p className="mt-0.5">{address}</p>
+                            <p>{zipCity}</p>
+                        </div>
+                    )}
+                    {(phone || email) && (
+                        <div>
+                            <p className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-1.5">Kontakt</p>
+                            {phone && <p className="flex items-center gap-1.5"><i className="fa-solid fa-phone text-gray-500 text-[10px]"></i> {phone}</p>}
+                            {email && (
+                                <a href={`mailto:${email}`} className="flex items-center gap-1.5 hover:text-blue-400 transition-colors mt-0.5">
+                                    <i className="fa-solid fa-envelope text-gray-500 text-[10px]"></i> {email}
+                                </a>
+                            )}
+                        </div>
+                    )}
+                    {website && (
+                        <div>
+                            <p className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-1.5">Online</p>
+                            <a 
+                                href={website.startsWith('http') ? website : `https://${website}`} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                className="flex items-center gap-1.5 hover:text-blue-400 transition-colors"
+                            >
+                                <Globe className="w-3.5 h-3.5 text-blue-500" /> {website}
+                            </a>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Bottom copyright row */}
+            <div className="flex flex-col md:flex-row justify-between items-center gap-6">
+                <div className="flex items-center gap-4">
+                    <div className="w-8 h-8 bg-blue-600/20 rounded-lg flex items-center justify-center">
+                        <ShieldCheck className="w-4 h-4 text-blue-500" />
+                    </div>
+                    <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest">Sichere Übertragung via Empire Premium Cloud</p>
+                </div>
+                <p className="text-[9px] text-white/20 font-mono">© {new Date().getFullYear()} {firmName.toUpperCase()} • ALL RIGHTS RESERVED</p>
+            </div>
+        </div>
+    );
+};
 
 export default SharedFolderView;

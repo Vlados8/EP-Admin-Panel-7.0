@@ -1,0 +1,1 @@
+with open(r" C:\\Users\\vlado\\.gemini\\antigravity-ide\\brain\\3c252455-c4a0-42cf-adfb-d30f1809f702\\.system_generated\\logs\\transcript.jsonl\, \r\, encoding=\utf-8\) as f:\n lines = f.readlines()\nfor line in lines[-100:]:\n if \USER_INPUT\ in line:\n print(line)\n

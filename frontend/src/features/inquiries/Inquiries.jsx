@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSelector } from 'react-redux';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import usePermission from '../../hooks/usePermission';
 import InquiryDetailsModal from './InquiryDetailsModal';
@@ -20,7 +20,17 @@ const COLUMNS = [
 
 const Inquiries = () => {
     const location = useLocation();
+    const navigate = useNavigate();
     const { user: currentUser } = useSelector(state => state.auth);
+
+    useEffect(() => {
+        if (currentUser) {
+            const role = currentUser.role?.name || currentUser.role;
+            if (role !== 'Admin' && role !== 'Büro') {
+                navigate('/dashboard');
+            }
+        }
+    }, [currentUser, navigate]);
     const [inquiries, setInquiries] = useState([]);
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(true);

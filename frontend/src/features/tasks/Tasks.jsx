@@ -42,6 +42,9 @@ const Tasks = () => {
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [selectedTimelineUserId, setSelectedTimelineUserId] = useState('all');
     const [isModalEditMode, setIsModalEditMode] = useState(false);
+    const [isTimelineUserSelectOpen, setIsTimelineUserSelectOpen] = useState(false);
+    const [isAssigneeSelectOpen, setIsAssigneeSelectOpen] = useState(false);
+    const [isProjectSelectOpen, setIsProjectSelectOpen] = useState(false);
     const [now, setNow] = useState(new Date());
 
     useEffect(() => {
@@ -611,6 +614,8 @@ const Tasks = () => {
         setFilePreviews([]);
         setEditingTask(null);
         setIsStatusDropdownOpen(false);
+        setIsAssigneeSelectOpen(false);
+        setIsProjectSelectOpen(false);
     };
 
     const handleOpenModal = (task = null) => {
@@ -1036,16 +1041,54 @@ const Tasks = () => {
                         {(calendarTab === 'week' || calendarTab === 'day') && (
                             <div className="flex items-center gap-2 self-stretch lg:self-auto min-w-[220px]">
                                 <i className="fa-solid fa-user-clock text-blue-400 text-sm"></i>
-                                <select
-                                    value={selectedTimelineUserId}
-                                    onChange={(e) => setSelectedTimelineUserId(e.target.value)}
-                                    className="flex-1 bg-black/40 border border-white/15 rounded-xl py-2 px-3 text-xs text-white focus:outline-none focus:border-blue-500 appearance-none [&>option]:bg-gray-900"
-                                >
-                                    <option value="all">Tages/Wochenplan: Alle Mitarbeiter</option>
-                                    {users.map(u => (
-                                        <option key={u.id} value={u.id}>Tages/Wochenplan: {u.name}</option>
-                                    ))}
-                                </select>
+                                <div className="relative flex-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsTimelineUserSelectOpen(!isTimelineUserSelectOpen)}
+                                        className="w-full bg-black/40 border border-white/15 rounded-xl py-2 px-3 text-xs text-white focus:outline-none focus:border-blue-500 transition-all flex items-center justify-between"
+                                    >
+                                        <span>
+                                            {selectedTimelineUserId === 'all' 
+                                                ? 'Tages/Wochenplan: Alle Mitarbeiter' 
+                                                : `Tages/Wochenplan: ${users.find(u => String(u.id) === String(selectedTimelineUserId))?.name || 'Unbekannt'}`}
+                                        </span>
+                                        <i className={`fa-solid fa-chevron-down text-gray-500 text-[10px] transition-transform duration-200 ${isTimelineUserSelectOpen ? 'rotate-180' : ''}`}></i>
+                                    </button>
+
+                                    {isTimelineUserSelectOpen && (
+                                        <>
+                                            <div 
+                                                className="fixed inset-0 z-40" 
+                                                onClick={() => setIsTimelineUserSelectOpen(false)}
+                                            />
+                                            <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setSelectedTimelineUserId('all');
+                                                        setIsTimelineUserSelectOpen(false);
+                                                    }}
+                                                    className={`w-full text-left px-4 py-2 text-xs text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate ${selectedTimelineUserId === 'all' ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                >
+                                                    Tages/Wochenplan: Alle Mitarbeiter
+                                                </button>
+                                                {users.map(u => (
+                                                    <button
+                                                        key={u.id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSelectedTimelineUserId(u.id.toString());
+                                                            setIsTimelineUserSelectOpen(false);
+                                                        }}
+                                                        className={`w-full text-left px-4 py-2 text-xs text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate ${String(selectedTimelineUserId) === String(u.id) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                    >
+                                                        Tages/Wochenplan: {u.name}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
                             </div>
                         )}
                     </div>
@@ -1252,24 +1295,47 @@ const Tasks = () => {
                                         placeholder="z.B. Material bestellen"
                                     />
                                 </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-1">
                                     <label className="text-xs font-medium text-gray-400 pl-1">Zuweisen an</label>
                                     <div className="relative">
-                                        <i className="fa-solid fa-user absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
-                                        <select
-                                            required
-                                            value={formData.assigned_to_id}
-                                            onChange={(e) => setFormData({ ...formData, assigned_to_id: e.target.value })}
-                                            className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors appearance-none [&>option]:bg-gray-900"
+                                        <i className="fa-solid fa-user absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 z-10"></i>
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsAssigneeSelectOpen(!isAssigneeSelectOpen)}
+                                            className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-left text-sm text-white focus:border-blue-500 transition-colors flex items-center justify-between"
                                         >
-                                            <option value="" disabled>Bitte wählen...</option>
-                                            {assignableUsers.map(user => (
-                                                <option key={user.id} value={user.id}>{user.name} ({user.role?.name || '?'})</option>
-                                            ))}
-                                        </select>
+                                            <span>
+                                                {formData.assigned_to_id
+                                                    ? assignableUsers.find(u => String(u.id) === String(formData.assigned_to_id))?.name || 'Mitarbeiter wählen'
+                                                    : 'Bitte wählen...'}
+                                            </span>
+                                            <i className={`fa-solid fa-chevron-down text-gray-500 text-xs transition-transform duration-200 ${isAssigneeSelectOpen ? 'rotate-180' : ''}`}></i>
+                                        </button>
+
+                                        {isAssigneeSelectOpen && (
+                                            <>
+                                                <div 
+                                                    className="fixed inset-0 z-40" 
+                                                    onClick={() => setIsAssigneeSelectOpen(false)}
+                                                />
+                                                <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar">
+                                                    {assignableUsers.map(user => (
+                                                        <button
+                                                            key={user.id}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setFormData({ ...formData, assigned_to_id: user.id.toString() });
+                                                                setIsAssigneeSelectOpen(false);
+                                                            }}
+                                                            className={`w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate ${String(formData.assigned_to_id) === String(user.id) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                        >
+                                                            {user.name} ({user.role?.name || '?'})
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
                                     {assignableUsers.length === 0 && (
                                         <p className="text-xs text-red-400 mt-1 pl-1">Keine verfügbaren Mitarbeiter gefunden.</p>
@@ -1278,22 +1344,59 @@ const Tasks = () => {
                                 <div className="space-y-1">
                                     <label className="text-xs font-medium text-gray-400 pl-1">Projekt (Optional)</label>
                                     <div className="relative">
-                                        <i className="fa-solid fa-folder absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
-                                        <select
-                                            value={formData.project_id}
-                                            onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
-                                            className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors appearance-none [&>option]:bg-gray-900"
+                                        <i className="fa-solid fa-folder absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 z-10"></i>
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsProjectSelectOpen(!isProjectSelectOpen)}
+                                            className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-left text-sm text-white focus:border-blue-500 transition-colors flex items-center justify-between"
                                         >
-                                            <option value="">Kein Projekt ausgewählt</option>
-                                            {projects.map(project => (
-                                                <option key={project.id} value={project.id}>
-                                                    {project.project_number} - {project.title}
-                                                </option>
-                                            ))}
-                                        </select>
+                                            <span className="truncate pr-2">
+                                                {formData.project_id
+                                                    ? (() => {
+                                                        const p = projects.find(proj => String(proj.id) === String(formData.project_id));
+                                                        return p ? `${p.project_number} - ${p.title}` : 'Kein Projekt ausgewählt';
+                                                      })()
+                                                    : 'Kein Projekt ausgewählt'}
+                                            </span>
+                                            <i className={`fa-solid fa-chevron-down text-gray-500 text-xs transition-transform duration-200 ${isProjectSelectOpen ? 'rotate-180' : ''}`}></i>
+                                        </button>
+
+                                        {isProjectSelectOpen && (
+                                            <>
+                                                <div 
+                                                    className="fixed inset-0 z-40" 
+                                                    onClick={() => setIsProjectSelectOpen(false)}
+                                                />
+                                                <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setFormData({ ...formData, project_id: '' });
+                                                            setIsProjectSelectOpen(false);
+                                                        }}
+                                                        className={`w-full text-left px-4 py-2 text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors truncate ${!formData.project_id ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                    >
+                                                        Kein Projekt ausgewählt
+                                                    </button>
+                                                    {projects.map(project => (
+                                                        <button
+                                                            key={project.id}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setFormData({ ...formData, project_id: project.id.toString() });
+                                                                setIsProjectSelectOpen(false);
+                                                            }}
+                                                            className={`w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate ${String(formData.project_id) === String(project.id) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                        >
+                                                            {project.project_number} - {project.title}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
-                            </div>
+                            </div>                       </div>
 
                             <div className="space-y-1">
                                 <label className="text-xs font-medium text-gray-400 pl-1">Fälligkeit (Datum & Zeit)</label>

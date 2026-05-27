@@ -240,6 +240,20 @@ export default function TasksScreen() {
   const projects = projectsData?.data?.projects || [];
   const usersList = users || [];
   const currentUser = userData?.data?.user;
+  const filteredUsersForAssignee = React.useMemo(() => {
+    if (!currentUser) return [];
+    const roleName = currentUser.role?.name || '';
+    if (roleName === 'Gruppenleiter') {
+      return usersList.filter((u: any) => u.id === currentUser.id || u.manager_id === currentUser.id);
+    }
+    if (roleName === 'Projektleiter') {
+      return usersList.filter((u: any) => 
+        u.id === currentUser.id || 
+        (u.role?.name !== 'Admin' && u.role?.name !== 'Büro' && u.role?.name !== 'Projektleiter')
+      );
+    }
+    return usersList;
+  }, [usersList, currentUser]);
   const canCreateTask = currentUser?.role?.name !== 'Worker';
 
   const modalPanResponder = React.useRef(
@@ -1770,7 +1784,7 @@ export default function TasksScreen() {
                   </TouchableOpacity>
 
                   {/* Individual Employees */}
-                  {(usersList || []).map((u: any) => {
+                  {(filteredUsersForAssignee || []).map((u: any) => {
                     if (!u) return null;
                     const isSelected = formData.assigned_to_id.toString() === u.id.toString();
                     return (
@@ -1927,7 +1941,7 @@ export default function TasksScreen() {
               </TouchableOpacity>
 
               {/* Individual Employees */}
-              {(usersList || []).map((u: any) => {
+              {(filteredUsersForAssignee || []).map((u: any) => {
                 if (!u) return null;
                 const isSelected = selectedTimelineUserId === u.id;
                 return (

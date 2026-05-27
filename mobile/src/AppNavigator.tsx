@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
@@ -21,7 +21,9 @@ import EmailScreen from './screens/EmailScreen';
 import ProjectDetailScreen from './screens/ProjectDetailScreen';
 import TaskDetailScreen from './screens/TaskDetailScreen';
 import EmailDetailScreen from './screens/EmailDetailScreen';
+import NotificationSettingsScreen from './screens/NotificationSettingsScreen';
 import { useAuth } from './context/AuthContext';
+import { registerForPushNotificationsAsync } from './services/pushNotificationHelper';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -68,10 +70,16 @@ function MainTabs() {
 export default function AppNavigator() {
   const { user, isLoading } = useAuth();
 
+  useEffect(() => {
+    if (user) {
+      registerForPushNotificationsAsync();
+    }
+  }, [user]);
+
   if (isLoading && !user) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9FAFB' }}>
-        <ActivityIndicator size="large" color="#000" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0a0a0c' }}>
+        <ActivityIndicator size="large" color="#3B82F6" />
       </View>
     );
   }
@@ -86,6 +94,7 @@ export default function AppNavigator() {
             <Stack.Screen name="ProjectDetail" component={ProjectDetailScreen} />
             <Stack.Screen name="TaskDetail" component={TaskDetailScreen} />
             <Stack.Screen name="EmailDetail" component={EmailDetailScreen} />
+            <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
           </>
         ) : (
           <Stack.Screen name="Auth" component={LoginScreen} />

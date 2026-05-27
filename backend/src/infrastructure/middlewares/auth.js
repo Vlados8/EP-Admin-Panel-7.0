@@ -80,6 +80,9 @@ exports.restrictTo = (...roles) => {
  */
 exports.checkPermission = (permission) => {
     return (req, res, next) => {
+        if (req.apiKey) {
+            return next();
+        }
         // hasPermission сам понимает логику 'Admin'
         if (!hasPermission(req.user, permission)) {
             return next(new AppError(`У вас нет прав (${permission}) на выполнение этого действия.`, 403));

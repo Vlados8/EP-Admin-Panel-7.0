@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
+import { hasPermission } from './utils/permissions';
 import MainLayout from './layouts/MainLayout';
 import Dashboard from './features/dashboard/Dashboard';
 import Notes from './features/notes/Notes';
@@ -15,6 +16,7 @@ import Inquiries from './features/inquiries/Inquiries';
 import ProjectDetails from './features/projects/ProjectDetails';
 import ApiKeys from './pages/Settings/ApiKeys';
 import ApiIntegration from './pages/Settings/ApiIntegration';
+import NotificationSettings from './pages/Settings/NotificationSettings';
 import CompanySettings from './features/system/CompanySettings';
 import DatabaseSettings from './features/system/DatabaseSettings';
 import Emails from './features/emails/Emails';
@@ -61,6 +63,14 @@ const RequireAdmin = ({ children }) => {
     return children;
 };
 
+const RequirePermission = ({ permission, children }) => {
+    const { user } = useSelector((state) => state.auth);
+    if (!hasPermission(user, permission)) {
+        return <Navigate to="/dashboard" replace />;
+    }
+    return children;
+};
+
 import { CompanyProvider } from './context/CompanyContext';
 import { PhoneProvider } from './context/PhoneContext';
 import PhonePage from './features/communication/PhonePage';
@@ -92,8 +102,8 @@ function App() {
                     <Route path="kunden" element={<Customers />} />
                     <Route path="projekte" element={<Projects />} />
                     <Route path="projekte/:id" element={<ProjectDetails />} />
-                    <Route path="kategorien" element={<Categories />} />
-                    <Route path="anfragen" element={<Inquiries />} />
+                    <Route path="kategorien" element={<RequirePermission permission="VIEW_CATEGORIES"><Categories /></RequirePermission>} />
+                    <Route path="anfragen" element={<RequirePermission permission="VIEW_INQUIRIES"><Inquiries /></RequirePermission>} />
                     <Route path="support" element={<Support />} />
                     <Route path="chat" element={<Chat />} />
                     <Route path="angebote" element={<Offers />} />
@@ -108,6 +118,7 @@ function App() {
                     <Route path="email-messages" element={<EmailMessages />} />
                     <Route path="email-bulk" element={<RequireAdmin><BulkEmail /></RequireAdmin>} />
                     <Route path="settings">
+                        <Route path="notifications" element={<NotificationSettings />} />
                         <Route path="email-accounts" element={<Emails />} />
                         <Route path="storage" element={<StorageManagement />} />
                         <Route path="email-api" element={<EmailApi />} />

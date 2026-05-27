@@ -93,6 +93,18 @@ exports.createTask = async (req, res, next) => {
             created_by_id
         });
 
+        // Trigger notification if task is assigned to another user
+        if (newTask.assigned_to_id && (!req.user || newTask.assigned_to_id !== req.user.id)) {
+            const NotificationService = require('../../utils/notificationService');
+            NotificationService.createNotification(
+                newTask.assigned_to_id,
+                'Neue Aufgabe zugewiesen 📋',
+                `Ihnen wurde die Aufgabe "${newTask.title}" zugewiesen.`,
+                'task',
+                { taskId: newTask.id }
+            );
+        }
+
         // Handle uploaded images: upload to R2 with tiered quality (Original, Compressed, Thumbnail)
         if (req.files && req.files.length > 0) {
             for (const file of req.files) {
@@ -217,7 +229,7 @@ exports.updateTask = async (req, res, next) => {
             }
         }
 
-        const { status, title, description, assigned_to_id, project_id, due_date, time } = req.body;
+        const oldAssigneeId = task.assigned_to_id;
 
         if (status !== undefined) task.status = status;
         if (title !== undefined) task.title = title;
@@ -228,6 +240,18 @@ exports.updateTask = async (req, res, next) => {
         if (time !== undefined) task.time = time || null;
 
         await task.save();
+
+        // Trigger notification if assignment changed to a different user
+        if (task.assigned_to_id && task.assigned_to_id !== oldAssigneeId && (!req.user || task.assigned_to_id !== req.user.id)) {
+            const NotificationService = require('../../utils/notificationService');
+            NotificationService.createNotification(
+                task.assigned_to_id,
+                'Aufgabe zugewiesen 📋',
+                `Ihnen wurde die Aufgabe "${task.title}" zugewiesen.`,
+                'task',
+                { taskId: task.id }
+            );
+        }
 
         // Handle New File Uploads in Update with tiered quality
         if (req.files && req.files.length > 0) {

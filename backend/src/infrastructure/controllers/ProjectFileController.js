@@ -71,7 +71,7 @@ exports.listFiles = async (req, res) => {
                         source: 'gallery'
                     });
                 });
-            } else if (!subPath) {
+            } else if (!subPath && images.length > 0) {
                 // At root: Ensure 'Galerie' folder is visible if any images exist
                 itemMap.set('gallery', {
                     name: 'Galerie',

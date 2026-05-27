@@ -36,6 +36,8 @@ const FileFavorite = require('./FileFavorite');
 const CallLog = require('./CallLog');
 const TimeLog = require('./TimeLog');
 const ReonicLead = require('./ReonicLead');
+const Notification = require('./Notification');
+const NotificationSetting = require('./NotificationSetting');
 
 // Associations
 
@@ -247,6 +249,13 @@ TimeLog.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
 Company.hasMany(ReonicLead, { foreignKey: 'company_id', as: 'reonic_leads' });
 ReonicLead.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
 
+// 16. Notifications & Settings
+User.hasMany(Notification, { foreignKey: 'user_id', as: 'notifications', onDelete: 'CASCADE' });
+Notification.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
+User.hasMany(NotificationSetting, { foreignKey: 'user_id', as: 'notification_settings', onDelete: 'CASCADE' });
+NotificationSetting.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
 module.exports = {
     sequelize,
     Company,
@@ -285,5 +294,7 @@ module.exports = {
     FileFavorite,
     CallLog,
     TimeLog,
-    ReonicLead
+    ReonicLead,
+    Notification,
+    NotificationSetting
 };

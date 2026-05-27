@@ -153,6 +153,16 @@ const initWebSocket = (server) => {
                 peerId,
                 type
             });
+
+            // Trigger call push notification so offline mobile users get it
+            const NotificationService = require('../../utils/notificationService');
+            NotificationService.createNotification(
+                targetUserId,
+                'Eingehender Anruf 📞',
+                `${callerName || 'Jemand'} ruft Sie an...`,
+                'call',
+                { callerId: userId, peerId, type }
+            );
         });
 
         socket.on('call:response', (data) => {

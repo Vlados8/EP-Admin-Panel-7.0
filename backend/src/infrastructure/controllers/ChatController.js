@@ -180,7 +180,7 @@ const ChatController = {
             // Update Conversation modified time
             await Conversation.update({ updatedAt: new Date() }, { where: { id: conversationId } });
 
-            // Broadcast via Socket.io
+            // Broadcast via Socket.io and trigger notifications
             try {
                 const io = socketService.getIO();
                 const participants = await Participant.findAll({ where: { conversationId } });
@@ -191,8 +191,25 @@ const ChatController = {
                         message: fullMessage
                     });
                 });
+
+                // Trigger in-app and push notification for other participants
+                const NotificationService = require('../../utils/notificationService');
+                const senderName = req.user.name || 'Ein Benutzer';
+                const notificationBody = fullMessage.type === 'text' ? fullMessage.text : 'Datei empfangen';
+
+                participants.forEach(p => {
+                    if (p.userId !== userId) {
+                        NotificationService.createNotification(
+                            p.userId,
+                            `Neue Nachricht von ${senderName}`,
+                            notificationBody.substring(0, 100),
+                            'chat',
+                            { conversationId: parseInt(conversationId) }
+                        );
+                    }
+                });
             } catch (err) {
-                logger.error(`Socket broadcast failed: ${err.message}`);
+                logger.error(`Socket broadcast or notification failed: ${err.message}`);
             }
 
             res.status(201).json({
@@ -468,7 +485,7 @@ const ChatController = {
                 // Update Conversation modified time
                 await Conversation.update({ updatedAt: new Date() }, { where: { id: conversationId } });
 
-                // Broadcast via Socket.io
+                // Broadcast via Socket.io and trigger notifications
                 try {
                     const io = socketService.getIO();
                     const participants = await Participant.findAll({ where: { conversationId } });
@@ -479,8 +496,25 @@ const ChatController = {
                             message: fullMessage
                         });
                     });
+
+                    // Trigger in-app and push notification for other participants
+                    const NotificationService = require('../../utils/notificationService');
+                    const senderName = req.user.name || 'Ein Benutzer';
+                    const fileDescription = type === 'image' ? 'Bild gesendet' : (type === 'video' ? 'Video gesendet' : 'Datei gesendet');
+
+                    participants.forEach(p => {
+                        if (p.userId !== userId) {
+                            NotificationService.createNotification(
+                                p.userId,
+                                `Neue Datei von ${senderName}`,
+                                fileDescription,
+                                'chat',
+                                { conversationId: parseInt(conversationId) }
+                            );
+                        }
+                    });
                 } catch (err) {
-                    logger.error(`Socket broadcast failed for batch item ${i}: ${err.message}`);
+                    logger.error(`Socket broadcast or notification failed for batch item ${i}: ${err.message}`);
                 }
             }
 

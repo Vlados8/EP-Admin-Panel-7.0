@@ -8,7 +8,7 @@ const router = express.Router();
 // Categories
 router
     .route('/')
-    .get(flexibleAuth, categoryController.getAllCategories)
+    .get(flexibleAuth, auth.checkPermission('VIEW_CATEGORIES'), categoryController.getAllCategories)
     .post(auth.protect, auth.restrictTo('Admin', 'Büro'), categoryController.createCategory);
 
 router

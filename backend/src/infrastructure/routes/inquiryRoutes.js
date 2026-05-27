@@ -8,11 +8,11 @@ const router = express.Router();
 
 // Маршруты, требующие JWT (админка/менеджеры)
 // Маршруты, требующие JWT (админка/менеджеры) или API-ключ
-router.get('/', flexibleAuth, inquiryController.getAllInquiries);
-router.get('/:id', auth.protect, inquiryController.getInquiry);
-router.put('/:id', auth.protect, inquiryController.updateInquiry);
-router.patch('/:id', auth.protect, inquiryController.updateInquiryStatus);
-router.delete('/:id', auth.protect, inquiryController.deleteInquiry);
+router.get('/', flexibleAuth, auth.checkPermission('VIEW_INQUIRIES'), inquiryController.getAllInquiries);
+router.get('/:id', auth.protect, auth.checkPermission('VIEW_INQUIRIES'), inquiryController.getInquiry);
+router.put('/:id', auth.protect, auth.checkPermission('MANAGE_INQUIRIES'), inquiryController.updateInquiry);
+router.patch('/:id', auth.protect, auth.checkPermission('MANAGE_INQUIRIES'), inquiryController.updateInquiryStatus);
+router.delete('/:id', auth.protect, auth.checkPermission('MANAGE_INQUIRIES'), inquiryController.deleteInquiry);
 
 // Гибкий маршрут создания (JWT для админки или API Key для сайтов)
 router.post('/', flexibleAuth, inquiryController.createInquiry);

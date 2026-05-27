@@ -13,6 +13,9 @@ const Subcontractors = () => {
     const [editingId, setEditingId] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
 
+    // Custom select dropdown state hooks
+    const [isStatusSelectOpen, setIsStatusSelectOpen] = useState(false);
+
     const [formData, setFormData] = useState({
         name: '',
         contact_person: '',
@@ -59,6 +62,7 @@ const Subcontractors = () => {
             status: 'active',
             notes: ''
         });
+        setIsStatusSelectOpen(false);
     };
 
     const handleOpenModal = (sub = null) => {
@@ -403,15 +407,43 @@ const Subcontractors = () => {
                                 <div>
                                     <label className="block text-sm font-medium text-gray-200 mb-1">Status</label>
                                     <div className="relative">
-                                        <select
-                                            value={formData.status}
-                                            onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                                            className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500 focus:bg-white/10 transition-all appearance-none [&>option]:bg-gray-800"
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsStatusSelectOpen(!isStatusSelectOpen)}
+                                            className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500 focus:bg-white/10 transition-all text-left flex items-center justify-between"
                                         >
-                                            <option value="active">Aktiv</option>
-                                            <option value="inactive">Inaktiv</option>
-                                        </select>
-                                        <i className="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none text-xs"></i>
+                                            <span>
+                                                {formData.status === 'active' ? 'Aktiv' : 'Inaktiv'}
+                                            </span>
+                                            <i className={`fa-solid fa-chevron-down text-gray-400 text-xs transition-transform duration-200 ${isStatusSelectOpen ? 'rotate-180' : ''}`}></i>
+                                        </button>
+                                        {isStatusSelectOpen && (
+                                            <>
+                                                <div className="fixed inset-0 z-40" onClick={() => setIsStatusSelectOpen(false)} />
+                                                <div className="absolute left-0 right-0 mt-1 bg-[#121212]/95 border border-white/10 rounded-lg shadow-2xl z-50 py-1 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] text-left">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setFormData({ ...formData, status: 'active' });
+                                                            setIsStatusSelectOpen(false);
+                                                        }}
+                                                        className={`w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors ${formData.status === 'active' ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                    >
+                                                        Aktiv
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setFormData({ ...formData, status: 'inactive' });
+                                                            setIsStatusSelectOpen(false);
+                                                        }}
+                                                        className={`w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors ${formData.status === 'inactive' ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                    >
+                                                        Inaktiv
+                                                    </button>
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                             </div>
