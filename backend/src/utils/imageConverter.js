@@ -53,8 +53,8 @@ async function processUploadedFile(file) {
             const sharp = require('sharp');
             const convertedPath = file.path + '_converted.jpg';
             
-            // Convert DNG to JPEG using sharp
-            await sharp(file.path).jpeg({ quality: 85 }).toFile(convertedPath);
+            // Convert DNG to JPEG using sharp, applying auto-rotation based on EXIF orientation
+            await sharp(file.path).rotate().jpeg({ quality: 85 }).toFile(convertedPath);
 
             // Delete original temporary file
             if (fs.existsSync(file.path)) {
