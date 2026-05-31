@@ -6,6 +6,7 @@ const socketService = require('../websocket');
 const fs = require('fs');
 const path = require('path');
 const { uploadToR2, deleteFromR2 } = require('../utils/storage');
+const { processUploadedFile } = require('../../utils/imageConverter');
 
 // Base chat uploads directory
 const CHAT_UPLOADS_DIR = path.join(__dirname, '../../../../uploads/chat');
@@ -437,6 +438,7 @@ const ChatController = {
 
             for (let i = 0; i < req.files.length; i++) {
                 const file = req.files[i];
+                await processUploadedFile(file);
 
                 let fileUrl;
                 let type = 'file';

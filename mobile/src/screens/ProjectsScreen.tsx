@@ -11,7 +11,8 @@ import {
   Modal,
   ScrollView,
   Keyboard,
-  Alert
+  Alert,
+  RefreshControl
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
@@ -363,6 +364,92 @@ export default function ProjectsScreen() {
     return '#EF4444';                      // Red
   };
 
+  // Timezone-safe local date string helper
+  const getLocalDateString = (offsetDays = 0) => {
+    const d = new Date();
+    if (offsetDays !== 0) {
+      d.setDate(d.getDate() + offsetDays);
+    }
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const todayStr = getLocalDateString(0);
+
+  const cleanDate = (dStr: string) => {
+    if (!dStr) return '';
+    return dStr.includes('T') ? dStr.split('T')[0] : dStr;
+  };
+
+  const formatLocalDateGerman = (dateStr: string) => {
+    if (!dateStr) return '';
+    const cleaned = cleanDate(dateStr);
+    const parts = cleaned.split('-').map(Number);
+    if (parts.length !== 3) return dateStr;
+    const [year, month, day] = parts;
+    const date = new Date(year, month - 1, day);
+    if (isNaN(date.getTime())) return dateStr;
+    
+    // Day names in German
+    const weekdays = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+    const months = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+    
+    return `${weekdays[date.getDay()]}, ${String(day).padStart(2, '0')}. ${months[date.getMonth()]}`;
+  };
+
+  const isActiveOnDate = (project: any, dateStr: string) => {
+    const start = cleanDate(project.start_date);
+    const end = cleanDate(project.end_date);
+    const isPast = project.status?.toLowerCase() === 'abgeschlossen' || (end && end < todayStr);
+    if (isPast) return false;
+
+    if (!start) return true;
+
+    return dateStr >= start && (!end || dateStr <= end);
+  };
+
+  // Classify into active/future and past/completed
+  const pastProjects = useMemo(() => {
+    return filteredProjects.filter((p: any) => {
+      const end = cleanDate(p.end_date);
+      return p.status?.toLowerCase() === 'abgeschlossen' || (end && end < todayStr);
+    });
+  }, [filteredProjects, todayStr]);
+
+  const activeOrFutureProjects = useMemo(() => {
+    return filteredProjects.filter((p: any) => {
+      const end = cleanDate(p.end_date);
+      return !(p.status?.toLowerCase() === 'abgeschlossen' || (end && end < todayStr));
+    });
+  }, [filteredProjects, todayStr]);
+
+  // Group next 7 days week agenda
+  const chronologicalDays = useMemo(() => {
+    const days: any[] = [];
+    for (let i = 0; i < 7; i++) {
+      const dateStr = getLocalDateString(i);
+      const dayProjects = activeOrFutureProjects.filter((p: any) => isActiveOnDate(p, dateStr));
+      days.push({
+        dateStr,
+        label: i === 0 ? 'Heute' : i === 1 ? 'Morgen' : formatLocalDateGerman(dateStr),
+        projects: dayProjects
+      });
+    }
+    return days;
+  }, [activeOrFutureProjects, todayStr]);
+
+  // Far-future projects starting after 7 days
+  const farFutureProjects = useMemo(() => {
+    const farFutureThreshold = getLocalDateString(7);
+    return activeOrFutureProjects.filter((p: any) => {
+      const isActiveInFirst7Days = Array.from({ length: 7 }, (_, idx) => getLocalDateString(idx))
+        .some(dStr => isActiveOnDate(p, dStr));
+      return p.start_date && p.start_date >= farFutureThreshold && !isActiveInFirst7Days;
+    });
+  }, [activeOrFutureProjects, todayStr]);
+
   const ProjectCard = ({ project }: any) => {
     const statusLevel = getStatusLevel(project);
     const progress = project.progress || 0;
@@ -407,17 +494,56 @@ export default function ProjectsScreen() {
                 <Text className="text-white text-[10px] font-bold tracking-widest">{project.project_number}</Text>
               </View>
             </View>
+
+            {/* Date range float badge */}
+            <View className="absolute bottom-3 left-4 bg-slate-950/80 px-2.5 py-1 rounded-lg border border-white/10 flex-row items-center shadow-lg">
+              <Calendar size={10} color="#3B82F6" />
+              <Text className="text-gray-300 text-[9px] font-bold ml-1.5">
+                {(() => {
+                  const start = cleanDate(project.start_date);
+                  const end = cleanDate(project.end_date);
+                  if (!start && !end) return 'Laufendes Projekt';
+                  const fmt = (dStr: string) => {
+                    if (!dStr) return '';
+                    const [y, m, d] = dStr.split('-');
+                    return `${d}.${m}`;
+                  };
+                  if (start && !end) return `Ab ${fmt(start)}`;
+                  if (!start && end) return `Bis ${fmt(end)}`;
+                  return `${fmt(start)} - ${fmt(end)}`;
+                })()}
+              </Text>
+            </View>
           </View>
 
           {/* Body Section */}
           <View className="p-5 bg-black/20">
             <Text className="text-white font-bold text-xl mb-1.5" numberOfLines={1}>{project.title}</Text>
-            <View className="flex-row items-center mb-4">
+            <View className="flex-row items-center mb-3">
               <MapPin size={12} color="#3B82F6" />
               <Text className="text-gray-400 text-xs ml-1.5 flex-1" numberOfLines={1}>
                 {project.address || `${project.client?.city || ''}, ${project.client?.address || ''}`}
               </Text>
             </View>
+
+            {/* Customer Details Row */}
+            {project.client && (
+              <View className="flex-row items-center mb-3">
+                <Building2 size={12} color="#A855F7" />
+                <Text className="text-gray-400 text-xs ml-1.5 flex-1" numberOfLines={1}>
+                  Kunde: <Text className="text-white font-semibold">{project.client.name}</Text>
+                </Text>
+              </View>
+            )}
+
+            {/* Project description snippet */}
+            {project.description ? (
+              <View className="bg-white/5 border border-white/5 rounded-2xl p-3 mb-4">
+                <Text className="text-gray-300 text-[11px] font-light leading-relaxed" numberOfLines={2}>
+                  {project.description}
+                </Text>
+              </View>
+            ) : null}
 
             {/* Progress Bar */}
             <View className="mb-4">

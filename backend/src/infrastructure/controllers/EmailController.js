@@ -9,6 +9,7 @@ const { emitToCompany, getIO } = require('../websocket');
 const AppError = require('../../utils/appError');
 const { hasPermission } = require('../../utils/permissions');
 const { uploadToR2, deleteFromR2 } = require('../utils/storage');
+const { processUploadedFile } = require('../../utils/imageConverter');
 
 // Initialize Mailgun
 const mailgun = new Mailgun(FormData);
@@ -455,6 +456,11 @@ exports.updateEmailAccount = async (req, res, next) => {
  */
 exports.sendEmail = async (req, res, next) => {
     try {
+        if (req.files && req.files.length > 0) {
+            for (const file of req.files) {
+                await processUploadedFile(file);
+            }
+        }
         const { from, to, subject, text, html } = req.body;
 
         if (!from) {
@@ -704,6 +710,7 @@ exports.receiveWebhook = async (req, res, next) => {
         // Handle attachments if any
         if (req.files && req.files.length > 0) {
             for (const file of req.files) {
+                await processUploadedFile(file);
                 try {
                     const r2Key = `emails/${file.filename}`;
                     const fileUrl = await uploadToR2(file.path, r2Key, file.mimetype);
@@ -877,6 +884,11 @@ exports.deleteMessage = async (req, res, next) => {
  */
 exports.sendBulkEmail = async (req, res, next) => {
     try {
+        if (req.files && req.files.length > 0) {
+            for (const file of req.files) {
+                await processUploadedFile(file);
+            }
+        }
         const { from, recipients, subject, text, html, delay } = req.body;
         const company_id = req.user.company_id;
         const userId = req.user.id;

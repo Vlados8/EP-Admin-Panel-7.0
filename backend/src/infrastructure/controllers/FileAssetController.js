@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const { fixEncoding, getSafeStorageName } = require('../../utils/fileUtils');
+const { processUploadedFile } = require('../../utils/imageConverter');
 const { Op } = require('sequelize');
 
 const upload = multer({ dest: path.join(__dirname, '../../../../uploads/temp/') });
@@ -237,7 +238,9 @@ exports.uploadFiles = async (req, res, next) => {
         const uploadedAssets = [];
 
         for (const file of req.files) {
-            let originalName = fixEncoding(file.originalname);
+            await processUploadedFile(file);
+            let originalName = file.originalname;
+
             let storageName = getSafeStorageName(originalName);
             const r2Key = `assets/${companyId}/${userId}/${Date.now()}-${storageName}`;
 

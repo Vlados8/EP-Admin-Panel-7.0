@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { hasPermission } = require('../../utils/permissions');
 const { uploadToR2, deleteFromR2, deletePrefixFromR2 } = require('../utils/storage');
+const { processUploadedFile } = require('../../utils/imageConverter');
 
 exports.getAllProjects = async (req, res) => {
     try {
@@ -276,6 +277,7 @@ exports.createProject = async (req, res) => {
         if (req.files && (req.files.photos || req.files.mainImage)) {
             // Handle Main Image
             if (req.files.mainImage && req.files.mainImage.length > 0) {
+                await processUploadedFile(req.files.mainImage[0]);
                 const file = req.files.mainImage[0];
                 try {
                     const r2Key = `projects/${newProject.id}/main_${Date.now()}${path.extname(file.originalname)}`;
@@ -310,6 +312,7 @@ exports.createProject = async (req, res) => {
 
                 const imageRecords = [];
                 for (const file of req.files.photos) {
+                    await processUploadedFile(file);
                     try {
                         const r2Key = `projects/${newProject.id}/gallery/${Date.now()}_${file.originalname}`;
                         const fileUrl = await uploadToR2(file.path, r2Key, file.mimetype);
@@ -484,6 +487,7 @@ exports.updateProject = async (req, res) => {
 
         // --- Handle Main Image Upload ---
         if (req.files && req.files.mainImage && req.files.mainImage.length > 0) {
+            await processUploadedFile(req.files.mainImage[0]);
             const file = req.files.mainImage[0];
             try {
                 // 1. Delete old image if it exists

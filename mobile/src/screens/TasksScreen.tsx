@@ -494,7 +494,7 @@ export default function TasksScreen() {
     if (!url) return;
     const fullUrl = url.startsWith('http') ? url : `${serverDomain}${url}`;
     
-    const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(fullUrl);
+    const isImage = /\.(jpg|jpeg|png|gif|webp|svg|heic|heif|tiff|bmp|jfif|avif|ico)$/i.test(fullUrl);
     
     if (isImage) {
       setViewerImages([{ uri: fullUrl, fileName: fileName }]);
@@ -1436,7 +1436,7 @@ export default function TasksScreen() {
                           const url = att.file_url || att.fileUrl;
                           const thumbUrl = att.thumb_url || att.thumbUrl || url;
                           const fullUrl = thumbUrl ? (thumbUrl.startsWith('http') ? thumbUrl : `${serverDomain}${thumbUrl}`) : null;
-                          const isImage = att.content_type?.includes('image') || /\.(jpg|jpeg|png|gif|webp)$/i.test(url);
+                          const isImage = att.content_type?.includes('image') || /\.(jpg|jpeg|png|gif|webp|svg|heic|heif|tiff|bmp|jfif|avif|ico)$/i.test(url);
                           
                           return (
                             <TouchableOpacity 

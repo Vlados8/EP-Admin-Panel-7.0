@@ -760,8 +760,8 @@ const UploadPanel = ({ queue, isMinimized, onToggleMinimize, onClose, onClearCom
 
     const getFileIcon = (name) => {
         const ext = name.split('.').pop().toLowerCase();
-        if (['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp'].includes(ext)) return <ImageIcon className="w-4 h-4 text-emerald-400" />;
-        if (['mp4', 'mov', 'avi', 'webm'].includes(ext)) return <FileVideo className="w-4 h-4 text-blue-400" />;
+        if (['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'heic', 'heif', 'tiff', 'bmp', 'jfif', 'avif', 'ico'].includes(ext)) return <ImageIcon className="w-4 h-4 text-emerald-400" />;
+        if (['mp4', 'mov', 'avi', 'webm', 'ogg', 'mkv', 'wmv', 'flv', 'm4v', '3gp'].includes(ext)) return <FileVideo className="w-4 h-4 text-blue-400" />;
         if (['mp3', 'wav', 'ogg'].includes(ext)) return <FileAudio className="w-4 h-4 text-purple-400" />;
         if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return <FileArchive className="w-4 h-4 text-orange-400" />;
         if (['pdf', 'doc', 'docx', 'txt'].includes(ext)) return <FileText className="w-4 h-4 text-red-400" />;

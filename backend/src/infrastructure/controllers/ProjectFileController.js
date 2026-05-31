@@ -18,6 +18,7 @@ const upload = multer({
 });
 
 const { fixEncoding, getSafeStorageName } = require('../../utils/fileUtils');
+const { processUploadedFile } = require('../../utils/imageConverter');
 
 // Utility func to ensure requested path is secure
 const getSecurePath = (projectId, requestedPath) => {
@@ -379,12 +380,14 @@ exports.uploadFiles = async (req, res) => {
         const uploadedFiles = [];
 
         for (const file of req.files) {
-            let originalName = fixEncoding(file.originalname);
+            await processUploadedFile(file);
+            let originalName = file.originalname;
+
             let nameToStore = originalName;
             let fileRecord = null;
             let fileUrl = '';
             
-            const ext = path.extname(originalName);
+            ext = path.extname(originalName);
             const baseName = path.basename(originalName, ext);
             let counter = 1;
 

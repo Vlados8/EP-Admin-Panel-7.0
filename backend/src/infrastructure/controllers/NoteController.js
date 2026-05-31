@@ -5,6 +5,7 @@ const AppError = require('../../utils/appError');
 const { hasPermission } = require('../../utils/permissions');
 const { uploadToR2, deleteFromR2 } = require('../utils/storage');
 const sharp = require('sharp');
+const { processUploadedFile } = require('../../utils/imageConverter');
 
 // Get all notes, potentially filtered by date or month
 exports.getNotes = async (req, res, next) => {
@@ -76,6 +77,7 @@ exports.createNote = async (req, res, next) => {
         // Handle File Uploads: upload to R2 with tiered quality (Original, Compressed, Thumbnail)
         if (req.files && req.files.length > 0) {
             for (const file of req.files) {
+                await processUploadedFile(file);
                 try {
                     let fileUrl = null;
                     let thumbUrl = null;
@@ -241,6 +243,7 @@ exports.updateNote = async (req, res, next) => {
         // Handle New File Uploads in Update with tiered quality
         if (req.files && req.files.length > 0) {
             for (const file of req.files) {
+                await processUploadedFile(file);
                 try {
                     let fileUrl = null;
                     let thumbUrl = null;

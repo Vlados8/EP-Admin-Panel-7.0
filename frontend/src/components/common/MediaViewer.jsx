@@ -89,12 +89,12 @@ const MediaViewer = ({ isOpen, onClose, items = [], initialIndex = 0, onShare })
     const originalUrl = currentItem.original_url || url; // This is the original high-quality file
 
     const isImage = type.startsWith('image/') || 
-                    name.match(/\.(jpg|jpeg|png|gif|webp|svg|avif)$/i) ||
-                    url.match(/\.(jpg|jpeg|png|gif|webp|svg|avif)(\?.*)?$/i);
+                    name.match(/\.(jpg|jpeg|png|gif|webp|svg|heic|heif|tiff|bmp|jfif|avif|ico)$/i) ||
+                    url.match(/\.(jpg|jpeg|png|gif|webp|svg|heic|heif|tiff|bmp|jfif|avif|ico)(\?.*)?$/i);
                     
     const isVideo = type.startsWith('video/') || 
-                    name.match(/\.(mp4|webm|ogg|mov)$/i) ||
-                    url.match(/\.(mp4|webm|ogg|mov)(\?.*)?$/i);
+                    name.match(/\.(mp4|webm|ogg|mov|avi|mkv|wmv|flv|m4v|3gp)$/i) ||
+                    url.match(/\.(mp4|webm|ogg|mov|avi|mkv|wmv|flv|m4v|3gp)(\?.*)?$/i);
                     
     const isPDF = type === 'application/pdf' || 
                    name.toLowerCase().endsWith('.pdf') ||
@@ -173,14 +173,40 @@ const MediaViewer = ({ isOpen, onClose, items = [], initialIndex = 0, onShare })
                     onClick={(e) => e.stopPropagation()}
                 >
                     {isImage ? (
-                        <img 
-                            crossOrigin="anonymous"
-                            src={getImageUrl(url)} 
-                            alt={name}
-                            className="max-w-full max-h-[85vh] object-contain shadow-2xl rounded-sm transition-transform duration-300"
-                            style={{ transform: `scale(${zoom})` }}
-                            onDoubleClick={() => setZoom(prev => prev === 1 ? 2 : 1)}
-                        />
+                        name.match(/\.(heic|heif)$/i) ? (
+                            <div className="flex flex-col items-center gap-6 p-12 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-md max-w-lg w-full">
+                                <i className="fa-solid fa-file-image text-8xl text-emerald-500/50"></i>
+                                <div className="text-center">
+                                    <p className="text-white text-xl font-bold mb-2">HEIC/HEIF Bild</p>
+                                    <p className="text-gray-400">Dieser Bildtyp (.heic) wird von Web-Browsern nicht direkt unterstützt. Neue Uploads werden automatisch konvertiert. Bitte laden Sie diese Datei herunter oder öffnen Sie sie in einem neuen Tab, um sie anzusehen.</p>
+                                </div>
+                                <div className="flex flex-col sm:flex-row gap-4 w-full">
+                                    <button 
+                                        onClick={handleOpenInNewTab}
+                                        className="flex-1 px-8 py-3 bg-white/10 hover:bg-white/20 text-white font-bold rounded-2xl transition-all border border-white/10 flex items-center justify-center gap-2"
+                                    >
+                                        <i className="fa-solid fa-arrow-up-right-from-square"></i>
+                                        Öffnen
+                                    </button>
+                                    <button 
+                                        onClick={handleDownload}
+                                        className="flex-1 px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-2xl transition-all shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
+                                    >
+                                        <i className="fa-solid fa-download"></i>
+                                        Download
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <img 
+                                crossOrigin="anonymous"
+                                src={getImageUrl(url)} 
+                                alt={name}
+                                className="max-w-full max-h-[85vh] object-contain shadow-2xl rounded-sm transition-transform duration-300"
+                                style={{ transform: `scale(${zoom})` }}
+                                onDoubleClick={() => setZoom(prev => prev === 1 ? 2 : 1)}
+                            />
+                        )
                     ) : isVideo ? (
                         <video 
                             controls 
@@ -240,12 +266,12 @@ const MediaViewer = ({ isOpen, onClose, items = [], initialIndex = 0, onShare })
                         const tUrl = item.file_url || item.url || '';
 
                         const isThumbImage = tType.startsWith('image/') || 
-                                           tName.match(/\.(jpg|jpeg|png|gif|webp|svg|avif)$/i) ||
-                                           tUrl.match(/\.(jpg|jpeg|png|gif|webp|svg|avif)(\?.*)?$/i);
+                                           tName.match(/\.(jpg|jpeg|png|gif|webp|svg|heic|heif|tiff|bmp|jfif|avif|ico)$/i) ||
+                                           tUrl.match(/\.(jpg|jpeg|png|gif|webp|svg|heic|heif|tiff|bmp|jfif|avif|ico)(\?.*)?$/i);
                         
                         const isThumbVideo = tType.startsWith('video/') || 
-                                           tName.match(/\.(mp4|webm|ogg|mov)$/i) ||
-                                           tUrl.match(/\.(mp4|webm|ogg|mov)(\?.*)?$/i);
+                                           tName.match(/\.(mp4|webm|ogg|mov|avi|mkv|wmv|flv|m4v|3gp)$/i) ||
+                                           tUrl.match(/\.(mp4|webm|ogg|mov|avi|mkv|wmv|flv|m4v|3gp)(\?.*)?$/i);
                         
                         return (
                             <button

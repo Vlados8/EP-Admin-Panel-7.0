@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { hasPermission } = require('../../utils/permissions');
 const { uploadToR2, deleteFromR2 } = require('../utils/storage');
+const { processUploadedFile } = require('../../utils/imageConverter');
 
 // Get all stages for a project
 exports.getStages = async (req, res, next) => {
@@ -72,6 +73,7 @@ exports.createStage = async (req, res, next) => {
         // Handle uploaded images with R2
         if (req.files && req.files.length > 0) {
             for (const file of req.files) {
+                await processUploadedFile(file);
                 try {
                     const r2Key = `projects/${project_id}/stages/${newStage.id}/${Date.now()}_${file.originalname}`;
                     const fileUrl = await uploadToR2(file.path, r2Key, file.mimetype);
@@ -173,6 +175,7 @@ exports.updateStage = async (req, res, next) => {
         // Handle new image uploads with R2
         if (req.files && req.files.length > 0) {
             for (const file of req.files) {
+                await processUploadedFile(file);
                 try {
                     const r2Key = `projects/${stage.project_id}/stages/${stage.id}/${Date.now()}_${file.originalname}`;
                     const fileUrl = await uploadToR2(file.path, r2Key, file.mimetype);
