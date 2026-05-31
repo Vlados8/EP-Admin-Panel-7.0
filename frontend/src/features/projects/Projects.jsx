@@ -19,6 +19,10 @@ const Projects = () => {
     const [selectedDate, setSelectedDate] = useState(getLocalDateString(0));
     const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
     
+    // Premium Status / Overdue Filters
+    const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'overdue', 'paused', 'completed'
+    const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
+    
     const canManageProjects = usePermission('MANAGE_PROJECTS');
     const navigate = useNavigate();
 
@@ -139,15 +143,33 @@ const Projects = () => {
         return matchesStart && matchesEnd;
     };
 
-    // Classify into: Active/Future schedules and Past/Completed
-    const pastProjects = filteredProjects.filter(p => {
+    // Classify into three main categories
+    const completedProjects = filteredProjects.filter(p => p.status?.toLowerCase() === 'abgeschlossen');
+    
+    const overdueProjects = filteredProjects.filter(p => {
         const end = cleanDate(p.end_date);
-        return p.status?.toLowerCase() === 'abgeschlossen' || (end && end < todayStr);
+        return p.status?.toLowerCase() !== 'abgeschlossen' && end && end < todayStr;
     });
 
     const activeOrFutureProjects = filteredProjects.filter(p => {
         const end = cleanDate(p.end_date);
-        return !(p.status?.toLowerCase() === 'abgeschlossen' || (end && end < todayStr));
+        return p.status?.toLowerCase() !== 'abgeschlossen' && (!end || end >= todayStr);
+    });
+
+    // Unified list based on statusFilter
+    const statusFilteredProjects = filteredProjects.filter(p => {
+        if (statusFilter === 'overdue') {
+            const end = cleanDate(p.end_date);
+            return p.status?.toLowerCase() !== 'abgeschlossen' && end && end < todayStr;
+        }
+        if (statusFilter === 'paused') {
+            return p.status?.toLowerCase() === 'pausiert';
+        }
+        if (statusFilter === 'completed') {
+            return p.status?.toLowerCase() === 'abgeschlossen';
+        }
+        // 'all' represents active and ongoing projects (excluding completed ones)
+        return p.status?.toLowerCase() !== 'abgeschlossen';
     });
 
     // Grouping for Day-by-Day View (Display next 7 days week agenda)
@@ -180,7 +202,7 @@ const Projects = () => {
         return p.start_date && p.start_date >= farFutureThreshold && !isActiveInFirst7Days;
     });
 
-    const searchSortedProjects = [...filteredProjects].sort((a, b) => {
+    const searchSortedProjects = [...statusFilteredProjects].sort((a, b) => {
         const getStatusLevel = (p) => {
             const hasPL = (p.assigned_personnel || []).some(pers => pers.role?.toLowerCase() === 'projektleiter' || pers.role?.toLowerCase() === 'pl');
             if (hasPL) return 0;
@@ -463,6 +485,78 @@ const Projects = () => {
                         </div>
                     </div>
 
+                    {/* Interactive Glassmorphic Status Filter Dropdown */}
+                    <div className="flex items-center bg-[#0f1322]/40 p-1 rounded-xl border border-white/5 backdrop-blur-md relative z-50">
+                        <div className="relative">
+                            <button
+                                onClick={() => {
+                                    setIsStatusDropdownOpen(!isStatusDropdownOpen);
+                                    setIsDatePickerOpen(false);
+                                }}
+                                className={`px-3 py-1.5 rounded-lg text-[11px] font-bold tracking-wider uppercase transition-all duration-300 flex items-center gap-1.5 ${
+                                    statusFilter !== 'all'
+                                        ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.18)]'
+                                        : 'text-gray-400 hover:text-white border border-transparent'
+                                }`}
+                            >
+                                <i className="fa-solid fa-filter"></i>
+                                {statusFilter === 'all' && 'Alle aktiven'}
+                                {statusFilter === 'overdue' && '⚠️ Überfällig'}
+                                {statusFilter === 'paused' && '⏸️ Pausiert'}
+                                {statusFilter === 'completed' && '✅ Abgeschlossen'}
+                                <i className={`fa-solid fa-chevron-down text-[9px] transition-transform ${isStatusDropdownOpen ? 'rotate-180' : ''}`}></i>
+                            </button>
+                            {isStatusDropdownOpen && (
+                                <div className="absolute right-0 mt-2 z-50 bg-[#0f1322]/95 border border-white/10 backdrop-blur-xl p-2 rounded-xl shadow-2xl animate-[fadeIn_0.2s_ease-out] w-64 flex flex-col gap-1">
+                                    <button
+                                        onClick={() => {
+                                            setStatusFilter('all');
+                                            setIsStatusDropdownOpen(false);
+                                        }}
+                                        className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-colors flex items-center gap-2.5 ${
+                                            statusFilter === 'all' ? 'bg-white/10 text-white font-bold' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                        }`}
+                                    >
+                                        <i className="fa-solid fa-layer-group text-blue-400"></i> Alle aktiven Projekte
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setStatusFilter('overdue');
+                                            setIsStatusDropdownOpen(false);
+                                        }}
+                                        className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-colors flex items-center gap-2.5 ${
+                                            statusFilter === 'overdue' ? 'bg-red-500/10 text-red-400 font-bold' : 'text-gray-400 hover:text-red-400 hover:bg-red-500/5'
+                                        }`}
+                                    >
+                                        <span>⚠️</span> Überfällig / Handlungsbedarf
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setStatusFilter('paused');
+                                            setIsStatusDropdownOpen(false);
+                                        }}
+                                        className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-colors flex items-center gap-2.5 ${
+                                            statusFilter === 'paused' ? 'bg-yellow-500/10 text-yellow-400 font-bold' : 'text-gray-400 hover:text-yellow-400 hover:bg-yellow-500/5'
+                                        }`}
+                                    >
+                                        <span>⏸️</span> Pausiert
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setStatusFilter('completed');
+                                            setIsStatusDropdownOpen(false);
+                                        }}
+                                        className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-colors flex items-center gap-2.5 ${
+                                            statusFilter === 'completed' ? 'bg-blue-500/10 text-blue-400 font-bold' : 'text-gray-400 hover:text-blue-400 hover:bg-blue-500/5'
+                                        }`}
+                                    >
+                                        <span>✅</span> Abgeschlossen
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
                     <div className="relative flex-1 md:flex-none">
                         <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
                         <input
@@ -490,16 +584,19 @@ const Projects = () => {
                     <div className="w-10 h-10 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4"></div>
                     <p className="text-sm font-medium tracking-wide">Lade Projekte...</p>
                 </div>
-            ) : filteredProjects.length === 0 ? (
+            ) : statusFilteredProjects.length === 0 ? (
                 <div className="bg-[#0f1322]/50 border border-white/5 rounded-2xl p-16 text-center text-gray-400 backdrop-blur-md animate-[fadeIn_0.3s_ease-out]">
                     <i className="fa-solid fa-magnifying-glass text-5xl mb-4 text-slate-700/60"></i>
                     <p className="text-lg font-medium text-white mb-2">Keine Projekte gefunden</p>
-                    <p className="text-sm text-gray-500 max-w-sm mx-auto">Es konnten keine passenden Einträge für Ihre aktuelle Suche gefunden werden.</p>
+                    <p className="text-sm text-gray-500 max-w-sm mx-auto">Es konnten keine passenden Einträge für Ihre aktuelle Auswahl gefunden werden.</p>
                     <button
-                        onClick={() => setSearchQuery('')}
+                        onClick={() => {
+                            setSearchQuery('');
+                            setStatusFilter('all');
+                        }}
                         className="mt-6 bg-white/5 border border-white/10 hover:bg-white/10 text-white px-5 py-2.5 rounded-xl transition-all text-xs font-bold uppercase tracking-wider"
                     >
-                        Suche zurücksetzen
+                        Filter zurücksetzen
                     </button>
                 </div>
             ) : searchQuery.trim() ? (
@@ -510,7 +607,30 @@ const Projects = () => {
                             Suchergebnisse
                         </span>
                         <span className="text-[10px] text-gray-500 font-bold bg-white/5 px-2 py-0.5 rounded border border-white/5 font-mono">
-                            {filteredProjects.length} {filteredProjects.length === 1 ? 'Treffer' : 'Treffer'}
+                            {statusFilteredProjects.length} {statusFilteredProjects.length === 1 ? 'Treffer' : 'Treffer'}
+                        </span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {searchSortedProjects.map(project => renderProjectCard(project))}
+                    </div>
+                </div>
+            ) : statusFilter !== 'all' ? (
+                /* Flat Filtered Layout (Overdue, Paused, Completed) */
+                <div className="space-y-6 animate-[fadeIn_0.3s_ease-out]">
+                    <div className="flex items-center gap-3 pb-2 border-b border-white/5">
+                        <span className={`text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full ${
+                            statusFilter === 'overdue'
+                                ? 'bg-red-500/10 text-red-400 border border-red-500/20 shadow-[0_0_12px_rgba(239,68,68,0.15)]'
+                                : statusFilter === 'paused'
+                                    ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 shadow-[0_0_12px_rgba(245,158,11,0.15)]'
+                                    : 'bg-blue-500/10 text-blue-400 border border-blue-500/20 shadow-[0_0_12px_rgba(59,130,246,0.15)]'
+                        }`}>
+                            {statusFilter === 'overdue' && 'Überfällig / Handlungsbedarf'}
+                            {statusFilter === 'paused' && 'Pausierte Projekte'}
+                            {statusFilter === 'completed' && 'Abgeschlossene Projekte'}
+                        </span>
+                        <span className="text-[10px] text-gray-500 font-bold bg-white/5 px-2 py-0.5 rounded border border-white/5 font-mono">
+                            {statusFilteredProjects.length} {statusFilteredProjects.length === 1 ? 'Eintrag' : 'Einträge'}
                         </span>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -520,6 +640,29 @@ const Projects = () => {
             ) : (
                 /* Normal Mode: Chronological Weekly Timeline & Sections */
                 <div className="space-y-12">
+                    {/* A. OVERDUE PROJECTS WARNING HEADER SECTION */}
+                    {overdueProjects.length > 0 && (
+                        <div className="space-y-4 animate-[fadeIn_0.3s_ease-out] bg-red-950/15 border border-red-500/20 p-6 rounded-2xl backdrop-blur-md shadow-[0_0_30px_rgba(239,68,68,0.05)]">
+                            <div className="flex items-center justify-between pb-2 border-b border-red-500/10">
+                                <div className="flex items-center gap-3">
+                                    <span className="text-xs font-extrabold uppercase tracking-wider px-3 py-1 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 shadow-[0_0_12px_rgba(239,68,68,0.25)] animate-pulse">
+                                        ⚠️ Handlungsbedarf
+                                    </span>
+                                    <h4 className="text-sm font-bold text-red-200">Überfällige aktive Projekte (Frist abgelaufen)</h4>
+                                </div>
+                                <span className="text-[10px] text-red-400 font-bold bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20 font-mono">
+                                    {overdueProjects.length} {overdueProjects.length === 1 ? 'Eintrag' : 'Einträge'}
+                                </span>
+                            </div>
+                            <p className="text-xs text-red-300/80 leading-relaxed max-w-2xl font-light">
+                                Die folgenden Projekte haben ihr geplantes Enddatum überschritten, sind aber noch aktiv. Bitte aktualisieren Sie den Status auf "Abgeschlossen" oder passen Sie die Projektdaten an.
+                            </p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2">
+                                {overdueProjects.map(project => renderProjectCard(project))}
+                            </div>
+                        </div>
+                    )}
+
                     {/* 1. CHRONOLOGICAL ACTIVE & FUTURE SECTIONS */}
                     {chronologicalDays.map(day => (
                         <div key={day.dateStr} className="space-y-4 animate-[fadeIn_0.3s_ease-out]">
@@ -584,20 +727,20 @@ const Projects = () => {
                     )}
 
                     {/* 3. PAST & COMPLETED PROJECTS SECTION (ALWAYS AT THE BOTTOM) */}
-                    {pastProjects.length > 0 && (
+                    {completedProjects.length > 0 && (
                         <div className="space-y-4 pt-8 border-t border-white/10 animate-[fadeIn_0.3s_ease-out]">
                             <div className="flex items-center gap-3 pb-2 border-b border-white/5">
                                 <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-slate-900/60 text-gray-400 border border-white/5 shadow-inner">
                                     Vergangene & Abgeschlossene Projekte
                                 </span>
                                 <span className="text-[10px] text-gray-500 font-bold bg-white/5 px-2 py-0.5 rounded border border-white/5">
-                                    {pastProjects.length}
+                                    {completedProjects.length}
                                 </span>
                             </div>
                             
                             {/* Render completed/past projects with slightly dimmed/ghostly/glass aesthetic to visually prioritize active ones */}
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 opacity-75 hover:opacity-100 transition-opacity duration-300">
-                                {pastProjects.map(project => renderProjectCard(project))}
+                                {completedProjects.map(project => renderProjectCard(project))}
                             </div>
                         </div>
                     )}
