@@ -89,8 +89,8 @@ const MediaViewer = ({ isOpen, onClose, items = [], initialIndex = 0, onShare })
     const originalUrl = currentItem.original_url || url; // This is the original high-quality file
 
     const isImage = type.startsWith('image/') || 
-                    name.match(/\.(jpg|jpeg|png|gif|webp|svg|heic|heif|tiff|bmp|jfif|avif|ico)$/i) ||
-                    url.match(/\.(jpg|jpeg|png|gif|webp|svg|heic|heif|tiff|bmp|jfif|avif|ico)(\?.*)?$/i);
+                    name.match(/\.(jpg|jpeg|png|gif|webp|svg|heic|heif|tiff|bmp|jfif|avif|ico|dng)$/i) ||
+                    url.match(/\.(jpg|jpeg|png|gif|webp|svg|heic|heif|tiff|bmp|jfif|avif|ico|dng)(\?.*)?$/i);
                     
     const isVideo = type.startsWith('video/') || 
                     name.match(/\.(mp4|webm|ogg|mov|avi|mkv|wmv|flv|m4v|3gp)$/i) ||
@@ -173,12 +173,19 @@ const MediaViewer = ({ isOpen, onClose, items = [], initialIndex = 0, onShare })
                     onClick={(e) => e.stopPropagation()}
                 >
                     {isImage ? (
-                        name.match(/\.(heic|heif)$/i) ? (
+                        name.match(/\.(heic|heif|dng)$/i) ? (
                             <div className="flex flex-col items-center gap-6 p-12 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-md max-w-lg w-full">
                                 <i className="fa-solid fa-file-image text-8xl text-emerald-500/50"></i>
                                 <div className="text-center">
-                                    <p className="text-white text-xl font-bold mb-2">HEIC/HEIF Bild</p>
-                                    <p className="text-gray-400">Dieser Bildtyp (.heic) wird von Web-Browsern nicht direkt unterstützt. Neue Uploads werden automatisch konvertiert. Bitte laden Sie diese Datei herunter oder öffnen Sie sie in einem neuen Tab, um sie anzusehen.</p>
+                                    <p className="text-white text-xl font-bold mb-2">
+                                        {name.match(/\.dng$/i) ? 'DNG RAW-Bild' : 'HEIC/HEIF Bild'}
+                                    </p>
+                                    <p className="text-gray-400 font-light">
+                                        {name.match(/\.dng$/i)
+                                            ? 'Dieser Bildtyp (.dng) ist ein RAW-Rohdatenformat und wird von Web-Browsern nicht direkt unterstützt. Bitte laden Sie diese Datei herunter oder öffnen Sie sie, um sie anzusehen.'
+                                            : 'Dieser Bildtyp (.heic) wird von Web-Browsern nicht direkt unterstützt. Neue Uploads werden automatisch konvertiert. Bitte laden Sie diese Datei herunter oder öffnen Sie sie in einem neuen Tab, um sie anzusehen.'
+                                        }
+                                    </p>
                                 </div>
                                 <div className="flex flex-col sm:flex-row gap-4 w-full">
                                     <button 
@@ -266,8 +273,8 @@ const MediaViewer = ({ isOpen, onClose, items = [], initialIndex = 0, onShare })
                         const tUrl = item.file_url || item.url || '';
 
                         const isThumbImage = tType.startsWith('image/') || 
-                                           tName.match(/\.(jpg|jpeg|png|gif|webp|svg|heic|heif|tiff|bmp|jfif|avif|ico)$/i) ||
-                                           tUrl.match(/\.(jpg|jpeg|png|gif|webp|svg|heic|heif|tiff|bmp|jfif|avif|ico)(\?.*)?$/i);
+                                           tName.match(/\.(jpg|jpeg|png|gif|webp|svg|heic|heif|tiff|bmp|jfif|avif|ico|dng)$/i) ||
+                                           tUrl.match(/\.(jpg|jpeg|png|gif|webp|svg|heic|heif|tiff|bmp|jfif|avif|ico|dng)(\?.*)?$/i);
                         
                         const isThumbVideo = tType.startsWith('video/') || 
                                            tName.match(/\.(mp4|webm|ogg|mov|avi|mkv|wmv|flv|m4v|3gp)$/i) ||

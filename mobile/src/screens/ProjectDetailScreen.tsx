@@ -730,7 +730,7 @@ export default function ProjectDetailScreen() {
   // Files Tab Helpers
   const isImageFile = (filename: string) => {
     const ext = filename.split('.').pop()?.toLowerCase();
-    return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'heic', 'heif', 'tiff', 'bmp', 'jfif', 'avif', 'ico'].includes(ext || '');
+    return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'heic', 'heif', 'tiff', 'bmp', 'jfif', 'avif', 'ico', 'dng'].includes(ext || '');
   };
 
   const handleOpenPermissions = (folder: any) => {

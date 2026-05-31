@@ -197,7 +197,7 @@ export default function EmailScreen() {
 
   const handleAttachmentPress = (attr: any) => {
     const isImage = attr.content_type?.startsWith('image/') || 
-                   ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'heic', 'heif', 'tiff', 'bmp', 'jfif', 'avif', 'ico'].some(ext => attr.file_name.toLowerCase().endsWith(ext));
+                   ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'heic', 'heif', 'tiff', 'bmp', 'jfif', 'avif', 'ico', 'dng'].some(ext => attr.file_name.toLowerCase().endsWith(ext));
     
     if (isImage) {
       setViewerImages([{ 

@@ -342,7 +342,7 @@ const EmailMessages = () => {
                             {selectedMessage.attachments.map((file, i) => {
                                 const isMedia = file.content_type?.startsWith('image/') || 
                                                file.content_type?.startsWith('video/') ||
-                                               file.file_name?.match(/\.(jpg|jpeg|png|gif|webp|svg|heic|heif|tiff|bmp|jfif|avif|ico|mp4|webm|mov|avi|mkv|wmv|flv|m4v|3gp)$/i);
+                                               file.file_name?.match(/\.(jpg|jpeg|png|gif|webp|svg|heic|heif|tiff|bmp|jfif|avif|ico|dng|mp4|webm|mov|avi|mkv|wmv|flv|m4v|3gp)$/i);
                                 
                                 return (
                                     <div 

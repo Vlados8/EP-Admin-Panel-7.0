@@ -329,7 +329,7 @@ export default function NotesScreen() {
     if (!url) return;
     const fullUrl = url.startsWith('http') ? url : `${serverDomain}${url}`;
     
-    const isImage = /\.(jpg|jpeg|png|gif|webp|svg|heic|heif|tiff|bmp|jfif|avif|ico)$/i.test(fullUrl);
+    const isImage = /\.(jpg|jpeg|png|gif|webp|svg|heic|heif|tiff|bmp|jfif|avif|ico|dng)$/i.test(fullUrl);
     
     if (isImage) {
       setViewerImages([{ uri: fullUrl, fileName: fileName }]);
