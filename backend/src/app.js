@@ -20,6 +20,7 @@ app.use(helmet({
         directives: {
             ...helmet.contentSecurityPolicy.getDefaultDirectives(),
             "img-src": ["'self'", "data:", "blob:", "http://localhost:3001", "http://localhost:3000", "https://ui-avatars.com", "https://*.empire-premium.de", "https://*.empire-premium-bau.de", "https://*.railway.app", "https://*.r2.dev", "https://*.cloudflarestorage.com", "https://*.jsdelivr.net"],
+            "media-src": ["'self'", "data:", "blob:", "http://localhost:3001", "http://localhost:3000", "https://*.empire-premium.de", "https://*.empire-premium-bau.de", "https://*.railway.app", "https://*.r2.dev", "https://*.cloudflarestorage.com"],
             "script-src": ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
             "style-src": ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com", "https://fonts.googleapis.com"],
             "connect-src": ["'self'", "ws:", "wss:", "http:", "https:"],
