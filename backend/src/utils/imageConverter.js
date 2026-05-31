@@ -47,6 +47,31 @@ async function processUploadedFile(file) {
             console.error(`[ImageConverter ERROR] Failed to convert HEIC/HEIF file ${file.originalname}:`, err);
             // Fallback: keep the file as-is rather than failing completely
         }
+    } else if (ext === '.dng') {
+        try {
+            console.log(`[ImageConverter] Processing DNG RAW file: ${file.originalname} (${file.path})`);
+            const sharp = require('sharp');
+            const convertedPath = file.path + '_converted.jpg';
+            
+            // Convert DNG to JPEG using sharp
+            await sharp(file.path).jpeg({ quality: 85 }).toFile(convertedPath);
+
+            // Delete original temporary file
+            if (fs.existsSync(file.path)) {
+                fs.unlinkSync(file.path);
+            }
+
+            // Update file object properties
+            file.path = convertedPath;
+            file.originalname = file.originalname.replace(/\.dng$/i, '.jpg');
+            file.mimetype = 'image/jpeg';
+            file.size = fs.statSync(convertedPath).size;
+            
+            console.log(`[ImageConverter] Successfully converted DNG to JPEG: ${file.originalname}, new size: ${file.size} bytes`);
+        } catch (err) {
+            console.error(`[ImageConverter ERROR] Failed to convert DNG RAW file ${file.originalname}:`, err);
+            // Fallback: keep the file as-is rather than failing completely
+        }
     } else if (ext === '.jfif') {
         file.originalname = file.originalname.replace(/\.jfif$/i, '.jpg');
         file.mimetype = 'image/jpeg';
