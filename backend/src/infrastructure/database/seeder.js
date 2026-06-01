@@ -192,6 +192,77 @@ async function seedDatabase() {
             });
         }
 
+        // --- Elektro (EL) ---
+        const [catEL] = await Category.findOrCreate({
+            where: { name: 'Elektro', company_id: company.id },
+            defaults: { description: 'Elektroinstallationen und Anschlüsse', icon: 'fa-bolt', order_index: 2 }
+        });
+
+        const [elMain] = await Subcategory.findOrCreate({
+            where: { name: 'Elektro-Anschluss', category_id: catEL.id },
+            defaults: { description: 'Auswahl und Konfiguration der Elektro-Anschlüsse', order_index: 0 }
+        });
+
+        const questionsEL = [
+            { text: 'Welcher Elektro-Anschluss ist primär gewünscht?', type: 'buttons', field_key: 'el.typ', order_index: 0 },
+            { text: 'Soll ein Stromspeicher (Batterie) integriert werden?', type: 'buttons', field_key: 'el.inverter.speicher', order_index: 1 },
+            { text: 'Welche Kapazität soll der Stromspeicher haben?', type: 'buttons', field_key: 'el.inverter.kapazitaet', order_index: 2 },
+            { text: 'Welche Leistung soll der Wechselrichter haben?', type: 'buttons', field_key: 'el.inverter.leistung', order_index: 3 },
+            { text: 'Welche Art von Wärmepumpen-Anschluss ist gewünscht?', type: 'buttons', field_key: 'el.wp.typ', order_index: 4 },
+            { text: 'Soll der Zählerschrank komplett erneuert werden?', type: 'buttons', field_key: 'el.schrank.neu', order_index: 5 },
+            { text: 'Muss das Haus neu geerdet werden / Fundamenterder vorhanden?', type: 'buttons', field_key: 'el.erdung', order_index: 6 }
+        ];
+
+        const qEL = {};
+        for (const qData of questionsEL) {
+            const [question] = await Question.findOrCreate({
+                where: { subcategory_id: elMain.id, question_text: qData.text },
+                defaults: { type: qData.type, field_key: qData.field_key, order_index: qData.order_index }
+            });
+            qEL[qData.text] = question;
+        }
+
+        const elAnswers = [
+            { q: 'Welcher Elektro-Anschluss ist primär gewünscht?', text: 'Wechselrichter (Inverter) & Batterie', next: 'Soll ein Stromspeicher (Batterie) integriert werden?' },
+            { q: 'Welcher Elektro-Anschluss ist primär gewünscht?', text: 'Wärmepumpe', next: 'Welche Art von Wärmepumpen-Anschluss ist gewünscht?' },
+            { q: 'Welcher Elektro-Anschluss ist primär gewünscht?', text: 'Zählerschrank / Verteiler', next: 'Soll der Zählerschrank komplett erneuert werden?' },
+            
+            { q: 'Soll ein Stromspeicher (Batterie) integriert werden?', text: 'Ja', next: 'Welche Kapazität soll der Stromspeicher haben?' },
+            { q: 'Soll ein Stromspeicher (Batterie) integriert werden?', text: 'Nein', next: 'Welche Leistung soll der Wechselrichter haben?' },
+            
+            { q: 'Welche Kapazität soll der Stromspeicher haben?', text: '5 kWh', next: 'Welche Leistung soll der Wechselrichter haben?' },
+            { q: 'Welche Kapazität soll der Stromspeicher haben?', text: '10 kWh', next: 'Welche Leistung soll der Wechselrichter haben?' },
+            { q: 'Welche Kapazität soll der Stromspeicher haben?', text: '15+ kWh', next: 'Welche Leistung soll der Wechselrichter haben?' },
+            
+            { q: 'Welche Leistung soll der Wechselrichter haben?', text: 'bis 10 kW', next: 'Muss das Haus neu geerdet werden / Fundamenterder vorhanden?' },
+            { q: 'Welche Leistung soll der Wechselrichter haben?', text: '10-20 kW', next: 'Muss das Haus neu geerdet werden / Fundamenterder vorhanden?' },
+            { q: 'Welche Leistung soll der Wechselrichter haben?', text: 'über 20 kW', next: 'Muss das Haus neu geerdet werden / Fundamenterder vorhanden?' },
+            
+            { q: 'Welche Art von Wärmepumpen-Anschluss ist gewünscht?', text: 'Luft-Wasser-Wärmepumpe', next: 'Muss das Haus neu geerdet werden / Fundamenterder vorhanden?' },
+            { q: 'Welche Art von Wärmepumpen-Anschluss ist gewünscht?', text: 'Sole-Wasser-Wärmepumpe', next: 'Muss das Haus neu geerdet werden / Fundamenterder vorhanden?' },
+            
+            { q: 'Soll der Zählerschrank komplett erneuert werden?', text: 'Ja, komplett neu', next: 'Muss das Haus neu geerdet werden / Fundamenterder vorhanden?' },
+            { q: 'Soll der Zählerschrank komplett erneuern', text: 'Nein, nur erweitern', next: 'Muss das Haus neu geerdet werden / Fundamenterder vorhanden?' },
+            
+            { q: 'Muss das Haus neu geerdet werden / Fundamenterder vorhanden?', text: 'Fundamenterder vorhanden', next: null },
+            { q: 'Muss das Haus neu geerdet werden / Fundamenterder vorhanden?', text: 'Muss neu gemacht werden', next: null },
+            { q: 'Muss das Haus neu geerdet werden / Fundamenterder vorhanden?', text: 'Nicht erforderlich', next: null }
+        ];
+
+        for (const aData of elAnswers) {
+            const question = qEL[aData.q];
+            const nextQuestion = aData.next ? qEL[aData.next] : null;
+            
+            const [answer] = await Answer.findOrCreate({
+                where: { question_id: question.id, answer_text: aData.text },
+                defaults: { next_question_id: nextQuestion ? nextQuestion.id : null }
+            });
+            if (answer.next_question_id !== (nextQuestion ? nextQuestion.id : null)) {
+                answer.next_question_id = nextQuestion ? nextQuestion.id : null;
+                await answer.save();
+            }
+        }
+
         console.log('--- Initial Seeding Completed Successfully ---');
     } catch (err) {
         console.error('--- Seeding Error: ---');
