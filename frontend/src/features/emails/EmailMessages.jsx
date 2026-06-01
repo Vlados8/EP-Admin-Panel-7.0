@@ -17,8 +17,9 @@ const EmailMessages = () => {
     const [selectedMessage, setSelectedMessage] = useState(null);
     const [attachments, setAttachments] = useState([]);
     const [sending, setSending] = useState(false);
-    const [composeData, setComposeData] = useState({ to: '', subject: '', text: '' });
+    const [composeData, setComposeData] = useState({ to: '', subject: '', text: '', html: '' });
     const fileInputRef = useRef(null);
+    const editorRef = useRef(null);
     const [searchParams, setSearchParams] = useSearchParams();
     const accountFilter = searchParams.get('account');
 
@@ -45,6 +46,27 @@ const EmailMessages = () => {
         setGalleryItems(items);
         setGalleryIndex(index);
         setIsGalleryOpen(true);
+    };
+
+    useEffect(() => {
+        if (view === 'compose' && editorRef.current) {
+            const currentHTML = editorRef.current.innerHTML;
+            const targetHTML = composeData.html || composeData.text?.replace(/\n/g, '<br>') || '';
+            if (currentHTML !== targetHTML) {
+                editorRef.current.innerHTML = targetHTML;
+            }
+        }
+    }, [view, composeData.html, composeData.text]);
+
+    const execCommand = (command, value = null) => {
+        document.execCommand(command, false, value);
+        if (editorRef.current) {
+            setComposeData(prev => ({
+                ...prev,
+                html: editorRef.current.innerHTML,
+                text: editorRef.current.innerText
+            }));
+        }
     };
 
     useEffect(() => {
@@ -102,7 +124,7 @@ const EmailMessages = () => {
     };
 
     const handleFormKeyDown = (e) => {
-        if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+        if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA' && !e.target.hasAttribute('contenteditable')) {
             e.preventDefault();
         }
     };
@@ -115,7 +137,12 @@ const EmailMessages = () => {
         formData.append('from', form.from.value);
         formData.append('to', form.to.value);
         formData.append('subject', form.subject.value);
-        formData.append('text', form.text.value);
+        
+        const htmlContent = editorRef.current ? editorRef.current.innerHTML : '';
+        const plainTextContent = editorRef.current ? (editorRef.current.innerText || htmlContent.replace(/<[^>]*>/g, '')) : '';
+        
+        formData.append('text', plainTextContent);
+        formData.append('html', htmlContent);
         
         attachments.forEach(file => {
             formData.append('attachments', file);
@@ -131,7 +158,10 @@ const EmailMessages = () => {
             toast.success('E-Mail erfolgreich gesendet!');
             setView('inbox');
             setAttachments([]);
-            setComposeData({ to: '', subject: '', text: '' });
+            setComposeData({ to: '', subject: '', text: '', html: '' });
+            if (editorRef.current) {
+                editorRef.current.innerHTML = '';
+            }
             fetchData();
         } catch (err) {
             toast.error(err.response?.data?.message || 'Fehler beim Senden');
@@ -167,13 +197,12 @@ const EmailMessages = () => {
     };
 
     const handleReply = (msg) => {
-        // Find if we have a draft or just switch to compose with preset values
-        // For simplicity, we'll just set the view and potentially pre-fill
-        // We'd need state for the compose form for this
+        const replyHtml = `<br><br><div style="border-left: 2px solid #ddd; padding-left: 10px; margin-left: 5px; color: #666;">Am ${new Date(msg.received_at).toLocaleString()} schrieb ${msg.sender}:<br><br>${msg.body_html || msg.body_plain?.replace(/\n/g, '<br>') || ''}</div>`;
         setComposeData({
             to: msg.sender,
             subject: `Re: ${msg.subject}`,
-            text: `\n\n--- Am ${new Date(msg.received_at).toLocaleString()} schrieb ${msg.sender} ---\n\n${msg.body_plain}`
+            text: `\n\n--- Am ${new Date(msg.received_at).toLocaleString()} schrieb ${msg.sender} ---\n\n${msg.body_plain}`,
+            html: replyHtml
         });
         setView('compose');
     };
@@ -379,7 +408,7 @@ const EmailMessages = () => {
         <div className="glass-card rounded-2xl border border-white/10 bg-white/5 overflow-hidden animate-[fadeIn_0.3s_ease-out]">
             <div className="p-6 border-b border-white/10 bg-white/5 flex items-center justify-between">
                 <h3 className="font-bold">Neue Nachricht verfassen</h3>
-                <button onClick={() => { setView('inbox'); setComposeData({ to: '', subject: '', text: '' }); }} className="text-gray-400 hover:text-white transition-colors"><i className="fa-solid fa-xmark"></i></button>
+                <button onClick={() => { setView('inbox'); setComposeData({ to: '', subject: '', text: '', html: '' }); }} className="text-gray-400 hover:text-white transition-colors"><i className="fa-solid fa-xmark"></i></button>
             </div>
             <form onSubmit={handleSend} onKeyDown={handleFormKeyDown} className="p-8 space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -450,14 +479,112 @@ const EmailMessages = () => {
                 </div>
                 <div>
                     <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Inhalt</label>
-                    <textarea 
-                        name="text" 
-                        required 
-                        className="w-full glass-input rounded-xl px-4 py-4 text-white min-h-[200px]" 
-                        placeholder="Schreiben Sie Ihre Nachricht hier..."
-                        value={composeData.text}
-                        onChange={(e) => setComposeData({...composeData, text: e.target.value})}
-                    ></textarea>
+                    <div className="flex flex-col border border-white/10 rounded-2xl overflow-hidden glass-input focus-within:border-blue-500/50 focus-within:shadow-[0_0_15px_rgba(59,130,246,0.1)] transition-all">
+                        {/* Toolbar */}
+                        <div className="flex flex-wrap items-center gap-1.5 px-4 py-2.5 bg-white/5 border-b border-white/10">
+                            <button
+                                type="button"
+                                onClick={() => execCommand('bold')}
+                                className="w-8 h-8 rounded-lg hover:bg-white/10 text-white font-bold flex items-center justify-center transition-colors text-sm"
+                                title="Fett (Strg+B)"
+                            >
+                                <i className="fa-solid fa-bold"></i>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => execCommand('italic')}
+                                className="w-8 h-8 rounded-lg hover:bg-white/10 text-white italic flex items-center justify-center transition-colors text-sm"
+                                title="Kursiv (Strg+I)"
+                            >
+                                <i className="fa-solid fa-italic"></i>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => execCommand('underline')}
+                                className="w-8 h-8 rounded-lg hover:bg-white/10 text-white underline flex items-center justify-center transition-colors text-sm"
+                                title="Unterstrichen (Strg+U)"
+                            >
+                                <i className="fa-solid fa-underline"></i>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => execCommand('strikeThrough')}
+                                className="w-8 h-8 rounded-lg hover:bg-white/10 text-white line-through flex items-center justify-center transition-colors text-sm"
+                                title="Durchgestrichen"
+                            >
+                                <i className="fa-solid fa-strikethrough"></i>
+                            </button>
+                            
+                            <div className="w-[1px] h-5 bg-white/10 mx-1"></div>
+                            
+                            <button
+                                type="button"
+                                onClick={() => execCommand('insertUnorderedList')}
+                                className="w-8 h-8 rounded-lg hover:bg-white/10 text-white flex items-center justify-center transition-colors text-sm"
+                                title="Aufzählung"
+                            >
+                                <i className="fa-solid fa-list-ul"></i>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => execCommand('insertOrderedList')}
+                                className="w-8 h-8 rounded-lg hover:bg-white/10 text-white flex items-center justify-center transition-colors text-sm"
+                                title="Nummerierte Liste"
+                            >
+                                <i className="fa-solid fa-list-ol"></i>
+                            </button>
+                            
+                            <div className="w-[1px] h-5 bg-white/10 mx-1"></div>
+                            
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const url = prompt('Link-URL eingeben (z. B. https://example.com):');
+                                    if (url) execCommand('createLink', url);
+                                }}
+                                className="w-8 h-8 rounded-lg hover:bg-white/10 text-blue-400 flex items-center justify-center transition-colors text-sm"
+                                title="Link einfügen"
+                            >
+                                <i className="fa-solid fa-link"></i>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => execCommand('unlink')}
+                                className="w-8 h-8 rounded-lg hover:bg-white/10 text-gray-400 flex items-center justify-center transition-colors text-sm"
+                                title="Link entfernen"
+                            >
+                                <i className="fa-solid fa-link-slash"></i>
+                            </button>
+                            
+                            <div className="w-[1px] h-5 bg-white/10 mx-1"></div>
+                            
+                            <button
+                                type="button"
+                                onClick={() => execCommand('removeFormat')}
+                                className="w-8 h-8 rounded-lg hover:bg-white/10 text-red-400 flex items-center justify-center transition-colors text-sm ml-auto"
+                                title="Formatierung löschen"
+                            >
+                                <i className="fa-solid fa-eraser"></i>
+                            </button>
+                        </div>
+                        {/* ContentEditable Editor Area */}
+                        <div
+                            ref={editorRef}
+                            contentEditable
+                            onInput={() => {
+                                if (editorRef.current) {
+                                    setComposeData(prev => ({
+                                        ...prev,
+                                        html: editorRef.current.innerHTML,
+                                        text: editorRef.current.innerText
+                                    }));
+                                }
+                            }}
+                            className="w-full min-h-[250px] max-h-[500px] overflow-y-auto px-6 py-5 text-white focus:outline-none leading-relaxed text-sm bg-transparent custom-rich-editor"
+                            placeholder="Schreiben Sie Ihre Nachricht hier..."
+                            style={{ outline: 'none' }}
+                        />
+                    </div>
                 </div>
 
                 {/* Attachments Section */}
@@ -482,28 +609,69 @@ const EmailMessages = () => {
                     />
 
                     {attachments.length > 0 && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {attachments.map((file, i) => (
-                                <div key={i} className="flex items-center justify-between px-4 py-3 rounded-xl bg-white/5 border border-white/10 group">
-                                    <div className="flex items-center gap-3 overflow-hidden">
-                                        <i className="fa-solid fa-file text-gray-500"></i>
-                                        <span className="text-xs text-gray-300 truncate">{file.name}</span>
-                                    </div>
-                                    <button 
-                                        type="button"
-                                        onClick={() => removeAttachment(i)}
-                                        className="text-gray-600 hover:text-red-400 transition-colors"
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 animate-[fadeIn_0.3s_ease-out]">
+                            {attachments.map((file, i) => {
+                                const isImage = file.type?.startsWith('image/') || file.name.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i);
+                                const previewUrl = isImage ? URL.createObjectURL(file) : null;
+                                const sizeString = file.size ? `${(file.size / 1024).toFixed(1)} KB` : '0.0 KB';
+
+                                return (
+                                    <div 
+                                        key={i} 
+                                        className="relative group glass-card rounded-2xl border border-white/10 bg-white/5 p-3 flex flex-col items-center justify-between text-center overflow-hidden transition-all hover:scale-[1.03] hover:border-blue-500/50 hover:shadow-[0_0_20px_rgba(59,130,246,0.15)] animate-[modalIn_0.2s_ease-out]"
                                     >
-                                        <i className="fa-solid fa-xmark"></i>
-                                    </button>
-                                </div>
-                            ))}
+                                        <button 
+                                            type="button"
+                                            onClick={() => removeAttachment(i)}
+                                            className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 border border-white/10 flex items-center justify-center text-gray-400 hover:text-red-400 hover:border-red-500/50 transition-all z-10"
+                                            title="Anhang entfernen"
+                                        >
+                                            <i className="fa-solid fa-xmark text-[10px]"></i>
+                                        </button>
+
+                                        {isImage ? (
+                                            <div className="w-full aspect-video rounded-lg overflow-hidden bg-black/40 mb-3 relative flex items-center justify-center border border-white/5">
+                                                <img 
+                                                    src={previewUrl} 
+                                                    alt={file.name} 
+                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                />
+                                            </div>
+                                        ) : (
+                                            <div className="w-full aspect-video rounded-lg bg-white/5 border border-white/5 mb-3 flex flex-col items-center justify-center text-blue-400 gap-1">
+                                                <i className={`fa-solid ${
+                                                    file.name.endsWith('.pdf') ? 'fa-file-pdf text-red-400' :
+                                                    file.name.match(/\.(zip|rar|tar|gz|7z)$/i) ? 'fa-file-zipper text-yellow-400' :
+                                                    file.name.match(/\.(xlsx|xls|csv)$/i) ? 'fa-file-excel text-emerald-400' :
+                                                    file.name.match(/\.(docx|doc)$/i) ? 'fa-file-word text-blue-400' :
+                                                    'fa-file-lines text-blue-400'
+                                                } text-3xl`}></i>
+                                                <span className="text-[10px] text-gray-500 uppercase font-black tracking-widest">
+                                                    {file.name.split('.').pop()}
+                                                </span>
+                                            </div>
+                                        )}
+
+                                        <div className="w-full px-1 min-w-0">
+                                            <p className="text-xs font-bold text-white truncate mb-0.5" title={file.name}>
+                                                {file.name}
+                                            </p>
+                                            <p className="text-[10px] text-gray-500">{sizeString}</p>
+                                        </div>
+
+                                        {/* Premium Loading/Upload Progress Bar (Mocked to be complete) */}
+                                        <div className="w-full mt-3 h-1 bg-white/10 rounded-full overflow-hidden p-[1px]">
+                                            <div className="h-full bg-blue-500 rounded-full w-full"></div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
                 </div>
 
                 <div className="flex justify-end gap-4 pt-4">
-                    <button type="button" onClick={() => { setView('inbox'); setAttachments([]); setComposeData({ to: '', subject: '', text: '' }); }} className="px-6 py-3 rounded-xl border border-white/10 hover:bg-white/5 text-sm font-bold transition-colors">Abbrechen</button>
+                    <button type="button" onClick={() => { setView('inbox'); setAttachments([]); setComposeData({ to: '', subject: '', text: '', html: '' }); }} className="px-6 py-3 rounded-xl border border-white/10 hover:bg-white/5 text-sm font-bold transition-colors">Abbrechen</button>
                     <button 
                         type="submit" 
                         disabled={sending}
@@ -535,7 +703,7 @@ const EmailMessages = () => {
                     </h1>
                     <p className="text-gray-500 max-w-lg text-sm md:text-base">Verwalten Sie Ihre Kommunikation über Ihre Domain-E-Mails.</p>
                 </div>
-                <button onClick={() => { setComposeData({ to: '', subject: '', text: '' }); setAttachments([]); setView('compose'); }} className="w-full md:w-auto px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 group shrink-0">
+                <button onClick={() => { setComposeData({ to: '', subject: '', text: '', html: '' }); setAttachments([]); setView('compose'); }} className="w-full md:w-auto px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 group shrink-0">
                     <i className="fa-solid fa-paper-plane group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform"></i> Verfassen
                 </button>
             </div>
@@ -565,7 +733,7 @@ const EmailMessages = () => {
                                 onClick={() => { 
                                     setView(item.id); 
                                     setSelectedMessage(null); 
-                                    setComposeData({ to: '', subject: '', text: '' }); 
+                                    setComposeData({ to: '', subject: '', text: '', html: '' }); 
                                     setAttachments([]); 
                                 }}
                                 className={`w-full px-4 py-3 rounded-2xl flex items-center justify-between transition-all group ${view === item.id ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5 border border-transparent'}`}
@@ -614,6 +782,17 @@ const EmailMessages = () => {
                 /* Standardize email links to look like Gmail */
                 .email-html-content a { color: #2563eb !important; text-decoration: underline !important; cursor: pointer !important; }
                 .email-html-content a:hover { color: #1d4ed8 !important; text-decoration: none !important; }
+
+                /* Custom Rich Text Editor Styles */
+                .custom-rich-editor[contenteditable]:empty::before {
+                    content: 'Schreiben Sie Ihre Nachricht hier...';
+                    color: rgba(255, 255, 255, 0.25);
+                    cursor: text;
+                }
+                .custom-rich-editor ul { list-style-type: disc !important; padding-left: 20px !important; margin-top: 5px !important; margin-bottom: 5px !important; }
+                .custom-rich-editor ol { list-style-type: decimal !important; padding-left: 20px !important; margin-top: 5px !important; margin-bottom: 5px !important; }
+                .custom-rich-editor a { color: #3b82f6 !important; text-decoration: underline !important; }
+                .custom-rich-editor a:hover { color: #60a5fa !important; }
             `}} />
             {/* Media Gallery Viewer */}
             <MediaViewer 
