@@ -49,7 +49,14 @@ const Categories = () => {
 
     // --- MODAL HANDLERS ---
     const openModal = (type, isEdit, parentId = null, data = null, extraOptions = null) => {
-        setModalConfig({ type, isEdit, parentId, data: data || getDefaultData(type), extraOptions });
+        let initialData = data || getDefaultData(type);
+        if (type === 'answer' && !isEdit && extraOptions?.parentQuestion) {
+            const parentType = extraOptions.parentQuestion.type;
+            if (parentType === 'slider' || parentType === 'input') {
+                initialData = { ...initialData, answer_text: 'Weiter' };
+            }
+        }
+        setModalConfig({ type, isEdit, parentId, data: initialData, extraOptions });
     };
 
     const closeModal = () => setModalConfig(null);
@@ -190,8 +197,8 @@ const Categories = () => {
                                                                     {canManage && (
                                                                         <div className="flex items-center gap-2">
                                                                             <span className="text-xs text-gray-500 bg-black/40 px-2 py-0.5 border border-white/5 rounded">ID: {q.id}</span>
-                                                                            {(!q.type || ['buttons', 'select', 'radio', 'checkbox', ''].includes(q.type)) && (
-                                                                                <button onClick={() => openModal('answer', false, q.id, null, { siblingQuestions: subcat.questions.filter(sq => sq.id !== q.id) })} className="text-xs px-2 py-1 bg-emerald-500/20 text-emerald-300 rounded hover:bg-emerald-500/40 border border-emerald-500/30">+ Antwort</button>
+                                                                            {(!q.type || ['buttons', 'select', 'radio', 'checkbox', 'slider', 'input', ''].includes(q.type)) && (
+                                                                                <button onClick={() => openModal('answer', false, q.id, null, { parentQuestion: q, siblingQuestions: subcat.questions.filter(sq => sq.id !== q.id) })} className="text-xs px-2 py-1 bg-emerald-500/20 text-emerald-300 rounded hover:bg-emerald-500/40 border border-emerald-500/30">+ Antwort</button>
                                                                             )}
                                                                             <button onClick={() => openModal('question', true, subcat.id, q)} className="text-blue-400 hover:text-white px-2"><i className="fa-solid fa-pen text-xs"></i></button>
                                                                             <button onClick={() => handleDelete('question', q.id)} className="text-red-400 hover:text-white px-2"><i className="fa-solid fa-trash text-xs"></i></button>
@@ -202,7 +209,14 @@ const Categories = () => {
                                                                 {/* ANSWERS FOR QUESTION */}
                                                                 {expandedQuestions[q.id] && (
                                                                     <div className="bg-black/20 p-2 pl-[116px]">
-                                                                        {q.answers?.length === 0 ? <div className="text-xs text-gray-500 py-1">Keine Antworten. (Ein Slider/Text Feld braucht keine Antworten)</div> : (
+                                                                        {q.answers?.length === 0 ? (
+                                                                            <div className="text-xs text-gray-500 py-1 flex flex-col gap-1">
+                                                                                <span>Keine Antworten definiert.</span>
+                                                                                {(q.type === 'slider' || q.type === 'input') && (
+                                                                                    <span className="text-teal-400/80">Fügen Sie eine Antwort hinzu (z. B. "Weiter"), um den Übergang zum nächsten Schritt festzulegen.</span>
+                                                                                )}
+                                                                            </div>
+                                                                        ) : (
                                                                             <div className="flex flex-col gap-1">
                                                                                 {q.answers?.map(ans => {
                                                                                     const nextQ = subcat.questions.find(sq => sq.id === ans.next_question_id);
@@ -218,7 +232,7 @@ const Categories = () => {
                                                                                             </div>
                                                                                             {canManage && (
                                                                                                 <div className="flex gap-2">
-                                                                                                    <button onClick={() => openModal('answer', true, q.id, ans, { siblingQuestions: subcat.questions.filter(sq => sq.id !== q.id) })} className="text-blue-400 hover:text-white"><i className="fa-solid fa-pen"></i></button>
+                                                                                                    <button onClick={() => openModal('answer', true, q.id, ans, { parentQuestion: q, siblingQuestions: subcat.questions.filter(sq => sq.id !== q.id) })} className="text-blue-400 hover:text-white"><i className="fa-solid fa-pen"></i></button>
                                                                                                     <button onClick={() => handleDelete('answer', ans.id)} className="text-red-400 hover:text-white"><i className="fa-solid fa-trash"></i></button>
                                                                                                 </div>
                                                                                             )}
@@ -301,8 +315,8 @@ const Categories = () => {
                                                 <option value="buttons">Buttons (Funnel)</option>
                                                 <option value="radio">Radio</option>
                                                 <option value="select">Dropdown</option>
-                                                <option value="slider">Slider (Keine Antw. Nötig)</option>
-                                                <option value="input">Textfeld (Keine Antw. Nötig)</option>
+                                                <option value="slider">Slider (Schieberegler)</option>
+                                                <option value="input">Textfeld (Eingabe)</option>
                                                 <option value="checkbox">Checkboxen</option>
                                             </select>
                                         </div>
@@ -336,6 +350,14 @@ const Categories = () => {
 
                             {modalConfig.type === 'answer' && (
                                 <>
+                                    {(modalConfig.extraOptions?.parentQuestion?.type === 'slider' || modalConfig.extraOptions?.parentQuestion?.type === 'input') && (
+                                        <div className="text-xs text-teal-300 bg-teal-500/10 border border-teal-500/20 p-3.5 rounded-lg flex items-start gap-2.5 mb-3 leading-relaxed">
+                                            <i className="fa-solid fa-circle-info mt-0.5 text-teal-400 text-sm"></i>
+                                            <span>
+                                                Dieses Feld ist ein Schieberegler oder ein Textfeld. Die Antwort dient als Beschriftung für den Weiter-Button (z. B. <strong>Weiter</strong>) und definiert die Logik zum nächsten Schritt.
+                                            </span>
+                                        </div>
+                                    )}
                                     <div>
                                         <label className="text-xs text-gray-400 mb-1 block">Antwort-Text (Button Label)</label>
                                         <input required value={modalConfig.data.answer_text} onChange={e => setModalConfig({ ...modalConfig, data: { ...modalConfig.data, answer_text: e.target.value } })} className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white" />
