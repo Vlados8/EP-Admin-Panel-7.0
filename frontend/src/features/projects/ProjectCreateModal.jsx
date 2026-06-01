@@ -715,12 +715,34 @@ const ProjectCreateModal = ({ isOpen, onClose, onProjectCreated, initialData = n
                                                         setSelectedCategories(prev => [...prev, { category_id: c.id, subcategory_id: '' }]);
                                                     }
                                                 }}
-                                                className={`p-3 rounded-xl border text-left font-medium transition-all flex items-center gap-3 ${isSelected ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'bg-black/20 border-white/10 text-white hover:bg-slate-800'}`}
+                                                className={`p-4 rounded-xl border text-left font-medium transition-all flex items-start gap-3 ${isSelected ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'bg-black/20 border-white/10 text-white hover:bg-slate-800'}`}
                                             >
-                                                <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-500'}`}>
+                                                <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 mt-1 ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-500'}`}>
                                                     {isSelected && <i className="fa-solid fa-check text-white text-[10px]"></i>}
                                                 </div>
-                                                <span className="text-sm text-gray-200">{c.name}</span>
+                                                <div className="flex-1 flex flex-col gap-1.5 min-w-0">
+                                                    <div className="flex items-center gap-2">
+                                                        <i className={`fa-solid ${c.icon || 'fa-folder'} text-base shrink-0 ${isSelected ? 'text-blue-400' : 'text-gray-400'}`}></i>
+                                                        <span className="text-sm font-semibold text-gray-200 truncate">{c.name}</span>
+                                                    </div>
+                                                    <div className="flex gap-1">
+                                                        {c.target === 'admin' && (
+                                                            <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20 flex items-center gap-1 w-fit">
+                                                                <i className="fa-solid fa-lock text-[8px]"></i> Admin-Panel
+                                                            </span>
+                                                        )}
+                                                        {c.target === 'site' && (
+                                                            <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-teal-500/10 text-teal-300 border border-teal-500/20 flex items-center gap-1 w-fit">
+                                                                <i className="fa-solid fa-globe text-[8px]"></i> Website
+                                                            </span>
+                                                        )}
+                                                        {c.target === 'both' && (
+                                                            <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20 flex items-center gap-1 w-fit">
+                                                                <i className="fa-solid fa-circle-check text-[8px]"></i> Beide
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
                                             </button>
                                         );
                                     })}

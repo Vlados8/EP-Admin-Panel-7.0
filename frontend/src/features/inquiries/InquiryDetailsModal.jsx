@@ -120,8 +120,13 @@ const InquiryDetailsModal = ({ inquiry, isOpen, onClose, onProjectCreate, onInqu
                     <div>
                         <h2 className="text-2xl font-bold text-white flex items-center flex-wrap gap-3">
                             {inquiry.title}
-                            <span className="text-sm font-normal px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                            <span className="text-sm font-normal px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 flex items-center gap-1.5">
                                 {inquiry.category?.name || 'Keine Kategorie'}
+                                {inquiry.category?.target && (
+                                    <span className="text-[10px] opacity-75 bg-black/30 px-1.5 py-0.5 rounded font-medium border border-white/5">
+                                        {inquiry.category.target === 'both' ? 'Beide' : inquiry.category.target === 'site' ? 'Website' : 'Admin'}
+                                    </span>
+                                )}
                             </span>
                             {inquiry.project && (
                                 <button
@@ -242,7 +247,9 @@ const InquiryDetailsModal = ({ inquiry, isOpen, onClose, onProjectCreate, onInqu
                                             >
                                                 <option value="">-- Keine --</option>
                                                 {categories.map(c => (
-                                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                                    <option key={c.id} value={c.id}>
+                                                        {c.name} ({c.target === 'both' ? 'Beide' : c.target === 'site' ? 'Website' : 'Admin-Panel'})
+                                                    </option>
                                                 ))}
                                             </select>
                                         </div>
