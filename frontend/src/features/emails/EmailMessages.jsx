@@ -101,6 +101,12 @@ const EmailMessages = () => {
         setAttachments(prev => prev.filter((_, i) => i !== index));
     };
 
+    const handleFormKeyDown = (e) => {
+        if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+            e.preventDefault();
+        }
+    };
+
     const handleSend = async (e) => {
         e.preventDefault();
         const form = e.target;
@@ -125,6 +131,7 @@ const EmailMessages = () => {
             toast.success('E-Mail erfolgreich gesendet!');
             setView('inbox');
             setAttachments([]);
+            setComposeData({ to: '', subject: '', text: '' });
             fetchData();
         } catch (err) {
             toast.error(err.response?.data?.message || 'Fehler beim Senden');
@@ -372,9 +379,9 @@ const EmailMessages = () => {
         <div className="glass-card rounded-2xl border border-white/10 bg-white/5 overflow-hidden animate-[fadeIn_0.3s_ease-out]">
             <div className="p-6 border-b border-white/10 bg-white/5 flex items-center justify-between">
                 <h3 className="font-bold">Neue Nachricht verfassen</h3>
-                <button onClick={() => setView('inbox')} className="text-gray-400 hover:text-white transition-colors"><i className="fa-solid fa-xmark"></i></button>
+                <button onClick={() => { setView('inbox'); setComposeData({ to: '', subject: '', text: '' }); }} className="text-gray-400 hover:text-white transition-colors"><i className="fa-solid fa-xmark"></i></button>
             </div>
-            <form onSubmit={handleSend} className="p-8 space-y-6">
+            <form onSubmit={handleSend} onKeyDown={handleFormKeyDown} className="p-8 space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label className="block text-sm text-gray-400 mb-2 font-semibold">Von</label>
@@ -496,7 +503,7 @@ const EmailMessages = () => {
                 </div>
 
                 <div className="flex justify-end gap-4 pt-4">
-                    <button type="button" onClick={() => { setView('inbox'); setAttachments([]); }} className="px-6 py-3 rounded-xl border border-white/10 hover:bg-white/5 text-sm font-bold transition-colors">Abbrechen</button>
+                    <button type="button" onClick={() => { setView('inbox'); setAttachments([]); setComposeData({ to: '', subject: '', text: '' }); }} className="px-6 py-3 rounded-xl border border-white/10 hover:bg-white/5 text-sm font-bold transition-colors">Abbrechen</button>
                     <button 
                         type="submit" 
                         disabled={sending}
@@ -528,7 +535,7 @@ const EmailMessages = () => {
                     </h1>
                     <p className="text-gray-500 max-w-lg text-sm md:text-base">Verwalten Sie Ihre Kommunikation über Ihre Domain-E-Mails.</p>
                 </div>
-                <button onClick={() => setView('compose')} className="w-full md:w-auto px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 group shrink-0">
+                <button onClick={() => { setComposeData({ to: '', subject: '', text: '' }); setAttachments([]); setView('compose'); }} className="w-full md:w-auto px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 group shrink-0">
                     <i className="fa-solid fa-paper-plane group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform"></i> Verfassen
                 </button>
             </div>
@@ -555,7 +562,12 @@ const EmailMessages = () => {
                         return (
                             <button
                                 key={item.id}
-                                onClick={() => { setView(item.id); setSelectedMessage(null); }}
+                                onClick={() => { 
+                                    setView(item.id); 
+                                    setSelectedMessage(null); 
+                                    setComposeData({ to: '', subject: '', text: '' }); 
+                                    setAttachments([]); 
+                                }}
                                 className={`w-full px-4 py-3 rounded-2xl flex items-center justify-between transition-all group ${view === item.id ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5 border border-transparent'}`}
                             >
                                 <div className="flex items-center gap-3">
