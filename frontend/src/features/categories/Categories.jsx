@@ -131,6 +131,39 @@ const Categories = () => {
                 )}
             </div>
 
+            {/* Target visibility explanation legend */}
+            <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-5 mb-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4 animate-[fadeIn_0.3s_ease-out] text-xs">
+                <div className="space-y-1.5 max-w-xl">
+                    <span className="font-semibold text-gray-300 uppercase tracking-wider block text-[10px]">Zielgruppen-Sichtbarkeit der Gewerke</span>
+                    <p className="text-gray-400 leading-relaxed">
+                        Jedes Hauptgewerk kann einer bestimmten Zielgruppe zugeordnet werden. Dies steuert, wo das Gewerk и его вопросы будут отображаться.
+                    </p>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                    <div className="bg-blue-500/5 border border-blue-500/10 rounded-xl p-2.5 flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
+                        <div>
+                            <span className="font-semibold text-blue-300 block">Beide (Website & Admin)</span>
+                            <span className="text-[10px] text-gray-500">Überall sichtbar und auswählbar</span>
+                        </div>
+                    </div>
+                    <div className="bg-teal-500/5 border border-teal-500/10 rounded-xl p-2.5 flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse"></span>
+                        <div>
+                            <span className="font-semibold text-teal-300 block">Kundenportal (Website)</span>
+                            <span className="text-[10px] text-gray-500">Nur für Kundenanfragen auf der Homepage</span>
+                        </div>
+                    </div>
+                    <div className="bg-purple-500/5 border border-purple-500/10 rounded-xl p-2.5 flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse"></span>
+                        <div>
+                            <span className="font-semibold text-purple-300 block">Interne Erfassung (Admin)</span>
+                            <span className="text-[10px] text-gray-500">Nur für interne Projekte im Admin-Panel</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div className="glass-card rounded-2xl p-6 border border-white/5">
                 {loading ? <div className="text-center text-gray-400">Laden...</div> : categories.length === 0 ? <div className="text-gray-400 text-center">Keine Daten.</div> : (
                     <div className="space-y-4">
@@ -318,6 +351,11 @@ const Categories = () => {
                                                     <i className="fa-solid fa-chevron-down text-xs"></i>
                                                 </div>
                                             </div>
+                                            <p className="text-[10px] text-gray-500 mt-2 leading-relaxed">
+                                                <strong>Beide:</strong> Gewerk ist auf der WordPress-Website и в админ-панели.<br />
+                                                <strong>Nur Website:</strong> Gewerk отображается только на сайте для публичных заявок.<br />
+                                                <strong>Nur Admin-Panel:</strong> Gewerk доступно только при ручном создании проекта в админке.
+                                            </p>
                                         </div>
                                     )}
                                     <div className="flex gap-4">
