@@ -69,6 +69,18 @@ const EmailMessages = () => {
         }
     };
 
+    const insertHTML = (html) => {
+        if (editorRef.current) {
+            editorRef.current.focus();
+            document.execCommand('insertHTML', false, html);
+            setComposeData(prev => ({
+                ...prev,
+                html: editorRef.current.innerHTML,
+                text: editorRef.current.innerText
+            }));
+        }
+    };
+
     useEffect(() => {
         fetchData();
 
@@ -554,6 +566,23 @@ const EmailMessages = () => {
                                 title="Link entfernen"
                             >
                                 <i className="fa-solid fa-link-slash"></i>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const btnText = prompt('Button-Text eingeben (z. B. "Jetzt ansehen"):', 'Hier klicken');
+                                    if (btnText) {
+                                        const btnUrl = prompt('Link-URL eingeben (z. B. https://example.com):', 'https://');
+                                        if (btnUrl) {
+                                            const btnHtml = `<a href="${btnUrl}" target="_blank" style="display: inline-block; background-color: #2563eb; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-family: Helvetica, Arial, sans-serif; margin: 10px 0; font-size: 14px; text-align: center;">${btnText}</a>`;
+                                            insertHTML(btnHtml);
+                                        }
+                                    }
+                                }}
+                                className="w-8 h-8 rounded-lg hover:bg-white/10 text-blue-400 flex items-center justify-center transition-colors text-sm"
+                                title="Button-Link einfügen (Call-to-Action)"
+                            >
+                                <i className="fa-solid fa-square-plus"></i>
                             </button>
                             
                             <div className="w-[1px] h-5 bg-white/10 mx-1"></div>
