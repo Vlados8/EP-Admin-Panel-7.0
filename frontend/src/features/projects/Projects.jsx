@@ -121,7 +121,13 @@ const Projects = () => {
             project.description?.toLowerCase().includes(q) ||
             project.client?.name?.toLowerCase().includes(q) ||
             project.client?.email?.toLowerCase().includes(q) ||
-            project.client?.contact_person?.toLowerCase().includes(q)
+            project.client?.contact_person?.toLowerCase().includes(q) ||
+            project.client_first_name?.toLowerCase().includes(q) ||
+            project.client_last_name?.toLowerCase().includes(q) ||
+            project.client_email?.toLowerCase().includes(q) ||
+            project.client_phone?.toLowerCase().includes(q) ||
+            project.client_address?.toLowerCase().includes(q) ||
+            project.client_notes?.toLowerCase().includes(q)
         );
     });
 
@@ -343,12 +349,37 @@ const Projects = () => {
                         </p>
 
                         {/* Customer details row */}
-                        {project.client && (
-                            <p className="text-gray-400 text-xs flex items-center gap-2">
-                                <i className="fa-solid fa-user-tie text-purple-500/80 text-[12px]"></i>
-                                <span className="text-slate-300 font-medium line-clamp-1">
-                                    Kunde: <span className="text-white font-semibold">{project.client.name}</span>
-                                </span>
+                        {(project.client || [project.client_first_name, project.client_last_name].some(Boolean)) && (
+                            <p className="text-slate-300 text-xs flex items-center gap-1.5 mb-1.5 flex-wrap">
+                                <i className="fa-solid fa-user-tie text-purple-400 text-[12px]"></i>
+                                {project.client ? (
+                                    <>
+                                        <span className="font-medium">
+                                            Kunde: <span className="text-white font-semibold">{project.client.name}</span>
+                                        </span>
+                                        {(() => {
+                                            const addName = [project.client_first_name, project.client_last_name].filter(Boolean).join(' ');
+                                            if (addName) {
+                                                return (
+                                                    <span className="text-gray-400 text-[11px] font-light flex items-center gap-1 before:content-['|'] before:text-white/10 before:mx-1">
+                                                        <i className="fa-solid fa-user text-emerald-400 text-[10px]"></i>
+                                                        Endkunde: <span className="text-emerald-300 font-medium">{addName}</span>
+                                                    </span>
+                                                );
+                                            }
+                                            return null;
+                                        })()}
+                                    </>
+                                ) : (
+                                    (() => {
+                                        const addName = [project.client_first_name, project.client_last_name].filter(Boolean).join(' ');
+                                        return (
+                                            <span className="font-medium">
+                                                Endkunde: <span className="text-white font-semibold">{addName}</span>
+                                            </span>
+                                        );
+                                    })()
+                                )}
                             </p>
                         )}
 
