@@ -734,91 +734,92 @@ const ProjectCreateModal = ({ isOpen, onClose, onProjectCreated, initialData = n
                                         <i className="fa-solid fa-layer-group"></i> Unterkategorien zuweisen
                                     </h4>
                                     <div className="space-y-4">
-                                        {selectedCategories.map(sc => {
-                                            const category = categories.find(c => c.id === sc.category_id);
+                                        {Array.from(new Set(selectedCategories.map(sc => sc.category_id))).map(catId => {
+                                            const category = categories.find(c => c.id === catId);
                                             if (!category) return null;
 
-                                            // Helper to get questions for this category and subcategory combo
+                                            const items = selectedCategories.filter(sc => sc.category_id === catId);
+                                            const selectedSubIds = items.map(item => item.subcategory_id).filter(id => id !== '');
+
+                                            // Helper to get questions for this category and all selected subcategories combo
                                             const getCategoryQuestions = () => {
                                                 let qList = [...(category.questions || [])];
-                                                if (sc.subcategory_id) {
-                                                    const sub = category.subcategories?.find(s => s.id === sc.subcategory_id);
+                                                selectedSubIds.forEach(subId => {
+                                                    const sub = category.subcategories?.find(s => s.id === subId);
                                                     if (sub && sub.questions) {
                                                         qList = [...qList, ...sub.questions];
                                                     }
-                                                }
-                                                return qList;
+                                                });
+                                                const seen = new Set();
+                                                return qList.filter(q => {
+                                                    if (seen.has(q.id)) return false;
+                                                    seen.add(q.id);
+                                                    return true;
+                                                });
                                             };
 
                                             const qList = getCategoryQuestions();
                                             const answeredCount = qList.filter(q => !!dynamicAnswers[q.id]?.value).length;
-                                            const isExpanded = !!expandedCategoryQuestions[sc.category_id];
+                                            const isExpanded = !!expandedCategoryQuestions[catId];
 
                                             return (
-                                                <div key={sc.category_id} className="bg-black/20 p-4 rounded-xl border border-white/5 space-y-4 animate-[fadeIn_0.2s_ease-out]">
+                                                <div key={catId} className="bg-black/20 p-4 rounded-xl border border-white/5 space-y-4 animate-[fadeIn_0.2s_ease-out]">
                                                     {/* Card Header Row */}
-                                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                                        <div className="font-semibold text-white flex items-center gap-2 text-sm">
-                                                            <i className={`fa-solid ${category.icon || 'fa-folder'} text-blue-400`}></i>
-                                                            {category.name}
-                                                        </div>
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="relative">
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => setOpenSubcategorySelect(openSubcategorySelect === sc.category_id ? null : sc.category_id)}
-                                                                    className="bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white text-xs font-semibold hover:border-blue-500/50 transition-colors flex items-center gap-2"
-                                                                >
-                                                                    <span>
-                                                                        {sc.subcategory_id
-                                                                            ? category.subcategories?.find(s => s.id === sc.subcategory_id)?.name
-                                                                            : '-- Keine Unterkategorie --'}
-                                                                    </span>
-                                                                    <i className={`fa-solid fa-chevron-down text-gray-500 text-[10px] transition-transform duration-200 ${openSubcategorySelect === sc.category_id ? 'rotate-180' : ''}`}></i>
-                                                                </button>
-
-                                                                {openSubcategorySelect === sc.category_id && (
-                                                                    <>
-                                                                        <div 
-                                                                            className="fixed inset-0 z-40" 
-                                                                            onClick={() => setOpenSubcategorySelect(null)}
-                                                                        />
-                                                                        <div className="absolute right-0 mt-2 w-48 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-48 overflow-y-auto backdrop-blur-md py-1.5 animate-[fadeIn_0.15s_ease-out] custom-scrollbar">
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => {
-                                                                                    setSelectedCategories(prev => prev.map(item => item.category_id === sc.category_id ? { ...item, subcategory_id: '' } : item));
-                                                                                    setOpenSubcategorySelect(null);
-                                                                                }}
-                                                                                className={`w-full text-left px-4 py-2 text-xs text-gray-300 hover:text-white hover:bg-white/5 transition-colors ${!sc.subcategory_id ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
-                                                                            >
-                                                                                -- Keine Unterkategorie --
-                                                                            </button>
-                                                                            {category.subcategories?.map(sub => (
-                                                                                <button
-                                                                                    key={sub.id}
-                                                                                    type="button"
-                                                                                    onClick={() => {
-                                                                                        setSelectedCategories(prev => prev.map(item => item.category_id === sc.category_id ? { ...item, subcategory_id: sub.id } : item));
-                                                                                        setOpenSubcategorySelect(null);
-                                                                                    }}
-                                                                                    className={`w-full text-left px-4 py-2 text-xs text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate ${sc.subcategory_id === sub.id ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
-                                                                                >
-                                                                                    {sub.name}
-                                                                                </button>
-                                                                            ))}
-                                                                        </div>
-                                                                    </>
-                                                                )}
+                                                    <div className="flex flex-col gap-4">
+                                                        <div className="flex justify-between items-center">
+                                                            <div className="font-semibold text-white flex items-center gap-2 text-sm">
+                                                                <i className={`fa-solid ${category.icon || 'fa-folder'} text-blue-400`}></i>
+                                                                {category.name}
                                                             </div>
                                                             <button
                                                                 type="button"
-                                                                onClick={() => setSelectedCategories(prev => prev.filter(item => item.category_id !== sc.category_id))}
+                                                                onClick={() => setSelectedCategories(prev => prev.filter(item => item.category_id !== catId))}
                                                                 className="text-gray-400 hover:text-red-400 transition-colors p-1"
                                                             >
                                                                 <i className="fa-solid fa-trash-can"></i>
                                                             </button>
                                                         </div>
+
+                                                        {/* Subcategories checklist */}
+                                                        {category.subcategories && category.subcategories.length > 0 && (
+                                                            <div className="space-y-2">
+                                                                <label className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider block">Unterkategorien auswählen:</label>
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    {category.subcategories.map(sub => {
+                                                                        const isSubSelected = selectedSubIds.includes(sub.id);
+                                                                        return (
+                                                                            <button
+                                                                                key={sub.id}
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    if (isSubSelected) {
+                                                                                        // Toggle off
+                                                                                        setSelectedCategories(prev => {
+                                                                                            const filtered = prev.filter(sc => !(sc.category_id === catId && sc.subcategory_id === sub.id));
+                                                                                            const hasOtherSubs = filtered.some(sc => sc.category_id === catId);
+                                                                                            if (!hasOtherSubs) {
+                                                                                                return [...filtered, { category_id: catId, subcategory_id: '' }];
+                                                                                            }
+                                                                                            return filtered;
+                                                                                        });
+                                                                                    } else {
+                                                                                        // Toggle on
+                                                                                        setSelectedCategories(prev => {
+                                                                                            const clean = prev.filter(sc => !(sc.category_id === catId && sc.subcategory_id === ''));
+                                                                                            return [...clean, { category_id: catId, subcategory_id: sub.id }];
+                                                                                        });
+                                                                                    }
+                                                                                }}
+                                                                                className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all flex items-center gap-2 ${isSubSelected ? 'bg-teal-500/20 border-teal-500 text-teal-300' : 'bg-black/40 border-white/10 text-gray-300 hover:border-teal-500/30'}`}
+                                                                            >
+                                                                                <i className={`fa-solid ${isSubSelected ? 'fa-square-check text-teal-400' : 'fa-square text-gray-500'}`}></i>
+                                                                                {sub.name}
+                                                                            </button>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                     </div>
 
                                                     {/* Accordion Toggle (only show if there are questions) */}
@@ -826,7 +827,7 @@ const ProjectCreateModal = ({ isOpen, onClose, onProjectCreated, initialData = n
                                                         <div className="pt-2 border-t border-white/5 flex items-center justify-center gap-4">
                                                             <button
                                                                 type="button"
-                                                                onClick={() => setExpandedCategoryQuestions(prev => ({ ...prev, [sc.category_id]: !isExpanded }))}
+                                                                onClick={() => setExpandedCategoryQuestions(prev => ({ ...prev, [catId]: !isExpanded }))}
                                                                 className="text-xs text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1.5 transition-colors"
                                                             >
                                                                 <i className={`fa-solid ${isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'}`}></i>
