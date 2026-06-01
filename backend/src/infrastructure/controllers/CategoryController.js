@@ -17,6 +17,14 @@ exports.getAllCategories = async (req, res, next) => {
             }
         }
 
+        // Фильтрация по target (site, admin, both)
+        if (req.query.target) {
+            whereClause.target = req.query.target;
+        } else if (req.apiKey) {
+            // Запросы через внешний API-ключ видят только 'site' и 'both'
+            whereClause.target = { [Op.in]: ['site', 'both'] };
+        }
+
         const categories = await Category.findAll({
             where: whereClause,
             order: [

@@ -752,6 +752,24 @@ if (require.main === module) {
                         await sequelize.query("ALTER TABLE projects ADD COLUMN categories_json TEXT NULL");
                     }
 
+                    console.log('Verifying categories schema for target column...');
+                    let hasTarget = false;
+                    try {
+                        const [cols] = await sequelize.query("PRAGMA table_info(categories)");
+                        hasTarget = cols.some(c => c.name === 'target');
+                    } catch (err) {
+                        const [cols] = await sequelize.query("SHOW COLUMNS FROM categories LIKE 'target'");
+                        hasTarget = cols.length > 0;
+                    }
+                    if (!hasTarget) {
+                        console.log('Adding target column to categories...');
+                        try {
+                            await sequelize.query("ALTER TABLE categories ADD COLUMN target VARCHAR(50) DEFAULT 'both' NOT NULL");
+                        } catch (alterErr) {
+                            await sequelize.query("ALTER TABLE categories ADD COLUMN target VARCHAR(50) DEFAULT 'both'");
+                        }
+                    }
+
                     console.log('Schema verification complete.');
                 } catch (schemaErr) {
                     console.warn('Non-critical: Schema fix failed (columns might already exist):', schemaErr.message);

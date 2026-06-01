@@ -27,6 +27,11 @@ const Category = sequelize.define('Category', {
     order_index: {
         type: DataTypes.INTEGER,
         defaultValue: 0
+    },
+    target: {
+        type: DataTypes.ENUM('site', 'admin', 'both'),
+        defaultValue: 'both',
+        allowNull: false
     }
 }, {
     tableName: 'categories',

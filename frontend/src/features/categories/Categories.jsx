@@ -62,7 +62,8 @@ const Categories = () => {
     const closeModal = () => setModalConfig(null);
 
     const getDefaultData = (type) => {
-        if (type === 'category' || type === 'subcategory') return { name: '', description: '', order_index: 0, icon: '' };
+        if (type === 'category') return { name: '', description: '', order_index: 0, icon: '', target: 'both' };
+        if (type === 'subcategory') return { name: '', description: '', order_index: 0, icon: '' };
         if (type === 'question') return { question_text: '', field_key: '', type: 'buttons', order_index: 0, unit: '', config: { min: 0, max: 100, step: 1 } };
         if (type === 'answer') return { answer_text: '', next_question_id: '', order_index: 0 };
     };
@@ -143,7 +144,24 @@ const Categories = () => {
                                         </button>
                                         <i className={`fa-solid ${cat.icon || 'fa-folder'} text-blue-400 text-xl w-6 text-center`}></i>
                                         <div>
-                                            <h3 className="text-white font-semibold">{cat.name}</h3>
+                                            <div className="flex items-center gap-2">
+                                                <h3 className="text-white font-semibold">{cat.name}</h3>
+                                                {cat.target === 'admin' && (
+                                                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/20 flex items-center gap-1">
+                                                        <i className="fa-solid fa-lock text-[8px]"></i> Interne Erfassung (Admin)
+                                                    </span>
+                                                )}
+                                                {cat.target === 'site' && (
+                                                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-300 border border-teal-500/20 flex items-center gap-1">
+                                                        <i className="fa-solid fa-globe text-[8px]"></i> Kundenportal (Website)
+                                                    </span>
+                                                )}
+                                                {cat.target === 'both' && (
+                                                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-300 border border-blue-500/20 flex items-center gap-1">
+                                                        <i className="fa-solid fa-circle-check text-[8px]"></i> Beide
+                                                    </span>
+                                                )}
+                                            </div>
                                             <p className="text-xs text-gray-400">{cat.description || 'Keine Beschreibung'}</p>
                                         </div>
                                     </div>
@@ -283,6 +301,25 @@ const Categories = () => {
                                         <label className="text-xs text-gray-400 mb-1 block">Beschreibung (opt.)</label>
                                         <input value={modalConfig.data.description || ''} onChange={e => setModalConfig({ ...modalConfig, data: { ...modalConfig.data, description: e.target.value } })} className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white" />
                                     </div>
+                                    {modalConfig.type === 'category' && (
+                                        <div>
+                                            <label className="text-xs text-gray-400 mb-1 block">Sichtbarkeit / Zielgruppe</label>
+                                            <div className="relative">
+                                                <select 
+                                                    value={modalConfig.data.target || 'both'} 
+                                                    onChange={e => setModalConfig({ ...modalConfig, data: { ...modalConfig.data, target: e.target.value } })} 
+                                                    className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-white appearance-none cursor-pointer pr-10 focus:border-blue-500/50 outline-none transition-colors"
+                                                >
+                                                    <option value="both" className="bg-[#111] text-white">Beide (Website & Admin-Panel)</option>
+                                                    <option value="site" className="bg-[#111] text-teal-300">Nur Website (Kundenportal)</option>
+                                                    <option value="admin" className="bg-[#111] text-purple-300">Nur Admin-Panel (Interne Erfassung)</option>
+                                                </select>
+                                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-400">
+                                                    <i className="fa-solid fa-chevron-down text-xs"></i>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                     <div className="flex gap-4">
                                         <div className="flex-1">
                                             <label className="text-xs text-gray-400 mb-1 block">Reihenfolge</label>
