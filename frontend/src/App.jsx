@@ -34,6 +34,7 @@ import TimeLogs from './features/timetracking/TimeLogs';
 import TimeSettings from './features/timetracking/TimeSettings';
 import BulkEmail from './features/emails/BulkEmail';
 import SubcontractorLogin from './pages/SubcontractorLogin';
+import PartnerLogin from './pages/PartnerLogin';
 
 import { useEffect } from 'react';
 import socketService from './services/socket';
@@ -95,6 +96,7 @@ function App() {
                 <Routes>
                     <Route path="/login" element={<Login />} />
                     <Route path="/subcontractor-login" element={<SubcontractorLogin />} />
+                    <Route path="/partner-login" element={<PartnerLogin />} />
                     <Route path="/shared/:token" element={<SharedFolderView />} />
 
                     <Route path="/" element={

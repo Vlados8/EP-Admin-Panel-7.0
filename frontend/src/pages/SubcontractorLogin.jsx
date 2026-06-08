@@ -133,6 +133,14 @@ const SubcontractorLogin = () => {
                             <i className="fa-solid fa-user-shield"></i>
                             Mitarbeiter Login
                         </button>
+                        <button
+                            type="button"
+                            onClick={() => navigate('/partner-login')}
+                            className="w-full bg-white/5 hover:bg-white/10 text-purple-400 font-medium py-3 px-4 rounded-xl border border-purple-500/20 hover:border-purple-500/40 transition-all text-sm flex items-center justify-center gap-2"
+                        >
+                            <i className="fa-solid fa-handshake"></i>
+                            Partner Portal
+                        </button>
                     </div>
                 </form>
             </div>

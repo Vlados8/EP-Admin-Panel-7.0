@@ -26,6 +26,18 @@ export const loginSubcontractor = createAsyncThunk(
     }
 );
 
+export const loginPartner = createAsyncThunk(
+    'auth/loginPartner',
+    async (credentials, { rejectWithValue }) => {
+        try {
+            const response = await api.post('/auth/partner/login', credentials);
+            return response.data; // should contain { token, data: { user } }
+        } catch (error) {
+            return rejectWithValue(error.response?.data?.message || 'Login fehlgeschlagen. Bitte überprüfen Sie Ihre Daten.');
+        }
+    }
+);
+
 const initialState = {
     user: JSON.parse(localStorage.getItem('user')) || null,
     token: localStorage.getItem('token') || null,
@@ -87,6 +99,23 @@ const authSlice = createSlice({
                 localStorage.setItem('user', JSON.stringify(action.payload.data.user));
             })
             .addCase(loginSubcontractor.rejected, (state, action) => {
+                state.isLoading = false;
+                state.error = action.payload;
+            })
+            .addCase(loginPartner.pending, (state) => {
+                state.isLoading = true;
+                state.error = null;
+            })
+            .addCase(loginPartner.fulfilled, (state, action) => {
+                state.isLoading = false;
+                state.isAuthenticated = true;
+                state.token = action.payload.token;
+                state.user = action.payload.data.user;
+
+                localStorage.setItem('token', action.payload.token);
+                localStorage.setItem('user', JSON.stringify(action.payload.data.user));
+            })
+            .addCase(loginPartner.rejected, (state, action) => {
                 state.isLoading = false;
                 state.error = action.payload;
             });

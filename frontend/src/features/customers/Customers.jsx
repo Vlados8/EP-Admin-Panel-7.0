@@ -21,6 +21,7 @@ const Customers = () => {
     // Custom select dropdown state hooks
     const [isTypeSelectOpen, setIsTypeSelectOpen] = useState(false);
     const [isStatusSelectOpen, setIsStatusSelectOpen] = useState(false);
+    const [isPartnerSelectOpen, setIsPartnerSelectOpen] = useState(false);
 
     const [formData, setFormData] = useState({
         name: '',
@@ -32,7 +33,9 @@ const Customers = () => {
         city: '',
         type: 'company',
         status: 'active',
-        notes: ''
+        notes: '',
+        client_partner: 'client',
+        password: ''
     });
 
     const currentUserRole = currentUser?.role?.name || currentUser?.role;
@@ -64,10 +67,13 @@ const Customers = () => {
             city: '',
             type: 'company',
             status: 'active',
-            notes: ''
+            notes: '',
+            client_partner: 'client',
+            password: ''
         });
         setIsTypeSelectOpen(false);
         setIsStatusSelectOpen(false);
+        setIsPartnerSelectOpen(false);
     };
 
     const handleOpenModal = (client = null) => {
@@ -84,7 +90,9 @@ const Customers = () => {
                 city: client.city || '',
                 type: client.type || 'company',
                 status: client.status || 'active',
-                notes: client.notes || ''
+                notes: client.notes || '',
+                client_partner: client.client_partner || 'client',
+                password: ''
             });
         } else {
             setIsEditing(false);
@@ -172,6 +180,18 @@ const Customers = () => {
         );
     };
 
+    const getPartnerBadge = (client_partner) => {
+        return client_partner === 'partner' ? (
+            <div className="flex items-center gap-1 text-fuchsia-400 bg-fuchsia-500/10 px-2 py-1 rounded-md text-xs w-max border border-fuchsia-500/20 font-bold">
+                <i className="fa-solid fa-handshake"></i> Partner
+            </div>
+        ) : (
+            <div className="flex items-center gap-1 text-gray-400 bg-gray-500/10 px-2 py-1 rounded-md text-xs w-max border border-gray-500/20">
+                <i className="fa-solid fa-user-tag"></i> Kunde
+            </div>
+        );
+    };
+
     return (
         <div className="animate-[fadeIn_0.4s_ease-out_forwards]">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
@@ -207,8 +227,9 @@ const Customers = () => {
                     displayedClients.map((client) => (
                         <div key={client.id} className="glass-card p-5 rounded-2xl border border-white/10 relative group">
                             <div className="flex justify-between items-start mb-3">
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
                                     {getTypeIcon(client.type)}
+                                    {getPartnerBadge(client.client_partner)}
                                     {getStatusBadge(client.status)}
                                 </div>
                                 {canManageCustomers && (
@@ -274,8 +295,9 @@ const Customers = () => {
                                 displayedClients.map((client) => (
                                     <tr key={client.id} className="hover:bg-white/5 transition-colors">
                                         <td className="p-4">
-                                            <div className="flex items-center gap-2 mb-1">
+                                            <div className="flex items-center gap-2 mb-1 flex-wrap">
                                                 {getTypeIcon(client.type)}
+                                                {getPartnerBadge(client.client_partner)}
                                             </div>
                                             <div className="font-semibold text-white">{client.name}</div>
                                             {(client.city || client.zip_code || client.address) && (
@@ -421,6 +443,69 @@ const Customers = () => {
                                             </>
                                         )}
                                     </div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-200 mb-1">Rolle (Kunde / Partner)</label>
+                                    <div className="relative">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsPartnerSelectOpen(!isPartnerSelectOpen)}
+                                            className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500 focus:bg-white/10 transition-all text-left flex items-center justify-between"
+                                        >
+                                            <span>
+                                                {formData.client_partner === 'partner' ? 'Partner (Portal-Zugang)' : 'Normaler Kunde'}
+                                            </span>
+                                            <i className={`fa-solid fa-chevron-down text-gray-400 text-xs transition-transform duration-200 ${isPartnerSelectOpen ? 'rotate-180' : ''}`}></i>
+                                        </button>
+                                        {isPartnerSelectOpen && (
+                                            <>
+                                                <div className="fixed inset-0 z-40" onClick={() => setIsPartnerSelectOpen(false)} />
+                                                <div className="absolute left-0 right-0 mt-1 bg-[#121212]/95 border border-white/10 rounded-lg shadow-2xl z-50 py-1 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] text-left">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setFormData({ ...formData, client_partner: 'client' });
+                                                            setIsPartnerSelectOpen(false);
+                                                        }}
+                                                        className={`w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors ${formData.client_partner === 'client' ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                    >
+                                                        Normaler Kunde
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setFormData({ ...formData, client_partner: 'partner' });
+                                                            setIsPartnerSelectOpen(false);
+                                                        }}
+                                                        className={`w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors ${formData.client_partner === 'partner' ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                    >
+                                                        Partner (Portal-Zugang)
+                                                    </button>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    {formData.client_partner === 'partner' && (
+                                        <>
+                                            <label className="block text-sm font-medium text-gray-200 mb-1">
+                                                Portal-Passwort {isEditing ? '(leer lassen für keine Änderung)' : '*'}
+                                            </label>
+                                            <input
+                                                type="password"
+                                                required={!isEditing}
+                                                value={formData.password || ''}
+                                                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                                placeholder={isEditing ? 'Unverändert' : 'Passwort vergeben'}
+                                                className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500 focus:bg-white/10 transition-all"
+                                            />
+                                        </>
+                                    )}
                                 </div>
                             </div>
 

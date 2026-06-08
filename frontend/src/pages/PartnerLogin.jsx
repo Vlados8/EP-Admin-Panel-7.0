@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { login, clearError } from '../../store/slices/authSlice';
-import { useCompany } from '../../context/CompanyContext';
-const Login = () => {
+import { loginPartner, clearError } from '../store/slices/authSlice';
+import { useCompany } from '../context/CompanyContext';
+
+const PartnerLogin = () => {
     const { companyData, getAssetUrl } = useCompany();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -17,7 +18,7 @@ const Login = () => {
         : '/images/glass_bg.png';
 
     const backgroundStyle = {
-        backgroundImage: `linear-gradient(to bottom, rgba(10, 10, 12, 0.7), rgba(3, 3, 5, 0.8)), url('${bgUrl}')`,
+        backgroundImage: `linear-gradient(to bottom, rgba(10, 10, 12, 0.8), rgba(3, 3, 5, 0.9)), url('${bgUrl}')`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundAttachment: 'fixed'
@@ -25,7 +26,7 @@ const Login = () => {
 
     useEffect(() => {
         if (isAuthenticated) {
-            navigate('/dashboard');
+            navigate('/projekte');
         }
         return () => {
             dispatch(clearError());
@@ -35,7 +36,7 @@ const Login = () => {
     const handleLogin = async (e) => {
         e.preventDefault();
         if (email && password) {
-            dispatch(login({ email, password }));
+            dispatch(loginPartner({ email, password }));
         }
     };
 
@@ -63,7 +64,10 @@ const Login = () => {
                             {companyData?.settings?.logoLowerText || companyData?.name?.split(' ').slice(1).join(' ') || 'Premium Bau'}
                         </span>
                     </h1>
-                    <p className="text-slate-400 mt-2 font-medium">Internes Bau-Management System</p>
+                    <p className="text-purple-400 mt-2 font-bold text-sm tracking-wider uppercase text-center flex items-center justify-center gap-1.5">
+                        <i className="fa-solid fa-handshake"></i>
+                        Partner Portal
+                    </p>
                 </div>
 
                 <form onSubmit={handleLogin} className="flex flex-col gap-5">
@@ -75,7 +79,7 @@ const Login = () => {
                     )}
 
                     <div className="flex flex-col gap-2">
-                        <label className="text-sm text-slate-300 font-medium px-1">E-Mail Adresse</label>
+                        <label className="text-sm text-slate-300 font-medium px-1">Partner E-Mail</label>
                         <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
                                 <i className="fa-solid fa-envelope"></i>
@@ -84,8 +88,8 @@ const Login = () => {
                                 type="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                className="glass-input w-full pl-11 pr-4 py-3 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
-                                placeholder="name@firma.de"
+                                className="glass-input w-full pl-11 pr-4 py-3 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all"
+                                placeholder="partner@firma.de"
                                 required
                             />
                         </div>
@@ -101,7 +105,7 @@ const Login = () => {
                                 type="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="glass-input w-full pl-11 pr-4 py-3 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+                                className="glass-input w-full pl-11 pr-4 py-3 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all"
                                 placeholder="••••••••"
                                 required
                             />
@@ -111,7 +115,7 @@ const Login = () => {
                     <button
                         type="submit"
                         disabled={isLoading}
-                        className="mt-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3.5 px-4 rounded-xl transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)] hover:shadow-[0_0_25px_rgba(59,130,246,0.5)] flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="mt-4 bg-purple-600 hover:bg-purple-500 text-white font-semibold py-3.5 px-4 rounded-xl transition-all shadow-[0_0_20px_rgba(147,51,234,0.3)] hover:shadow-[0_0_25px_rgba(147,51,234,0.5)] flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {isLoading ? (
                             <i className="fa-solid fa-circle-notch fa-spin"></i>
@@ -123,11 +127,15 @@ const Login = () => {
                         )}
                     </button>
 
-                    <a href="#" className="text-center text-sm text-slate-400 hover:text-blue-400 transition-colors mt-2">
-                        Passwort vergessen?
-                    </a>
-
-                    <div className="flex flex-col gap-3 mt-2 pt-4 border-t border-white/5">
+                    <div className="flex flex-col gap-3 mt-4 pt-4 border-t border-white/5">
+                        <button
+                            type="button"
+                            onClick={() => navigate('/login')}
+                            className="w-full bg-white/5 hover:bg-white/10 text-blue-400 font-medium py-3 px-4 rounded-xl border border-blue-500/20 hover:border-blue-500/40 transition-all text-sm flex items-center justify-center gap-2"
+                        >
+                            <i className="fa-solid fa-user-shield"></i>
+                            Mitarbeiter Login
+                        </button>
                         <button
                             type="button"
                             onClick={() => navigate('/subcontractor-login')}
@@ -136,14 +144,6 @@ const Login = () => {
                             <i className="fa-solid fa-truck-fast"></i>
                             Subunternehmer Portal
                         </button>
-                        <button
-                            type="button"
-                            onClick={() => navigate('/partner-login')}
-                            className="w-full bg-white/5 hover:bg-white/10 text-purple-400 font-medium py-3 px-4 rounded-xl border border-purple-500/20 hover:border-purple-500/40 transition-all text-sm flex items-center justify-center gap-2"
-                        >
-                            <i className="fa-solid fa-handshake"></i>
-                            Partner Portal
-                        </button>
                     </div>
                 </form>
             </div>
@@ -151,4 +151,4 @@ const Login = () => {
     );
 };
 
-export default Login;
+export default PartnerLogin;

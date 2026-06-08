@@ -28,9 +28,13 @@ exports.getAllProjects = async (req, res) => {
                     sequelize.literal(`EXISTS (SELECT 1 FROM project_users AS pu WHERE pu.project_id = Project.id AND pu.user_id = '${req.user.id}')`)
                 ];
             } else if (userRole === 'Subcontractor') {
-                whereClause[Op.and] = [
-                    sequelize.literal(`EXISTS (SELECT 1 FROM project_subcontractors AS ps WHERE ps.project_id = Project.id AND ps.subcontractor_id = ${req.user.id})`)
-                ];
+                if (req.user.isPartner) {
+                    whereClause.client_id = req.user.id;
+                } else {
+                    whereClause[Op.and] = [
+                        sequelize.literal(`EXISTS (SELECT 1 FROM project_subcontractors AS ps WHERE ps.project_id = Project.id AND ps.subcontractor_id = ${req.user.id})`)
+                    ];
+                }
             }
         }
 
@@ -165,11 +169,17 @@ exports.getProjectById = async (req, res) => {
             }
 
             if (userRole === 'Subcontractor') {
-                const isSubAssigned = await ProjectSubcontractor.findOne({
-                    where: { project_id: project.id, subcontractor_id: req.user.id }
-                });
-                if (!isSubAssigned) {
-                    return res.status(403).json({ error: 'Keine Berechtigung für dieses Projekt (Sie sind nicht als Subunternehmer zugewiesen)' });
+                if (req.user.isPartner) {
+                    if (project.client_id !== req.user.id) {
+                        return res.status(403).json({ error: 'Keine Berechtigung für dieses Projekt (Sie sind nicht als Partner dieses Projekts zugewiesen)' });
+                    }
+                } else {
+                    const isSubAssigned = await ProjectSubcontractor.findOne({
+                        where: { project_id: project.id, subcontractor_id: req.user.id }
+                    });
+                    if (!isSubAssigned) {
+                        return res.status(403).json({ error: 'Keine Berechtigung für dieses Projekt (Sie sind nicht als Subunternehmer zugewiesen)' });
+                    }
                 }
             }
         }

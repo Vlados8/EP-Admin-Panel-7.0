@@ -69,7 +69,7 @@ const SubcontractorDashboard = ({ user }) => {
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 animate-[fadeIn_0.5s_ease-out]">
                 <div>
                     <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight">
-                        Willkommen zurück, <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-400">{user.name || 'Partner'}</span>
+                        Willkommen zurück, <span className={`text-transparent bg-clip-text bg-gradient-to-r ${user.isPartner ? 'from-purple-400 to-indigo-400' : 'from-amber-400 to-orange-400'}`}>{user.name || 'Partner'}</span>
                     </h1>
                     <p className="text-gray-400 mt-1 flex items-center gap-2">
                         <i className="fa-regular fa-calendar"></i>
@@ -77,10 +77,17 @@ const SubcontractorDashboard = ({ user }) => {
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <div className="px-4 py-2 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div>
-                        <span className="text-xs font-bold text-amber-400 uppercase tracking-widest">Subunternehmer-Portal</span>
-                    </div>
+                    {user.isPartner ? (
+                        <div className="px-4 py-2 bg-purple-500/10 border border-purple-500/20 rounded-xl flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></div>
+                            <span className="text-xs font-bold text-purple-400 uppercase tracking-widest">Partner-Portal</span>
+                        </div>
+                    ) : (
+                        <div className="px-4 py-2 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div>
+                            <span className="text-xs font-bold text-amber-400 uppercase tracking-widest">Subunternehmer-Portal</span>
+                        </div>
+                    )}
                 </div>
             </div>
 

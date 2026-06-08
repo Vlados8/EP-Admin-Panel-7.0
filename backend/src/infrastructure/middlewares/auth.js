@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = require('../../config/jwtConfig');
-const { User, Role, Company, Subcontractor } = require('../../domain/models');
+const { User, Role, Company, Subcontractor, Client } = require('../../domain/models');
 const AppError = require('../../utils/appError');
 const { hasPermission } = require('../../utils/permissions');
 
@@ -35,6 +35,16 @@ exports.protect = async (req, res, next) => {
             if (currentUser) {
                 currentUser.role = 'Subcontractor';
             }
+        } else if (decoded.isPartner) {
+            currentUser = await Client.findByPk(decoded.id, {
+                include: [
+                    { model: Company, as: 'company' }
+                ]
+            });
+            if (currentUser) {
+                currentUser.role = 'Subcontractor';
+                currentUser.isPartner = true;
+            }
         } else {
             currentUser = await User.findByPk(decoded.id, {
                 include: [
@@ -52,7 +62,7 @@ exports.protect = async (req, res, next) => {
         req.user = currentUser;
 
         // 5. Update last_seen_at (Throttle to once per minute to avoid excessive DB writes)
-        if (!decoded.isSubcontractor) {
+        if (!decoded.isSubcontractor && !decoded.isPartner) {
             const now = new Date();
             const lastSeen = currentUser.last_seen_at ? new Date(currentUser.last_seen_at) : new Date(0);
             if (now.getTime() - lastSeen.getTime() > 60000) {
