@@ -11,13 +11,14 @@ const Header = ({ title, onMenuClick }) => {
     const navigate = useNavigate();
     const phone = usePhone();
     const { user } = useSelector((state) => state.auth);
+    const isSubcontractor = user?.role === 'Subcontractor' || user?.role?.name === 'Subcontractor';
 
     const [isOpen, setIsOpen] = useState(false);
     const [notifications, setNotifications] = useState([]);
     const dropdownRef = useRef(null);
 
     useEffect(() => {
-        if (user) {
+        if (user && !isSubcontractor) {
             fetchNotifications();
             
             // Listen to real-time notification socket events
@@ -60,7 +61,7 @@ const Header = ({ title, onMenuClick }) => {
 
     const markAllAsRead = async () => {
         try {
-            await api.patch('/notifications/mark-read');
+            await api.patch('/notifications/mark-read', {});
             setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
         } catch (err) {
             console.error('[Header] Failed to mark read:', err);
@@ -139,25 +140,27 @@ const Header = ({ title, onMenuClick }) => {
 
             <div className="flex items-center gap-6">
                 {/* Browser Call Reception Toggle */}
-                <div className="hidden lg:flex items-center gap-3 bg-white/5 border border-white/10 rounded-full py-1.5 pl-4 pr-1.5">
-                    <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Browser-Anrufe</span>
-                    <button 
-                        onClick={() => phone.setIsReceivingCalls(!phone.isReceivingCalls)}
-                        className={`w-10 h-5 rounded-full relative transition-all duration-300 ${
-                            phone.isReceivingCalls ? 'bg-blue-600 shadow-[0_0_10px_rgba(37,99,235,0.4)]' : 'bg-white/10'
-                        }`}
-                    >
-                        <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all duration-300 shadow-sm ${
-                            phone.isReceivingCalls ? 'left-6' : 'left-1'
-                        }`}></div>
-                    </button>
-                    {phone.isReceivingCalls && (
-                        <span className="flex h-2 w-2 relative">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-                        </span>
-                    )}
-                </div>
+                {!isSubcontractor && (
+                    <div className="hidden lg:flex items-center gap-3 bg-white/5 border border-white/10 rounded-full py-1.5 pl-4 pr-1.5">
+                        <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Browser-Anrufe</span>
+                        <button 
+                            onClick={() => phone.setIsReceivingCalls(!phone.isReceivingCalls)}
+                            className={`w-10 h-5 rounded-full relative transition-all duration-300 ${
+                                phone.isReceivingCalls ? 'bg-blue-600 shadow-[0_0_10px_rgba(37,99,235,0.4)]' : 'bg-white/10'
+                            }`}
+                        >
+                            <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all duration-300 shadow-sm ${
+                                phone.isReceivingCalls ? 'left-6' : 'left-1'
+                            }`}></div>
+                        </button>
+                        {phone.isReceivingCalls && (
+                            <span className="flex h-2 w-2 relative">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                            </span>
+                        )}
+                    </div>
+                )}
 
                 <div className="hidden md:relative">
                     <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
@@ -169,85 +172,87 @@ const Header = ({ title, onMenuClick }) => {
                 </div>
 
                 {/* Interactive Notifications Bell Dropdown */}
-                <div className="relative" ref={dropdownRef}>
-                    <button 
-                        onClick={() => setIsOpen(!isOpen)}
-                        className="relative p-2 text-gray-400 hover:text-white transition-colors flex items-center justify-center rounded-xl hover:bg-white/5"
-                    >
-                        <i className="fa-regular fa-bell text-xl"></i>
-                        {unreadCount > 0 && (
-                            <span className="absolute -top-0.5 -right-0.5 bg-blue-600 text-white rounded-full text-[9px] px-1.5 py-0.5 font-bold flex items-center justify-center min-w-[16px] h-4 shadow-[0_0_10px_rgba(37,99,235,0.6)] animate-pulse">
-                                {unreadCount}
-                            </span>
-                        )}
-                    </button>
+                {!isSubcontractor && (
+                    <div className="relative" ref={dropdownRef}>
+                        <button 
+                            onClick={() => setIsOpen(!isOpen)}
+                            className="relative p-2 text-gray-400 hover:text-white transition-colors flex items-center justify-center rounded-xl hover:bg-white/5"
+                        >
+                            <i className="fa-regular fa-bell text-xl"></i>
+                            {unreadCount > 0 && (
+                                <span className="absolute -top-0.5 -right-0.5 bg-blue-600 text-white rounded-full text-[9px] px-1.5 py-0.5 font-bold flex items-center justify-center min-w-[16px] h-4 shadow-[0_0_10px_rgba(37,99,235,0.6)] animate-pulse">
+                                    {unreadCount}
+                                </span>
+                            )}
+                        </button>
 
-                    {isOpen && (
-                        <div className="absolute right-0 top-14 w-80 md:w-[380px] bg-[#0c0c10]/90 border border-white/15 backdrop-blur-2xl rounded-2xl shadow-[0_25px_60px_rgba(0,0,0,0.85)] p-4 z-[9999] text-left animate-[slideUp_0.2s_ease-out] flex flex-col gap-3.5">
-                            <div className="flex items-center justify-between pb-2 border-b border-white/10">
-                                <span className="font-extrabold text-white text-xs uppercase tracking-widest">Mitteilungen</span>
-                                {unreadCount > 0 && (
-                                    <button 
-                                        onClick={markAllAsRead}
-                                        className="text-[10px] text-blue-400 hover:text-blue-300 transition-colors uppercase font-black tracking-widest hover:underline"
-                                    >
-                                        Alle lesen
-                                    </button>
-                                )}
-                            </div>
-
-                            <div className="max-h-80 overflow-y-auto pr-1 flex flex-col gap-2 custom-scrollbar">
-                                {notifications.length === 0 ? (
-                                    <div className="py-10 text-center text-gray-500 text-xs flex flex-col gap-2.5 items-center justify-center bg-white/[0.02] border border-white/5 border-dashed rounded-xl">
-                                        <i className="fa-regular fa-bell-slash text-xl text-gray-600"></i>
-                                        <span className="font-bold uppercase tracking-widest text-[10px]">Keine Mitteilungen</span>
-                                    </div>
-                                ) : (
-                                    notifications.map((n) => (
-                                        <div 
-                                            key={n.id}
-                                            onClick={() => handleNotificationClick(n)}
-                                            className={`group p-3 rounded-xl border transition-all duration-300 cursor-pointer flex gap-3 ${
-                                                !n.is_read 
-                                                    ? 'bg-blue-500/[0.04] hover:bg-blue-500/[0.08] border-blue-500/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]' 
-                                                    : 'bg-white/[0.01] hover:bg-white/[0.04] border-white/5 hover:border-white/10'
-                                            }`}
+                        {isOpen && (
+                            <div className="absolute right-0 top-14 w-80 md:w-[380px] bg-[#0c0c10]/90 border border-white/15 backdrop-blur-2xl rounded-2xl shadow-[0_25px_60px_rgba(0,0,0,0.85)] p-4 z-[9999] text-left animate-[slideUp_0.2s_ease-out] flex flex-col gap-3.5">
+                                <div className="flex items-center justify-between pb-2 border-b border-white/10">
+                                    <span className="font-extrabold text-white text-xs uppercase tracking-widest">Mitteilungen</span>
+                                    {unreadCount > 0 && (
+                                        <button 
+                                            onClick={markAllAsRead}
+                                            className="text-[10px] text-blue-400 hover:text-blue-300 transition-colors uppercase font-black tracking-widest hover:underline"
                                         >
-                                            <div className={`w-9 h-9 rounded-xl border flex items-center justify-center text-xs shrink-0 ${getTypeIcon(n.type)}`}></div>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex justify-between items-center gap-2">
-                                                    <span className={`text-[10px] font-black uppercase tracking-wider ${!n.is_read ? 'text-blue-400' : 'text-gray-500'}`}>
-                                                        {n.type === 'note' ? 'Bautagebuch' : n.type === 'task' ? 'Aufgabe' : n.type === 'email' ? 'E-Mail' : n.type === 'chat' ? 'Chat' : n.type === 'call' ? 'Anruf' : 'Info'}
-                                                    </span>
-                                                    <span className="text-[9px] text-gray-500 font-bold uppercase whitespace-nowrap shrink-0">{formatTimeAgo(n.createdAt)}</span>
-                                                </div>
-                                                <p className={`text-xs font-bold truncate mt-1 leading-snug group-hover:text-blue-400 transition-colors ${!n.is_read ? 'text-white' : 'text-gray-300'}`}>
-                                                    {n.title}
-                                                </p>
-                                                <p className={`text-[10px] leading-relaxed mt-0.5 line-clamp-2 ${!n.is_read ? 'text-gray-300' : 'text-gray-400'}`}>{n.body}</p>
-                                            </div>
-                                            {!n.is_read && (
-                                                <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)] self-center shrink-0"></div>
-                                            )}
-                                        </div>
-                                    ))
-                                )}
-                            </div>
+                                            Alle lesen
+                                        </button>
+                                    )}
+                                </div>
 
-                            <div className="pt-2 border-t border-white/10 flex">
-                                <button 
-                                    onClick={() => {
-                                        setIsOpen(false);
-                                        navigate('/settings/notifications');
-                                    }}
-                                    className="w-full text-center text-gray-400 hover:text-white text-xs transition-all duration-200 py-2.5 flex items-center justify-center gap-2 font-black uppercase tracking-widest bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 hover:border-white/20"
-                                >
-                                    <i className="fa-solid fa-gear text-[10px]"></i> Einstellungen verwalten
-                                </button>
+                                <div className="max-h-80 overflow-y-auto pr-1 flex flex-col gap-2 custom-scrollbar">
+                                    {notifications.length === 0 ? (
+                                        <div className="py-10 text-center text-gray-500 text-xs flex flex-col gap-2.5 items-center justify-center bg-white/[0.02] border border-white/5 border-dashed rounded-xl">
+                                            <i className="fa-regular fa-bell-slash text-xl text-gray-600"></i>
+                                            <span className="font-bold uppercase tracking-widest text-[10px]">Keine Mitteilungen</span>
+                                        </div>
+                                    ) : (
+                                        notifications.map((n) => (
+                                            <div 
+                                                key={n.id}
+                                                onClick={() => handleNotificationClick(n)}
+                                                className={`group p-3 rounded-xl border transition-all duration-300 cursor-pointer flex gap-3 ${
+                                                    !n.is_read 
+                                                        ? 'bg-blue-500/[0.04] hover:bg-blue-500/[0.08] border-blue-500/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]' 
+                                                        : 'bg-white/[0.01] hover:bg-white/[0.04] border-white/5 hover:border-white/10'
+                                                }`}
+                                            >
+                                                <div className={`w-9 h-9 rounded-xl border flex items-center justify-center text-xs shrink-0 ${getTypeIcon(n.type)}`}></div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex justify-between items-center gap-2">
+                                                        <span className={`text-[10px] font-black uppercase tracking-wider ${!n.is_read ? 'text-blue-400' : 'text-gray-500'}`}>
+                                                            {n.type === 'note' ? 'Bautagebuch' : n.type === 'task' ? 'Aufgabe' : n.type === 'email' ? 'E-Mail' : n.type === 'chat' ? 'Chat' : n.type === 'call' ? 'Anruf' : 'Info'}
+                                                        </span>
+                                                        <span className="text-[9px] text-gray-500 font-bold uppercase whitespace-nowrap shrink-0">{formatTimeAgo(n.createdAt)}</span>
+                                                    </div>
+                                                    <p className={`text-xs font-bold truncate mt-1 leading-snug group-hover:text-blue-400 transition-colors ${!n.is_read ? 'text-white' : 'text-gray-300'}`}>
+                                                        {n.title}
+                                                    </p>
+                                                    <p className={`text-[10px] leading-relaxed mt-0.5 line-clamp-2 ${!n.is_read ? 'text-gray-300' : 'text-gray-400'}`}>{n.body}</p>
+                                                </div>
+                                                {!n.is_read && (
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)] self-center shrink-0"></div>
+                                                )}
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+
+                                <div className="pt-2 border-t border-white/10 flex">
+                                    <button 
+                                        onClick={() => {
+                                            setIsOpen(false);
+                                            navigate('/settings/notifications');
+                                        }}
+                                        className="w-full text-center text-gray-400 hover:text-white text-xs transition-all duration-200 py-2.5 flex items-center justify-center gap-2 font-black uppercase tracking-widest bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 hover:border-white/20"
+                                    >
+                                        <i className="fa-solid fa-gear text-[10px]"></i> Einstellungen verwalten
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                    )}
-                </div>
+                        )}
+                    </div>
+                )}
 
                 <div className="h-8 w-px bg-white/10"></div>
 

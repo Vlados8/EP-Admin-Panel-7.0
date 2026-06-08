@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config(); // Trigger restart
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -255,18 +255,29 @@ if (require.main === module) {
                 console.log('Database synchronized successfully.');
 
                 // MANUALLY FIX missing columns to resolve "Unknown column 'user_id'"
-                try {
-                    console.log('Verifying companies schema...');
+                const runStep = async (name, fn) => {
+                    try {
+                        await fn();
+                    } catch (err) {
+                        console.warn(`Non-critical: Schema fix step '${name}' failed:`, err.message);
+                    }
+                };
+
+                await runStep('companies settings', async () => {
                     const [companySettingsCol] = await sequelize.query("SHOW COLUMNS FROM companies LIKE 'settings'");
                     if (companySettingsCol.length === 0) {
                         console.log('Adding missing settings column to companies...');
                         await sequelize.query("ALTER TABLE companies ADD COLUMN settings JSON NULL");
                     }
+                });
 
-                    console.log('Verifying project_folders schema...');
-                    const [projectFolderResults] = await sequelize.query("SHOW TABLES LIKE 'project_folders'");
+                let projectFolderResults = [];
+                await runStep('project_folders check', async () => {
+                    const [results] = await sequelize.query("SHOW TABLES LIKE 'project_folders'");
+                    projectFolderResults = results;
+                });
 
-                    console.log('Verifying email_accounts schema...');
+                await runStep('email_accounts user_id/is_shared/display_name', async () => {
                     const [results] = await sequelize.query("SHOW COLUMNS FROM email_accounts LIKE 'user_id'");
                     if (results.length === 0) {
                         console.log('Adding missing user_id column to email_accounts...');
@@ -284,7 +295,9 @@ if (require.main === module) {
                         console.log('Adding missing display_name column to email_accounts...');
                         await sequelize.query("ALTER TABLE email_accounts ADD COLUMN display_name VARCHAR(255) NULL AFTER is_shared");
                     }
+                });
 
+                await runStep('emails columns', async () => {
                     const [readResults] = await sequelize.query("SHOW COLUMNS FROM emails LIKE 'is_read'");
                     if (readResults.length === 0) {
                         console.log('Adding missing is_read column to emails...');
@@ -326,7 +339,9 @@ if (require.main === module) {
                         console.log('Adding missing client_id column to emails...');
                         await sequelize.query("ALTER TABLE emails ADD COLUMN client_id INT NULL AFTER recipient_email, ADD CONSTRAINT fk_emails_client FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL");
                     }
+                });
 
+                await runStep('attachments inquiry_id/email_id', async () => {
                     const [inquiryIdResults] = await sequelize.query("SHOW COLUMNS FROM attachments LIKE 'inquiry_id'");
                     if (inquiryIdResults.length === 0) {
                         console.log('Adding missing inquiry_id column to attachments...');
@@ -341,29 +356,33 @@ if (require.main === module) {
                         console.log('Making email_id nullable in attachments...');
                         await sequelize.query("ALTER TABLE attachments MODIFY COLUMN email_id CHAR(36) NULL");
                     }
+                });
 
-                    console.log('Verifying inquiries schema...');
+                await runStep('inquiries is_read', async () => {
                     const [inquiryReadResults] = await sequelize.query("SHOW COLUMNS FROM inquiries LIKE 'is_read'");
                     if (inquiryReadResults.length === 0) {
                         console.log('Adding missing is_read column to inquiries...');
                         await sequelize.query("ALTER TABLE inquiries ADD COLUMN is_read BOOLEAN DEFAULT 0 AFTER notes");
                     }
+                });
 
-                    console.log('Verifying support_tickets schema...');
+                await runStep('support_tickets is_read', async () => {
                     const [supportReadResults] = await sequelize.query("SHOW COLUMNS FROM support_tickets LIKE 'is_read'");
                     if (supportReadResults.length === 0) {
                         console.log('Adding missing is_read column to support_tickets...');
                         await sequelize.query("ALTER TABLE support_tickets ADD COLUMN is_read BOOLEAN DEFAULT 0 AFTER source_website");
                     }
+                });
 
-                    console.log('Verifying api_keys schema...');
+                await runStep('api_keys allowed_category_ids', async () => {
                     const [apiKeyCategoryResults] = await sequelize.query("SHOW COLUMNS FROM api_keys LIKE 'allowed_category_ids'");
                     if (apiKeyCategoryResults.length === 0) {
                         console.log('Adding missing allowed_category_ids column to api_keys...');
                         await sequelize.query("ALTER TABLE api_keys ADD COLUMN allowed_category_ids JSON NULL");
                     }
+                });
 
-                    console.log('Verifying attachments schema for Notes and Tasks...');
+                await runStep('attachments note_id/task_id/thumb_url/original_url', async () => {
                     const [noteIdResults] = await sequelize.query("SHOW COLUMNS FROM attachments LIKE 'note_id'");
                     if (noteIdResults.length === 0) {
                         console.log('Adding missing note_id column to attachments...');
@@ -387,12 +406,13 @@ if (require.main === module) {
                         console.log('Adding missing original_url column to attachments...');
                         await sequelize.query("ALTER TABLE attachments ADD COLUMN original_url VARCHAR(255) NULL AFTER thumb_url");
                     }
+                });
 
+                await runStep('project_folders sync/columns', async () => {
                     if (projectFolderResults.length === 0) {
                         console.log('Creating project_folders table...');
                         await ProjectFolder.sync({ alter: true });
                     } else {
-                        // Table exists, verify columns for permissions/sharing
                         console.log('Verifying project_folders columns...');
                         const [roleCols] = await sequelize.query("SHOW COLUMNS FROM project_folders LIKE 'allowed_role_ids'");
                         if (roleCols.length === 0) {
@@ -415,7 +435,12 @@ if (require.main === module) {
                             await sequelize.query("ALTER TABLE project_folders ADD COLUMN created_by_id CHAR(36) NULL");
                         }
 
-                        // Backfill share_tokens for existing folders that might have NULL
+                        const [createdSubcontractorCols] = await sequelize.query("SHOW COLUMNS FROM project_folders LIKE 'created_by_subcontractor_id'");
+                        if (createdSubcontractorCols.length === 0) {
+                            console.log('Adding created_by_subcontractor_id to project_folders...');
+                            await sequelize.query("ALTER TABLE project_folders ADD COLUMN created_by_subcontractor_id INT NULL, ADD CONSTRAINT fk_project_folders_subcontractor FOREIGN KEY (created_by_subcontractor_id) REFERENCES subcontractors(id) ON DELETE SET NULL");
+                        }
+
                         console.log('Backfilling missing share_tokens...');
                         const [folders] = await sequelize.query("SELECT id FROM project_folders WHERE share_token IS NULL");
                         for (const folder of folders) {
@@ -423,15 +448,68 @@ if (require.main === module) {
                             await sequelize.query(`UPDATE project_folders SET share_token = '${newToken}' WHERE id = '${folder.id}'`);
                         }
                     }
+                });
 
-                    console.log('Verifying project_files schema...');
+                await runStep('project_files created_by_subcontractor_id', async () => {
                     const [projectFileResults] = await sequelize.query("SHOW TABLES LIKE 'project_files'");
                     if (projectFileResults.length === 0) {
                         console.log('Creating project_files table...');
                         await ProjectFile.sync({ alter: true });
+                    } else {
+                        const [createdSubcontractorFileCols] = await sequelize.query("SHOW COLUMNS FROM project_files LIKE 'created_by_subcontractor_id'");
+                        if (createdSubcontractorFileCols.length === 0) {
+                            console.log('Adding created_by_subcontractor_id to project_files...');
+                            await sequelize.query("ALTER TABLE project_files ADD COLUMN created_by_subcontractor_id INT NULL, ADD CONSTRAINT fk_project_files_subcontractor FOREIGN KEY (created_by_subcontractor_id) REFERENCES subcontractors(id) ON DELETE SET NULL");
+                        }
                     }
+                });
 
-                    console.log('Verifying chat schema...');
+                await runStep('project_folders visible_to_subcontractors', async () => {
+                    const [projectFolderResults] = await sequelize.query("SHOW TABLES LIKE 'project_folders'");
+                    if (projectFolderResults.length > 0) {
+                        const [visibleToSubCols] = await sequelize.query("SHOW COLUMNS FROM project_folders LIKE 'visible_to_subcontractors'");
+                        if (visibleToSubCols.length === 0) {
+                            console.log('Adding visible_to_subcontractors to project_folders...');
+                            await sequelize.query("ALTER TABLE project_folders ADD COLUMN visible_to_subcontractors TINYINT(1) DEFAULT 1");
+                        }
+                    }
+                });
+
+                await runStep('projects internal_description', async () => {
+                    const [projectResults] = await sequelize.query("SHOW TABLES LIKE 'projects'");
+                    if (projectResults.length > 0) {
+                        const [cols] = await sequelize.query("SHOW COLUMNS FROM projects LIKE 'internal_description'");
+                        if (cols.length === 0) {
+                            console.log('Adding internal_description to projects...');
+                            await sequelize.query("ALTER TABLE projects ADD COLUMN internal_description TEXT NULL");
+                        }
+                    }
+                });
+
+
+                await runStep('project_stages created_by_subcontractor_id', async () => {
+                    const [projectStagesResults] = await sequelize.query("SHOW TABLES LIKE 'project_stages'");
+                    if (projectStagesResults.length > 0) {
+                        const [createdSubcontractorStageCols] = await sequelize.query("SHOW COLUMNS FROM project_stages LIKE 'created_by_subcontractor_id'");
+                        if (createdSubcontractorStageCols.length === 0) {
+                            console.log('Adding created_by_subcontractor_id to project_stages...');
+                            await sequelize.query("ALTER TABLE project_stages ADD COLUMN created_by_subcontractor_id INT NULL, ADD CONSTRAINT fk_project_stages_subcontractor FOREIGN KEY (created_by_subcontractor_id) REFERENCES subcontractors(id) ON DELETE SET NULL");
+                        }
+                    }
+                });
+
+                await runStep('tasks assigned_subcontractor_id', async () => {
+                    const [tasksTableResults] = await sequelize.query("SHOW TABLES LIKE 'tasks'");
+                    if (tasksTableResults.length > 0) {
+                        const [assignedSubcontractorTaskCols] = await sequelize.query("SHOW COLUMNS FROM tasks LIKE 'assigned_subcontractor_id'");
+                        if (assignedSubcontractorTaskCols.length === 0) {
+                            console.log('Adding assigned_subcontractor_id to tasks...');
+                            await sequelize.query("ALTER TABLE tasks ADD COLUMN assigned_subcontractor_id INT NULL, ADD CONSTRAINT fk_tasks_subcontractor FOREIGN KEY (assigned_subcontractor_id) REFERENCES subcontractors(id) ON DELETE SET NULL");
+                        }
+                    }
+                });
+
+                await runStep('chat schema updates', async () => {
                     const [conversationResults] = await sequelize.query("SHOW TABLES LIKE 'conversations'");
                     if (conversationResults.length === 0) {
                         console.log('Creating chat tables...');
@@ -456,7 +534,6 @@ if (require.main === module) {
                             console.log('Adding missing reactions column to messages...');
                             await sequelize.query("ALTER TABLE messages ADD COLUMN reactions JSON NULL AFTER reply_to_id");
                         } else {
-                            // Ensure it's not null and has a default value
                             await sequelize.query("ALTER TABLE messages MODIFY COLUMN reactions JSON NOT NULL");
                         }
 
@@ -472,16 +549,15 @@ if (require.main === module) {
                             await sequelize.query("ALTER TABLE project_files ADD COLUMN file_url TEXT NULL");
                         }
 
-                        // Ensure message type enum includes video and voice
                         try {
-                            console.log('Updating message type ENUM to include video and voice...');
                             await sequelize.query("ALTER TABLE messages MODIFY COLUMN type ENUM('text', 'image', 'video', 'file', 'voice') DEFAULT 'text'");
                         } catch (enumErr) {
-                            console.warn('ENUM update failed (likely already updated or different DB engine):', enumErr.message);
+                            console.warn('ENUM update failed:', enumErr.message);
                         }
                     }
+                });
 
-                    console.log('Verifying users schema for storage...');
+                await runStep('users storage schema', async () => {
                     const [storageLimitCols] = await sequelize.query("SHOW COLUMNS FROM users LIKE 'storage_limit_gb'");
                     if (storageLimitCols.length === 0) {
                         console.log('Adding storage_limit_gb to users...');
@@ -498,59 +574,45 @@ if (require.main === module) {
                         console.log('Adding last_seen_at to users...');
                         await sequelize.query("ALTER TABLE users ADD COLUMN last_seen_at DATETIME NULL");
                     }
+                });
 
-                    console.log('Verifying file_folders schema...');
+                await runStep('file_folders table', async () => {
                     const [fileFolderResults] = await sequelize.query("SHOW TABLES LIKE 'file_folders'");
                     if (fileFolderResults.length === 0) {
                         console.log('Creating file_folders table...');
                         const FileFolder = require('./domain/models/FileFolder');
                         await FileFolder.sync({ alter: true });
                     }
+                });
 
-                    console.log('Verifying file_favorites schema...');
+                await runStep('file_favorites table', async () => {
                     const [fileFavoriteResults] = await sequelize.query("SHOW TABLES LIKE 'file_favorites'");
                     if (fileFavoriteResults.length === 0) {
                         console.log('Creating file_favorites table...');
                         const FileFavorite = require('./domain/models/FileFavorite');
                         await FileFavorite.sync({ alter: true });
                     } else {
-                        // More robust migration for folder_id and file_id nullability
                         try {
                             const [cols] = await sequelize.query("PRAGMA table_info(file_favorites)");
                             const hasFolderId = cols.some(c => c.name === 'folder_id');
-                            const fileIdCol = cols.find(c => c.name === 'file_id');
-                            
                             if (!hasFolderId) {
-                                console.log('Adding folder_id to file_favorites...');
                                 await sequelize.query("ALTER TABLE file_favorites ADD COLUMN folder_id CHAR(36) NULL");
                             }
-
-                            // If file_id is NOT NULL in SQLite, we might need a workaround. 
-                            // But usually PRAGMA table_info will show 'notnull' property.
-                            if (fileIdCol && fileIdCol.notnull === 1) {
-                                console.log('Attempting to relax file_id in file_favorites (SQLite workaround)...');
-                                // Note: SQLite doesn't support MODIFY COLUMN. 
-                                // Since this is a small junction table, it's safer to just rely on sync() for complex changes if needed, 
-                                // but for now we try to keep it simple.
-                            }
                         } catch (err) {
-                            // Fallback to MySQL style if PRAGMA fails
-                            console.log('Running MySQL fallback for file_favorites...');
                             const [favFolderIdCols] = await sequelize.query("SHOW COLUMNS FROM file_favorites LIKE 'folder_id'");
                             if (favFolderIdCols.length === 0) {
                                 await sequelize.query("ALTER TABLE file_favorites ADD COLUMN folder_id CHAR(36) NULL");
                             }
                             
-                            // Essential: ensure file_id is NULLABLE in MySQL
                             const [favFileIdCols] = await sequelize.query("SHOW COLUMNS FROM file_favorites LIKE 'file_id'");
                             if (favFileIdCols.length > 0 && favFileIdCols[0].Null === 'NO') {
-                                console.log('Making file_id nullable in MySQL file_favorites...');
                                 await sequelize.query("ALTER TABLE file_favorites MODIFY COLUMN file_id CHAR(36) NULL");
                             }
                         }
                     }
+                });
 
-                    console.log('Verifying file_assets schema...');
+                await runStep('file_assets table', async () => {
                     const [fileAssetResults] = await sequelize.query("SHOW TABLES LIKE 'file_assets'");
                     if (fileAssetResults.length === 0) {
                         console.log('Creating file_assets table...');
@@ -559,27 +621,26 @@ if (require.main === module) {
                     } else {
                         const [folderIdCols] = await sequelize.query("SHOW COLUMNS FROM file_assets LIKE 'folder_id'");
                         if (folderIdCols.length === 0) {
-                            console.log('Adding folder_id to file_assets...');
                             await sequelize.query("ALTER TABLE file_assets ADD COLUMN folder_id CHAR(36) NULL");
                         }
                         
                         const [assetShareCols] = await sequelize.query("SHOW COLUMNS FROM file_assets LIKE 'share_token'");
                         if (assetShareCols.length === 0) {
-                            console.log('Adding sharing columns to file_assets...');
                             await sequelize.query("ALTER TABLE file_assets ADD COLUMN share_token CHAR(36) UNIQUE NULL");
                             await sequelize.query("ALTER TABLE file_assets ADD COLUMN is_external_shared TINYINT(1) DEFAULT 0");
                         }
                     }
+                });
 
-                    console.log('Checking sharing columns for file_folders...');
+                await runStep('file_folders sharing columns', async () => {
                     const [folderShareCols] = await sequelize.query("SHOW COLUMNS FROM file_folders LIKE 'share_token'");
                     if (folderShareCols.length === 0) {
-                        console.log('Adding sharing columns to file_folders...');
                         await sequelize.query("ALTER TABLE file_folders ADD COLUMN share_token CHAR(36) UNIQUE NULL");
                         await sequelize.query("ALTER TABLE file_folders ADD COLUMN is_external_shared TINYINT(1) DEFAULT 0");
                     }
+                });
 
-                    console.log('Verifying users schema for SIP/Phone...');
+                await runStep('users SIP/Phone columns', async () => {
                     const queryInterface = sequelize.getQueryInterface();
                     const userTableInfo = await queryInterface.describeTable('users');
                     
@@ -599,12 +660,12 @@ if (require.main === module) {
                         console.log('Adding column wss_url...');
                         await queryInterface.addColumn('users', 'wss_url', { type: require('sequelize').DataTypes.STRING, allowNull: true });
                     }
+                });
 
-                    console.log('Verifying call_logs table...');
+                await runStep('call_logs table', async () => {
                     const [callLogTables] = await sequelize.query("SHOW TABLES LIKE 'call_logs'");
                     if (callLogTables.length === 0) {
                         console.log('Creating call_logs table manually...');
-                        // This is a fallback, sequelize.sync usually handles this but we want to be sure
                         await sequelize.query(`
                             CREATE TABLE IF NOT EXISTS call_logs (
                                 id CHAR(36) BINARY PRIMARY KEY,
@@ -618,162 +679,150 @@ if (require.main === module) {
                             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
                         `);
                     } else {
-                        // Check if call_id exists
                         const [callLogCols] = await sequelize.query("SHOW COLUMNS FROM call_logs LIKE 'call_id'");
                         if (callLogCols.length === 0) {
-                            console.log('Adding call_id column to call_logs...');
+                            const queryInterface = sequelize.getQueryInterface();
                             await queryInterface.addColumn('call_logs', 'call_id', { type: require('sequelize').DataTypes.STRING, allowNull: true, unique: true });
                         }
                     }
+                });
 
-                    console.log('Verifying users schema for advanced telephony...');
+                await runStep('users advanced telephony', async () => {
+                    const queryInterface = sequelize.getQueryInterface();
                     const userTableTelephony = await queryInterface.describeTable('users');
                     if (!userTableTelephony.is_receiving_calls) {
-                        console.log('Adding column is_receiving_calls...');
                         await queryInterface.addColumn('users', 'is_receiving_calls', { type: require('sequelize').DataTypes.BOOLEAN, defaultValue: false });
                     }
                     if (!userTableTelephony.mobile_phone) {
-                        console.log('Adding column mobile_phone...');
                         await queryInterface.addColumn('users', 'mobile_phone', { type: require('sequelize').DataTypes.STRING, allowNull: true });
                     }
                     if (!userTableTelephony.extension_id) {
-                        console.log('Adding column extension_id...');
                         await queryInterface.addColumn('users', 'extension_id', { type: require('sequelize').DataTypes.STRING, allowNull: true });
                     }
                     if (!userTableTelephony.pin) {
-                        console.log('Adding column pin...');
                         await queryInterface.addColumn('users', 'pin', { type: require('sequelize').DataTypes.STRING, allowNull: true });
                     }
                     if (!userTableTelephony.rfid_tag) {
-                        console.log('Adding column rfid_tag...');
                         await queryInterface.addColumn('users', 'rfid_tag', { type: require('sequelize').DataTypes.STRING, allowNull: true });
                     }
                     if (!userTableTelephony.personnel_number) {
-                        console.log('Adding column personnel_number...');
                         await queryInterface.addColumn('users', 'personnel_number', { type: require('sequelize').DataTypes.STRING, allowNull: true });
                     }
+                });
 
-                    console.log('Verifying time_logs table...');
+                await runStep('time_logs table', async () => {
                     const [timeLogTables] = await sequelize.query("SHOW TABLES LIKE 'time_logs'");
                     if (timeLogTables.length === 0) {
                         console.log('Creating time_logs table...');
                         const TimeLog = require('./domain/models/TimeLog');
                         await TimeLog.sync({ alter: true });
                     }
+                });
 
-                    console.log('Verifying reonic_leads table...');
+                await runStep('reonic_leads table', async () => {
                     const [reonicLeadTables] = await sequelize.query("SHOW TABLES LIKE 'reonic_leads'");
                     if (reonicLeadTables.length === 0) {
                         console.log('Creating reonic_leads table...');
                         const ReonicLead = require('./domain/models/ReonicLead');
                         await ReonicLead.sync({ alter: true });
                     }
+                });
 
-                    console.log('Verifying notifications schema...');
+                await runStep('notifications table', async () => {
                     const [notificationTables] = await sequelize.query("SHOW TABLES LIKE 'notifications'");
                     if (notificationTables.length === 0) {
                         console.log('Creating notifications table...');
                         const Notification = require('./domain/models/Notification');
                         await Notification.sync({ alter: true });
                     }
+                });
 
-                    console.log('Verifying notification_settings schema...');
+                await runStep('notification_settings table', async () => {
                     const [notificationSettingTables] = await sequelize.query("SHOW TABLES LIKE 'notification_settings'");
                     if (notificationSettingTables.length === 0) {
                         console.log('Creating notification_settings table...');
                         const NotificationSetting = require('./domain/models/NotificationSetting');
                         await NotificationSetting.sync({ alter: true });
                     }
+                });
 
-                    console.log('Verifying users push token column...');
+                await runStep('users push token', async () => {
                     const [userPushTokenCols] = await sequelize.query("SHOW COLUMNS FROM users LIKE 'expo_push_token'");
                     if (userPushTokenCols.length === 0) {
-                        console.log('Adding expo_push_token column to users...');
                         await sequelize.query("ALTER TABLE users ADD COLUMN expo_push_token VARCHAR(255) NULL");
                     }
+                });
 
-                    console.log('Verifying notes reminder column...');
+                await runStep('notes reminder column', async () => {
                     const [noteReminderCols] = await sequelize.query("SHOW COLUMNS FROM notes LIKE 'reminder_notified'");
                     if (noteReminderCols.length === 0) {
                         console.log('Adding reminder_notified column to notes...');
                         await sequelize.query("ALTER TABLE notes ADD COLUMN reminder_notified BOOLEAN DEFAULT 0");
                     }
+                });
 
-                    console.log('Verifying tasks reminder column...');
+                await runStep('tasks reminder column', async () => {
                     const [taskReminderCols] = await sequelize.query("SHOW COLUMNS FROM tasks LIKE 'reminder_notified'");
                     if (taskReminderCols.length === 0) {
                         console.log('Adding reminder_notified column to tasks...');
                         await sequelize.query("ALTER TABLE tasks ADD COLUMN reminder_notified BOOLEAN DEFAULT 0");
                     }
+                });
 
-                    console.log('Verifying projects schema for custom client info...');
+                await runStep('projects custom client info', async () => {
                     const [projectFirstNameCols] = await sequelize.query("SHOW COLUMNS FROM projects LIKE 'client_first_name'");
                     if (projectFirstNameCols.length === 0) {
-                        console.log('Adding client_first_name column to projects...');
                         await sequelize.query("ALTER TABLE projects ADD COLUMN client_first_name VARCHAR(255) NULL");
                     }
                     const [projectLastNameCols] = await sequelize.query("SHOW COLUMNS FROM projects LIKE 'client_last_name'");
                     if (projectLastNameCols.length === 0) {
-                        console.log('Adding client_last_name column to projects...');
                         await sequelize.query("ALTER TABLE projects ADD COLUMN client_last_name VARCHAR(255) NULL");
                     }
                     const [projectPhoneCols] = await sequelize.query("SHOW COLUMNS FROM projects LIKE 'client_phone'");
                     if (projectPhoneCols.length === 0) {
-                        console.log('Adding client_phone column to projects...');
                         await sequelize.query("ALTER TABLE projects ADD COLUMN client_phone VARCHAR(255) NULL");
                     }
                     const [projectEmailCols] = await sequelize.query("SHOW COLUMNS FROM projects LIKE 'client_email'");
                     if (projectEmailCols.length === 0) {
-                        console.log('Adding client_email column to projects...');
                         await sequelize.query("ALTER TABLE projects ADD COLUMN client_email VARCHAR(255) NULL");
                     }
                     const [projectAddressCols] = await sequelize.query("SHOW COLUMNS FROM projects LIKE 'client_address'");
                     if (projectAddressCols.length === 0) {
-                        console.log('Adding client_address column to projects...');
                         await sequelize.query("ALTER TABLE projects ADD COLUMN client_address VARCHAR(255) NULL");
                     }
                     const [projectNotesCols] = await sequelize.query("SHOW COLUMNS FROM projects LIKE 'client_notes'");
                     if (projectNotesCols.length === 0) {
-                        console.log('Adding client_notes column to projects...');
                         await sequelize.query("ALTER TABLE projects ADD COLUMN client_notes TEXT NULL");
                     }
+                });
 
-                    console.log('Verifying projects schema for categories_json...');
+                await runStep('projects categories_json', async () => {
                     let hasCategoriesJson = false;
                     try {
-                        const [cols] = await sequelize.query("PRAGMA table_info(projects)");
-                        hasCategoriesJson = cols.some(c => c.name === 'categories_json');
-                    } catch (err) {
                         const [cols] = await sequelize.query("SHOW COLUMNS FROM projects LIKE 'categories_json'");
                         hasCategoriesJson = cols.length > 0;
-                    }
+                    } catch (err) {}
                     if (!hasCategoriesJson) {
-                        console.log('Adding categories_json column to projects...');
                         await sequelize.query("ALTER TABLE projects ADD COLUMN categories_json TEXT NULL");
                     }
+                });
 
-                    console.log('Verifying categories schema for target column...');
+                await runStep('categories target', async () => {
                     let hasTarget = false;
                     try {
-                        const [cols] = await sequelize.query("PRAGMA table_info(categories)");
-                        hasTarget = cols.some(c => c.name === 'target');
-                    } catch (err) {
                         const [cols] = await sequelize.query("SHOW COLUMNS FROM categories LIKE 'target'");
                         hasTarget = cols.length > 0;
-                    }
+                    } catch (err) {}
                     if (!hasTarget) {
-                        console.log('Adding target column to categories...');
                         try {
                             await sequelize.query("ALTER TABLE categories ADD COLUMN target VARCHAR(50) DEFAULT 'both' NOT NULL");
                         } catch (alterErr) {
                             await sequelize.query("ALTER TABLE categories ADD COLUMN target VARCHAR(50) DEFAULT 'both'");
                         }
                     }
+                });
 
-                    console.log('Schema verification complete.');
-                } catch (schemaErr) {
-                    console.warn('Non-critical: Schema fix failed (columns might already exist):', schemaErr.message);
-                }
+                console.log('Schema verification complete.');
 
                 console.log('Running initial seeding...');
                 await seedDatabase();

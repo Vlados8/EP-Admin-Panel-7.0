@@ -1,5 +1,6 @@
 const { Subcontractor, Company } = require('../../domain/models');
 const AppError = require('../../utils/appError');
+const bcrypt = require('bcryptjs');
 
 exports.getAllSubcontractors = async (req, res, next) => {
     try {
@@ -19,7 +20,7 @@ exports.createSubcontractor = async (req, res, next) => {
     try {
         const {
             name, trade, contact_person, email, phone,
-            address, zip_code, city, hourly_rate, status, notes, company_id
+            address, zip_code, city, hourly_rate, status, notes, company_id, password
         } = req.body;
 
         // Ensure company_id is provided, normally extracted from logged in user req.user.company_id
@@ -27,6 +28,11 @@ exports.createSubcontractor = async (req, res, next) => {
         if (!cid) {
             const company = await Company.findOne();
             if (company) cid = company.id;
+        }
+
+        let password_hash = null;
+        if (password) {
+            password_hash = await bcrypt.hash(password, 12);
         }
 
         const subcontractor = await Subcontractor.create({
@@ -41,6 +47,7 @@ exports.createSubcontractor = async (req, res, next) => {
             hourly_rate: hourly_rate === '' ? null : hourly_rate || null,
             status: status || 'active',
             notes: notes === '' ? null : notes,
+            password_hash,
             company_id: cid
         });
 
@@ -63,7 +70,7 @@ exports.updateSubcontractor = async (req, res, next) => {
 
         const {
             name, trade, contact_person, email, phone,
-            address, zip_code, city, hourly_rate, status, notes
+            address, zip_code, city, hourly_rate, status, notes, password
         } = req.body;
 
         if (name !== undefined) subcontractor.name = name;
@@ -77,6 +84,9 @@ exports.updateSubcontractor = async (req, res, next) => {
         if (hourly_rate !== undefined) subcontractor.hourly_rate = hourly_rate === '' ? null : hourly_rate;
         if (status !== undefined) subcontractor.status = status;
         if (notes !== undefined) subcontractor.notes = notes === '' ? null : notes;
+        if (password !== undefined && password !== '') {
+            subcontractor.password_hash = await bcrypt.hash(password, 12);
+        }
 
         await subcontractor.save();
 

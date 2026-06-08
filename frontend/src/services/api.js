@@ -24,8 +24,8 @@ api.interceptors.response.use((response) => {
 }, (error) => {
     const originalRequest = error.config;
     
-    // Do not intercept authentication errors on the login route itself
-    if (originalRequest.url === '/auth/login') {
+    // Do not intercept authentication errors on the login routes itself
+    if (originalRequest.url === '/auth/login' || originalRequest.url === '/auth/subcontractor/login') {
         return Promise.reject(error);
     }
 

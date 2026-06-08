@@ -20,6 +20,10 @@ const Project = sequelize.define('Project', {
         type: DataTypes.TEXT,
         allowNull: true
     },
+    internal_description: {
+        type: DataTypes.TEXT,
+        allowNull: true
+    },
     budget: {
         type: DataTypes.DECIMAL(12, 2),
         allowNull: true,

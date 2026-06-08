@@ -23,7 +23,9 @@ const ProjectDetails = () => {
     const canManageStages = usePermission('MANAGE_PROJECTS'); // PL and above can manage all stages
     const isWorker = currentUser?.role?.name === 'Worker' || currentUser?.role === 'Worker';
     const isGroupLeader = currentUser?.role?.name === 'Gruppenleiter' || currentUser?.role === 'Gruppenleiter';
-    const hideBudget = isWorker || isGroupLeader;
+    const isSubcontractor = currentUser?.role?.name === 'Subcontractor' || currentUser?.role === 'Subcontractor';
+    const hideBudget = isWorker || isGroupLeader || isSubcontractor;
+    const hasEndClient = project ? !!(project.client_first_name || project.client_last_name || project.client_phone || project.client_email) : false;
     const [activeTab, setActiveTab] = useState('info'); // 'info', 'steps', or 'files'
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isAddingTask, setIsAddingTask] = useState(false);
@@ -520,11 +522,11 @@ const ProjectDetails = () => {
     };
 
     const handleConfirmOffer = async () => {
-        if (!window.confirm('Möchten Sie dieses Angebot подтвердить и проект активировать?')) return;
+        if (!window.confirm('Möchten Sie dieses Angebot bestätigen und das Projekt aktivieren?')) return;
         try {
             const res = await api.post(`/offers/confirm/${id}`);
             if (res.data?.status === 'success') {
-                alert('Project успешно активирован!');
+                alert('Projekt erfolgreich aktiviert!');
                 // Re-fetch project
                 const updatedRes = await api.get(`/projects/${id}`);
                 if (updatedRes.data?.status === 'success') {
@@ -540,7 +542,13 @@ const ProjectDetails = () => {
     const handleEmailClick = (email, e) => {
         if (e) e.preventDefault();
         if (email) {
-            navigate(`/email-messages?to=${encodeURIComponent(email)}`);
+            navigator.clipboard.writeText(email)
+                .then(() => {
+                    alert(`E-Mail-Adresse "${email}" wurde in die Zwischenablage kopiert.`);
+                })
+                .catch(err => {
+                    console.error('Fehler beim Kopieren:', err);
+                });
         }
     };
 
@@ -612,7 +620,7 @@ const ProjectDetails = () => {
                                 </button>
                             )}
                         </div>
-                        {project.client && (
+                        {project.client && !(isSubcontractor && hasEndClient) && (
                             <p className="text-sm text-gray-400 mt-1 flex items-center gap-2">
                                 <i className="fa-solid fa-building text-gray-500"></i>
                                 {project.client.company_name || project.client.name || project.client.contact_person}
@@ -651,7 +659,7 @@ const ProjectDetails = () => {
                         </div>
                         <div>
                             <h3 className="text-xl font-bold text-white mb-1">Angebot aktiv</h3>
-                            <p className="text-gray-400 text-sm max-w-sm">Dies ist ein Entwurf. Bestätigen Sie das Angebot, um standardmäßige Projektordner zu erstellen и начать работу.</p>
+                            <p className="text-gray-400 text-sm max-w-sm">Dies ist ein Entwurf. Bestätigen Sie das Angebot, um standardmäßige Projektordner zu erstellen und mit der Arbeit zu beginnen.</p>
                         </div>
                     </div>
                     <button
@@ -778,6 +786,11 @@ const ProjectDetails = () => {
                                                             von {log.user.name}
                                                         </span>
                                                     )}
+                                                    {log.subcontractor && (
+                                                        <span className="text-[10px] text-amber-400 font-bold flex items-center gap-1.5">
+                                                            von {log.subcontractor.name} <i className="fa-solid fa-helmet-safety text-amber-400 text-[10px]"></i>
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 <h4 className="text-sm font-bold text-white mb-1">{log.title}</h4>
                                                 <p className="text-xs text-gray-300 leading-relaxed whitespace-pre-wrap">{log.content}</p>
@@ -828,6 +841,17 @@ const ProjectDetails = () => {
                                         {project.description || <span className="text-gray-400 italic">Keine Beschreibung hinterlegt.</span>}
                                     </div>
                                 </div>
+
+                                {['Admin', 'Büro', 'Projektleiter'].includes(currentUser?.role?.name || currentUser?.role) && (
+                                    <div>
+                                        <h4 className="text-xs text-blue-400 uppercase tracking-wider font-semibold mb-2 flex items-center gap-1.5">
+                                            <i className="fa-solid fa-lock"></i> Interne Beschreibung
+                                        </h4>
+                                        <div className="text-gray-200 text-sm whitespace-pre-wrap leading-relaxed bg-white/5 p-4 rounded-xl border border-blue-500/25">
+                                            {project.internal_description || <span className="text-gray-400 italic">Keine interne Beschreibung hinterlegt.</span>}
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div className="grid grid-cols-2 gap-6">
                                     <div className="col-span-2 md:col-span-1">
@@ -1165,7 +1189,7 @@ const ProjectDetails = () => {
                                 <i className="fa-solid fa-user-tie text-emerald-400"></i>
                             </h3>
                             
-                            {project.client && (
+                            {project.client && !(isSubcontractor && hasEndClient) && (
                                 <div className="flex items-start gap-4 mb-4 pb-4 border-b border-white/5">
                                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-white/10 flex items-center justify-center text-blue-400 text-sm font-bold shrink-0">
                                         <i className="fa-solid fa-building"></i>
@@ -1173,13 +1197,13 @@ const ProjectDetails = () => {
                                     <div className="min-w-0 flex-1">
                                         <div className="text-[10px] text-gray-500 uppercase font-bold mb-0.5">Kundenfirma</div>
                                         <div className="font-semibold text-white truncate">{project.client.company_name || project.client.name}</div>
-                                        {project.client.contact_person && (
+                                        {project.client.contact_person && !isSubcontractor && (
                                             <div className="text-xs text-emerald-400 font-medium mt-0.5 flex items-center gap-1.5">
                                                 <i className="fa-regular fa-user text-emerald-400/80 text-[10px]"></i>
                                                 {project.client.contact_person}
                                             </div>
                                         )}
-                                        {project.client.email ? (
+                                        {project.client.email && !isSubcontractor ? (
                                             <button 
                                                 onClick={(e) => handleEmailClick(project.client.email, e)}
                                                 className="text-xs text-blue-400 hover:underline truncate mt-0.5 block text-left"
@@ -1187,7 +1211,7 @@ const ProjectDetails = () => {
                                                 {project.client.email}
                                             </button>
                                         ) : null}
-                                        {project.client.phone && (
+                                        {project.client.phone && !isSubcontractor && (
                                             <div className="text-xs text-gray-400 truncate mt-0.5">{project.client.phone}</div>
                                         )}
                                     </div>
@@ -1219,7 +1243,7 @@ const ProjectDetails = () => {
                                             <div className="text-[10px] text-gray-500 uppercase font-bold mb-0.5">E-Mail</div>
                                             <button 
                                                 onClick={(e) => handleEmailClick(project.client_email, e)}
-                                                className="text-sm text-blue-400 hover:underline flex items-center gap-2 truncate block text-left w-full"
+                                                className="text-sm text-blue-400 hover:underline flex items-center gap-2 truncate block text-left w-full cursor-pointer"
                                             >
                                                 <i className="fa-solid fa-envelope text-gray-400 text-xs"></i>
                                                 {project.client_email}
@@ -1237,7 +1261,7 @@ const ProjectDetails = () => {
                                         </div>
                                     )}
 
-                                    {project.client_notes && (
+                                    {project.client_notes && !isSubcontractor && (
                                         <div className="pt-2 border-t border-white/5">
                                             <div className="text-[10px] text-emerald-400 uppercase font-bold mb-1">Kunden-Notizen (intern)</div>
                                             <div className="text-xs text-gray-300 bg-emerald-500/5 border border-emerald-500/10 p-2.5 rounded-lg leading-relaxed whitespace-pre-wrap">
@@ -1259,35 +1283,32 @@ const ProjectDetails = () => {
                                     <div>
                                         <div className="text-xs text-gray-500 mb-2 uppercase select-none">Projektleiter</div>
                                         {managers.map(m => (
-                                            <div key={m.id} className="flex items-center justify-between bg-white/[0.02] border border-white/5 p-3 rounded-xl hover:bg-white/[0.05] transition-all mb-2.5">
-                                                <div className="flex items-center gap-3 min-w-0">
-                                                    <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400 text-xs font-bold border border-blue-500/20 shrink-0">
+                                            <div key={m.id} className="flex items-start bg-white/[0.02] border border-white/5 p-3 rounded-xl hover:bg-white/[0.05] transition-all mb-2.5">
+                                                <div className="flex items-start gap-3 min-w-0">
+                                                    <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400 text-xs font-bold border border-blue-500/20 shrink-0 mt-0.5">
                                                         {m.user?.name?.charAt(0)}
                                                     </div>
-                                                    <div className="min-w-0">
+                                                    <div className="min-w-0 space-y-0.5">
                                                         <div className="text-sm font-semibold text-white truncate">{m.user?.name}</div>
                                                         {m.user?.specialty && <div className="text-[10px] text-gray-400 truncate">{m.user.specialty}</div>}
+                                                        {m.user?.phone && (
+                                                            <div className="text-[11px] text-gray-400 flex items-center gap-1.5 mt-1 select-text">
+                                                                <i className="fa-solid fa-phone text-blue-400 w-3 text-center"></i>
+                                                                <a href={`tel:${m.user.phone}`} className="hover:text-blue-400 transition-colors">{m.user.phone}</a>
+                                                            </div>
+                                                        )}
+                                                        {m.user?.email && (
+                                                            <div className="text-[11px] text-gray-400 flex items-center gap-1.5 select-text">
+                                                                <i className="fa-solid fa-envelope text-blue-400 w-3 text-center"></i>
+                                                                <button 
+                                                                    onClick={(e) => handleEmailClick(m.user.email, e)}
+                                                                    className="hover:text-blue-400 transition-colors text-left truncate cursor-pointer"
+                                                                >
+                                                                    {m.user.email}
+                                                                </button>
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                </div>
-                                                <div className="flex items-center gap-2 shrink-0">
-                                                    {m.user?.phone && (
-                                                        <a 
-                                                            href={`tel:${m.user.phone}`} 
-                                                            className="w-7 h-7 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 flex items-center justify-center transition-colors text-xs"
-                                                            title={`Telefon: ${m.user.phone}`}
-                                                        >
-                                                            <i className="fa-solid fa-phone"></i>
-                                                        </a>
-                                                    )}
-                                                    {m.user?.email && (
-                                                        <button 
-                                                            onClick={(e) => handleEmailClick(m.user.email, e)}
-                                                            className="w-7 h-7 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 flex items-center justify-center transition-colors text-xs"
-                                                            title={`E-Mail compose: ${m.user.email}`}
-                                                        >
-                                                            <i className="fa-solid fa-envelope"></i>
-                                                        </button>
-                                                    )}
                                                 </div>
                                             </div>
                                         ))}
@@ -1297,35 +1318,32 @@ const ProjectDetails = () => {
                                     <div>
                                         <div className="text-xs text-gray-500 mb-2 uppercase select-none">Gruppenleiter</div>
                                         {groupLeaders.map(gl => (
-                                            <div key={gl.id} className="flex items-center justify-between bg-white/[0.02] border border-white/5 p-3 rounded-xl hover:bg-white/[0.05] transition-all mb-2.5">
-                                                <div className="flex items-center gap-3 min-w-0">
-                                                    <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400 text-xs font-bold border border-emerald-500/20 shrink-0">
+                                            <div key={gl.id} className="flex items-start bg-white/[0.02] border border-white/5 p-3 rounded-xl hover:bg-white/[0.05] transition-all mb-2.5">
+                                                <div className="flex items-start gap-3 min-w-0">
+                                                    <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400 text-xs font-bold border border-emerald-500/20 shrink-0 mt-0.5">
                                                         {gl.user?.name?.charAt(0)}
                                                     </div>
-                                                    <div className="min-w-0">
+                                                    <div className="min-w-0 space-y-0.5">
                                                         <div className="text-sm font-semibold text-white truncate">{gl.user?.name}</div>
                                                         {gl.user?.specialty && <div className="text-[10px] text-gray-400 truncate">{gl.user.specialty}</div>}
+                                                        {gl.user?.phone && (
+                                                            <div className="text-[11px] text-gray-400 flex items-center gap-1.5 mt-1 select-text">
+                                                                <i className="fa-solid fa-phone text-emerald-400 w-3 text-center"></i>
+                                                                <a href={`tel:${gl.user.phone}`} className="hover:text-emerald-400 transition-colors">{gl.user.phone}</a>
+                                                            </div>
+                                                        )}
+                                                        {gl.user?.email && (
+                                                            <div className="text-[11px] text-gray-400 flex items-center gap-1.5 select-text">
+                                                                <i className="fa-solid fa-envelope text-emerald-400 w-3 text-center"></i>
+                                                                <button 
+                                                                    onClick={(e) => handleEmailClick(gl.user.email, e)}
+                                                                    className="hover:text-emerald-400 transition-colors text-left truncate cursor-pointer"
+                                                                >
+                                                                    {gl.user.email}
+                                                                </button>
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                </div>
-                                                <div className="flex items-center gap-2 shrink-0">
-                                                    {gl.user?.phone && (
-                                                        <a 
-                                                            href={`tel:${gl.user.phone}`} 
-                                                            className="w-7 h-7 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 flex items-center justify-center transition-colors text-xs"
-                                                            title={`Telefon: ${gl.user.phone}`}
-                                                        >
-                                                            <i className="fa-solid fa-phone"></i>
-                                                        </a>
-                                                    )}
-                                                    {gl.user?.email && (
-                                                        <button 
-                                                            onClick={(e) => handleEmailClick(gl.user.email, e)}
-                                                            className="w-7 h-7 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 flex items-center justify-center transition-colors text-xs"
-                                                            title={`E-Mail compose: ${gl.user.email}`}
-                                                        >
-                                                            <i className="fa-solid fa-envelope"></i>
-                                                        </button>
-                                                    )}
                                                 </div>
                                             </div>
                                         ))}
@@ -1335,35 +1353,32 @@ const ProjectDetails = () => {
                                     <div>
                                         <div className="text-xs text-gray-500 mb-2 uppercase select-none">Mitarbeiter</div>
                                         {workers.map(w => (
-                                            <div key={w.id} className="flex items-center justify-between bg-white/[0.02] border border-white/5 p-3 rounded-xl hover:bg-white/[0.05] transition-all mb-2.5">
-                                                <div className="flex items-center gap-3 min-w-0">
-                                                    <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-400 text-xs font-bold border border-amber-500/20 shrink-0">
+                                            <div key={w.id} className="flex items-start bg-white/[0.02] border border-white/5 p-3 rounded-xl hover:bg-white/[0.05] transition-all mb-2.5">
+                                                <div className="flex items-start gap-3 min-w-0">
+                                                    <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-400 text-xs font-bold border border-amber-500/20 shrink-0 mt-0.5">
                                                         {w.user?.name?.charAt(0)}
                                                     </div>
-                                                    <div className="min-w-0">
+                                                    <div className="min-w-0 space-y-0.5">
                                                         <div className="text-sm font-semibold text-white truncate">{w.user?.name}</div>
                                                         {w.user?.specialty && <div className="text-[10px] text-gray-400 truncate">{w.user.specialty}</div>}
+                                                        {w.user?.phone && (
+                                                            <div className="text-[11px] text-gray-400 flex items-center gap-1.5 mt-1 select-text">
+                                                                <i className="fa-solid fa-phone text-amber-400 w-3 text-center"></i>
+                                                                <a href={`tel:${w.user.phone}`} className="hover:text-amber-400 transition-colors">{w.user.phone}</a>
+                                                            </div>
+                                                        )}
+                                                        {w.user?.email && (
+                                                            <div className="text-[11px] text-gray-400 flex items-center gap-1.5 select-text">
+                                                                <i className="fa-solid fa-envelope text-amber-400 w-3 text-center"></i>
+                                                                <button 
+                                                                    onClick={(e) => handleEmailClick(w.user.email, e)}
+                                                                    className="hover:text-amber-400 transition-colors text-left truncate cursor-pointer"
+                                                                >
+                                                                    {w.user.email}
+                                                                </button>
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                </div>
-                                                <div className="flex items-center gap-2 shrink-0">
-                                                    {w.user?.phone && (
-                                                        <a 
-                                                            href={`tel:${w.user.phone}`} 
-                                                            className="w-7 h-7 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 flex items-center justify-center transition-colors text-xs"
-                                                            title={`Telefon: ${w.user.phone}`}
-                                                        >
-                                                            <i className="fa-solid fa-phone"></i>
-                                                        </a>
-                                                    )}
-                                                    {w.user?.email && (
-                                                        <button 
-                                                            onClick={(e) => handleEmailClick(w.user.email, e)}
-                                                            className="w-7 h-7 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 flex items-center justify-center transition-colors text-xs"
-                                                            title={`E-Mail compose: ${w.user.email}`}
-                                                        >
-                                                            <i className="fa-solid fa-envelope"></i>
-                                                        </button>
-                                                    )}
                                                 </div>
                                             </div>
                                         ))}
@@ -1408,11 +1423,11 @@ const ProjectDetails = () => {
                                                     </div>
                                                 )}
                                                 {as.subcontractor?.email && (
-                                                    <div className="flex items-center gap-2 text-[11px] text-blue-400 hover:underline cursor-pointer">
+                                                    <div className="flex items-center gap-2 text-[11px] text-blue-400 select-text cursor-default">
                                                         <i className="fa-solid fa-envelope text-gray-500 w-3"></i>
                                                         <button 
                                                             onClick={(e) => handleEmailClick(as.subcontractor.email, e)}
-                                                            className="hover:underline text-left font-medium"
+                                                            className="hover:underline text-left font-medium cursor-pointer"
                                                         >
                                                             {as.subcontractor.email}
                                                         </button>
@@ -1617,7 +1632,7 @@ const ProjectDetails = () => {
                                                 {idx + 1}
                                             </div>
                                             {/* Mobile Actions: Show always or on group hover */}
-                                            {(canManageStages || task.creator?.id === currentUser.id) && (
+                                            {(canManageStages || task.creator?.id === currentUser.id || (task.created_by_subcontractor_id === currentUser.id && isSubcontractor)) && (
                                                 <div className="flex sm:hidden items-center gap-4 ml-auto">
                                                     <button onClick={() => handleStartEditTask(task)} className="text-gray-400 hover:text-blue-400 transition-colors p-2">
                                                         <i className="fa-solid fa-pen-to-square"></i>
@@ -1759,12 +1774,17 @@ const ProjectDetails = () => {
                                                     <div className={`font-bold text-base ${task.status === 'Erledigt' ? 'text-gray-400 line-through' : 'text-white'}`}>{task.title}</div>
 
                                                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                                                        {task.creator && (
+                                                        {task.creator ? (
                                                             <div className="text-[11px] md:text-[12px] text-blue-400 font-bold flex items-center gap-1.5">
                                                                 <i className="fa-solid fa-user text-[10px]"></i>
                                                                 {task.creator.name}
                                                             </div>
-                                                        )}
+                                                        ) : task.subcontractor_creator ? (
+                                                            <div className="text-[11px] md:text-[12px] text-amber-400 font-bold flex items-center gap-1.5">
+                                                                <i className="fa-solid fa-helmet-safety text-[10px] text-amber-400"></i>
+                                                                {task.subcontractor_creator.name}
+                                                            </div>
+                                                        ) : null}
                                                         <div className="text-[11px] md:text-[12px] text-gray-400 flex items-center gap-1.5">
                                                             <i className="fa-solid fa-clock text-[10px]"></i>
                                                             {new Date(task.createdAt).toLocaleString('de-DE', {
@@ -1820,7 +1840,7 @@ const ProjectDetails = () => {
 
                                         <div className="flex items-center justify-between sm:justify-end gap-6 pt-4 sm:pt-0 border-t sm:border-t-0 border-white/5 mt-2 sm:mt-0">
                                             {/* Desktop Actions: Hidden on mobile, show on group hover */}
-                                            {(canManageStages || task.creator?.id === currentUser.id) && (
+                                            {(canManageStages || task.creator?.id === currentUser.id || (task.created_by_subcontractor_id === currentUser.id && isSubcontractor)) && (
                                                 <div className="hidden sm:flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
                                                     <button onClick={() => handleStartEditTask(task)} className="text-gray-400 hover:text-blue-400 transition-colors">
                                                         <i className="fa-solid fa-pen-to-square"></i>
@@ -2091,12 +2111,17 @@ const ProjectDetails = () => {
                                                     <span className="text-xs text-gray-400 font-medium">
                                                         {new Date(log.date).toLocaleDateString('de-DE')} {log.time || ''}
                                                     </span>
-                                                    {log.user && (
+                                                    {log.subcontractor ? (
+                                                        <span className="text-xs text-amber-400 font-bold flex items-center gap-1.5 pl-2 border-l border-white/10" title="Subunternehmer">
+                                                            <i className="fa-solid fa-helmet-safety text-[10px] text-amber-400"></i>
+                                                            {log.subcontractor.name}
+                                                        </span>
+                                                    ) : log.user ? (
                                                         <span className="text-xs text-blue-400 font-bold flex items-center gap-1.5 pl-2 border-l border-white/10">
                                                             <i className="fa-solid fa-user-pen text-[10px]"></i>
                                                             {log.user.name}
                                                         </span>
-                                                    )}
+                                                    ) : null}
                                                 </div>
                                                 
                                                 <div className="flex items-center gap-2">
@@ -2108,7 +2133,7 @@ const ProjectDetails = () => {
                                                         <i className="fa-solid fa-thumbtack text-xs"></i>
                                                     </button>
                                                     
-                                                    {(canManageStages || log.user_id === currentUser.id) && (
+                                                    {(canManageStages || log.user_id === currentUser.id || (log.subcontractor_id === currentUser.id && isSubcontractor)) && (
                                                         <button 
                                                             onClick={() => handleDeleteDiaryLog(log.id)}
                                                             className="text-gray-600 hover:text-red-400 transition-colors p-1.5 opacity-0 group-hover:opacity-100"

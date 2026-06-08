@@ -32,6 +32,10 @@ const Note = sequelize.define('Note', {
         type: DataTypes.UUID,
         allowNull: true
     },
+    subcontractor_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true
+    },
     isDone: {
         type: DataTypes.BOOLEAN,
         defaultValue: false

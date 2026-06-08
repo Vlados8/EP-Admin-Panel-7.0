@@ -147,7 +147,7 @@ const InquiryDetailsModal = ({ inquiry, isOpen, onClose, onProjectCreate, onInqu
                         <button
                             onClick={handleCreateProject}
                             className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
-                            title="Ein neues aktives Projekt aus этой Anfrage erstellen"
+                            title="Ein neues aktives Projekt aus dieser Anfrage erstellen"
                         >
                             <i className="fa-solid fa-folder-plus"></i>
                             Projekt erstellen
@@ -155,7 +155,7 @@ const InquiryDetailsModal = ({ inquiry, isOpen, onClose, onProjectCreate, onInqu
                         <button
                             onClick={handleCreateOffer}
                             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
-                            title="Ein Angebot basierend auf этой Anfrage erstellen"
+                            title="Ein Angebot basierend auf dieser Anfrage erstellen"
                         >
                             <i className="fa-solid fa-file-invoice"></i>
                             Angebot erstellen

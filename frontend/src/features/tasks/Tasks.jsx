@@ -13,6 +13,7 @@ const Tasks = () => {
     const [users, setUsers] = useState([]);
     const [projects, setProjects] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [subcontractors, setSubcontractors] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -21,6 +22,7 @@ const Tasks = () => {
         description: '',
         status: 'In Arbeit',
         assigned_to_id: '',
+        assigned_subcontractor_id: '',
         project_id: '',
         due_date: '',
         time: '' // New field
@@ -45,6 +47,7 @@ const Tasks = () => {
     const [isTimelineUserSelectOpen, setIsTimelineUserSelectOpen] = useState(false);
     const [isAssigneeSelectOpen, setIsAssigneeSelectOpen] = useState(false);
     const [isProjectSelectOpen, setIsProjectSelectOpen] = useState(false);
+    const [isSubcontractorSelectOpen, setIsSubcontractorSelectOpen] = useState(false);
     const [now, setNow] = useState(new Date());
 
     useEffect(() => {
@@ -101,6 +104,7 @@ const Tasks = () => {
             description: '',
             status: 'In Arbeit',
             assigned_to_id: assignedToId || currentUser?.id || '',
+            assigned_subcontractor_id: '',
             project_id: '',
             due_date: dateStr || '',
             time: timeStr || ''
@@ -266,14 +270,16 @@ const Tasks = () => {
                                         </span>
                                         
                                         {/* Inline Add Button on Hover */}
-                                        <button
-                                            type="button"
-                                            onClick={() => handleOpenModalForDate(dateStr)}
-                                            className="opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 rounded-md bg-blue-500/20 text-blue-400 hover:bg-blue-500 hover:text-white flex items-center justify-center text-[10px]"
-                                            title="Aufgabe an diesem Tag erstellen"
-                                        >
-                                            <i className="fa-solid fa-plus"></i>
-                                        </button>
+                                        {canCreateTasks && (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleOpenModalForDate(dateStr)}
+                                                className="opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 rounded-md bg-blue-500/20 text-blue-400 hover:bg-blue-500 hover:text-white flex items-center justify-center text-[10px]"
+                                                title="Aufgabe an diesem Tag erstellen"
+                                            >
+                                                <i className="fa-solid fa-plus"></i>
+                                            </button>
+                                        )}
                                     </div>
                                     
                                     {/* Day Tasks Pills list */}
@@ -434,14 +440,16 @@ const Tasks = () => {
                                                     </div>
                                                     
                                                     {/* Inline Add Button inside specific Slot */}
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleOpenModalForDate(dateStr, selectedTimelineUserId === 'all' ? '' : selectedTimelineUserId, `${String(hour).padStart(2, '0')}:00`)}
-                                                        className="absolute bottom-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 rounded-md bg-blue-500/20 text-blue-400 hover:bg-blue-500 hover:text-white flex items-center justify-center text-[10px]"
-                                                        title={`Aufgabe für ${dayNamesLong[day.getDay()]} um ${hourStr} erstellen`}
-                                                    >
-                                                        <i className="fa-solid fa-plus"></i>
-                                                    </button>
+                                                    {canCreateTasks && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleOpenModalForDate(dateStr, selectedTimelineUserId === 'all' ? '' : selectedTimelineUserId, `${String(hour).padStart(2, '0')}:00`)}
+                                                            className="absolute bottom-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 rounded-md bg-blue-500/20 text-blue-400 hover:bg-blue-500 hover:text-white flex items-center justify-center text-[10px]"
+                                                            title={`Aufgabe für ${dayNamesLong[day.getDay()]} um ${hourStr} erstellen`}
+                                                        >
+                                                            <i className="fa-solid fa-plus"></i>
+                                                        </button>
+                                                    )}
                                                 </div>
                                             );
                                         })}
@@ -561,14 +569,16 @@ const Tasks = () => {
                                             </div>
                                             
                                             {/* Inline Add Button inside specific Slot */}
-                                            <button
-                                                type="button"
-                                                onClick={() => handleOpenModalForDate(dateStr, selectedTimelineUserId === 'all' ? '' : selectedTimelineUserId, `${String(hour).padStart(2, '0')}:00`)}
-                                                className="absolute bottom-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 rounded-md bg-blue-500/20 text-blue-400 hover:bg-blue-500 hover:text-white flex items-center justify-center text-[10px]"
-                                                title={`Aufgabe für um ${hourStr} erstellen`}
-                                            >
-                                                <i className="fa-solid fa-plus"></i>
-                                            </button>
+                                            {canCreateTasks && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleOpenModalForDate(dateStr, selectedTimelineUserId === 'all' ? '' : selectedTimelineUserId, `${String(hour).padStart(2, '0')}:00`)}
+                                                    className="absolute bottom-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 rounded-md bg-blue-500/20 text-blue-400 hover:bg-blue-500 hover:text-white flex items-center justify-center text-[10px]"
+                                                    title={`Aufgabe für um ${hourStr} erstellen`}
+                                                >
+                                                    <i className="fa-solid fa-plus"></i>
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -588,14 +598,16 @@ const Tasks = () => {
 
     const fetchTasksUsersAndProjects = async () => {
         try {
-            const [tasksRes, usersRes, projectsRes] = await Promise.all([
+            const [tasksRes, usersRes, projectsRes, subRes] = await Promise.all([
                 api.get('/tasks'),
                 api.get('/users'),
-                api.get('/projects?status=aktiv')
+                api.get('/projects?status=aktiv'),
+                api.get('/subcontractors')
             ]);
             setTasks(tasksRes.data.data.tasks);
             setUsers(usersRes.data.data.users);
             setProjects(projectsRes.data.data.projects);
+            setSubcontractors(subRes.data.data.subcontractors || []);
         } catch (error) {
             console.error('Error fetching data:', error);
         } finally {
@@ -608,7 +620,7 @@ const Tasks = () => {
     }, []);
 
     const resetForm = () => {
-        setFormData({ title: '', description: '', status: 'In Arbeit', assigned_to_id: '', project_id: '', due_date: '', time: '' });
+        setFormData({ title: '', description: '', status: 'In Arbeit', assigned_to_id: '', assigned_subcontractor_id: '', project_id: '', due_date: '', time: '' });
         setSelectedFiles([]);
         filePreviews.forEach(p => URL.revokeObjectURL(p.url));
         setFilePreviews([]);
@@ -616,6 +628,7 @@ const Tasks = () => {
         setIsStatusDropdownOpen(false);
         setIsAssigneeSelectOpen(false);
         setIsProjectSelectOpen(false);
+        setIsSubcontractorSelectOpen(false);
     };
 
     const handleOpenModal = (task = null) => {
@@ -626,6 +639,7 @@ const Tasks = () => {
                 description: task.description,
                 status: task.status,
                 assigned_to_id: task.assigned_to_id || '',
+                assigned_subcontractor_id: task.assigned_subcontractor_id || '',
                 project_id: task.project_id || '',
                 due_date: task.due_date || '',
                 time: task.time || ''
@@ -693,7 +707,16 @@ const Tasks = () => {
             data.append('title', formData.title);
             data.append('description', formData.description);
             data.append('status', formData.status);
-            if (formData.assigned_to_id) data.append('assigned_to_id', formData.assigned_to_id);
+            if (formData.assigned_to_id) {
+                data.append('assigned_to_id', formData.assigned_to_id);
+            } else {
+                data.append('assigned_to_id', '');
+            }
+            if (formData.assigned_subcontractor_id) {
+                data.append('assigned_subcontractor_id', formData.assigned_subcontractor_id);
+            } else {
+                data.append('assigned_subcontractor_id', '');
+            }
             if (formData.project_id) data.append('project_id', formData.project_id);
             if (formData.due_date) data.append('due_date', formData.due_date);
             if (formData.time) data.append('time', formData.time);
@@ -785,6 +808,17 @@ const Tasks = () => {
     });
 
     const displayedTasks = tasks.filter(task => {
+        if (currentUserRole === 'Subcontractor') {
+            const isAssigned = task.assigned_subcontractor_id == currentUser?.id;
+            if (!isAssigned) return false;
+
+            if (searchQuery.trim() !== '') {
+                return task.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    task.project?.title?.toLowerCase().includes(searchQuery.toLowerCase());
+            }
+            return true;
+        }
+
         if (canCreateTasks && searchQuery.trim() !== '') {
             return task.assignee?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 task.title?.toLowerCase().includes(searchQuery.toLowerCase());
@@ -886,21 +920,25 @@ const Tasks = () => {
                                                 )}
                                             </div>
                                             <div className="flex gap-2">
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); handleOpenModal(task); }}
-                                                    className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/5 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
-                                                    title="Aufgabe bearbeiten"
-                                                >
-                                                    <i className="fa-solid fa-pen-to-square"></i>
-                                                </button>
-                                                <button
-                                                    onClick={(e) => toggleStatus(task, e)}
-                                                    className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors bg-white/5 text-gray-400 hover:text-white hover:bg-white/10`}
-                                                    title="Status ändern"
-                                                >
-                                                    <i className="fa-solid fa-rotate"></i>
-                                                </button>
-                                                {(currentUserRole === 'Admin' || currentUserRole === 'Büro' || task.creator?.id === currentUser?.id) && canCreateTasks && (
+                                                {currentUserRole !== 'Subcontractor' && (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handleOpenModal(task); }}
+                                                        className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/5 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
+                                                        title="Aufgabe bearbeiten"
+                                                    >
+                                                        <i className="fa-solid fa-pen-to-square"></i>
+                                                    </button>
+                                                )}
+                                                {currentUserRole !== 'Subcontractor' && (
+                                                    <button
+                                                        onClick={(e) => toggleStatus(task, e)}
+                                                        className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors bg-white/5 text-gray-400 hover:text-white hover:bg-white/10`}
+                                                        title="Status ändern"
+                                                    >
+                                                        <i className="fa-solid fa-rotate"></i>
+                                                    </button>
+                                                )}
+                                                {currentUserRole !== 'Subcontractor' && (currentUserRole === 'Admin' || currentUserRole === 'Büro' || task.creator?.id === currentUser?.id) && canCreateTasks && (
                                                     <button
                                                         onClick={(e) => deleteTask(task.id, e)}
                                                         className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
@@ -943,10 +981,17 @@ const Tasks = () => {
                                                 <i className="fa-solid fa-arrow-right-from-bracket opacity-70"></i>
                                                 <span>{task.creator?.name || 'Unbekannt'}</span>
                                             </div>
-                                            <div className="flex items-center gap-1.5 font-medium text-white bg-white/10 px-2 py-1 rounded-md" title="Zugewiesen an">
-                                                <i className="fa-solid fa-user-check opacity-70 text-blue-400"></i>
-                                                <span>{task.assignee?.name || 'Unbekannt'}</span>
-                                            </div>
+                                            {task.subcontractor ? (
+                                                 <div className="flex items-center gap-1.5 font-medium text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-1 rounded-md" title="Zugewiesen an Subunternehmer">
+                                                     <i className="fa-solid fa-helmet-safety opacity-70 text-amber-400"></i>
+                                                     <span>{task.subcontractor.name}</span>
+                                                 </div>
+                                             ) : (
+                                                 <div className="flex items-center gap-1.5 font-medium text-white bg-white/10 px-2 py-1 rounded-md" title="Zugewiesen an">
+                                                     <i className="fa-solid fa-user-check opacity-70 text-blue-400"></i>
+                                                     <span>{task.assignee?.name || 'Unbekannt'}</span>
+                                                 </div>
+                                             )}
                                         </div>
 
                                         {task.project && (
@@ -1127,14 +1172,20 @@ const Tasks = () => {
                                         </div>
                                         <div className="flex-1 min-w-0 relative">
                                             <p className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">Status (Klicken zum Ändern)</p>
-                                            <button
-                                                type="button"
-                                                onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
-                                                className="w-full text-left bg-transparent border-none text-white text-xs font-black mt-0.5 focus:outline-none cursor-pointer flex justify-between items-center pr-2"
-                                            >
-                                                <span>{editingTask.status}</span>
-                                                <i className={`fa-solid fa-chevron-down text-gray-500 text-[10px] transition-transform duration-200 ${isStatusDropdownOpen ? 'rotate-180' : ''}`}></i>
-                                            </button>
+                                            {currentUserRole === 'Subcontractor' ? (
+                                                 <div className="text-white text-xs font-black mt-0.5">
+                                                     {editingTask.status}
+                                                 </div>
+                                             ) : (
+                                                 <button
+                                                     type="button"
+                                                     onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
+                                                     className="w-full text-left bg-transparent border-none text-white text-xs font-black mt-0.5 focus:outline-none cursor-pointer flex justify-between items-center pr-2"
+                                                 >
+                                                     <span>{editingTask.status}</span>
+                                                     <i className={`fa-solid fa-chevron-down text-gray-500 text-[10px] transition-transform duration-200 ${isStatusDropdownOpen ? 'rotate-180' : ''}`}></i>
+                                                 </button>
+                                             )}
 
                                             {isStatusDropdownOpen && (
                                                 <div className="absolute left-0 right-0 top-full mt-2 z-50 glass-card bg-[#121212]/95 border border-white/10 rounded-xl p-1.5 shadow-2xl animate-[fadeIn_0.15s_ease-out]">
@@ -1171,7 +1222,14 @@ const Tasks = () => {
                                         </div>
                                         <div className="min-w-0 flex-1">
                                             <p className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">Zugewiesen an</p>
-                                            <p className="text-white text-xs font-bold truncate mt-0.5">{editingTask.assignee?.name || 'Keine Zuweisung'}</p>
+                                            {editingTask.subcontractor ? (
+                                                 <p className="text-amber-400 text-xs font-bold truncate mt-0.5 flex items-center gap-1.5">
+                                                     <i className="fa-solid fa-helmet-safety text-amber-400 text-xs"></i>
+                                                     {editingTask.subcontractor.name} (Subunternehmer)
+                                                 </p>
+                                             ) : (
+                                                 <p className="text-white text-xs font-bold truncate mt-0.5">{editingTask.assignee?.name || 'Keine Zuweisung'}</p>
+                                             )}
                                         </div>
                                     </div>
 
@@ -1295,7 +1353,7 @@ const Tasks = () => {
                                         placeholder="z.B. Material bestellen"
                                     />
                                 </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div className="space-y-1">
                                     <label className="text-xs font-medium text-gray-400 pl-1">Zuweisen an</label>
                                     <div className="relative">
@@ -1320,12 +1378,22 @@ const Tasks = () => {
                                                     onClick={() => setIsAssigneeSelectOpen(false)}
                                                 />
                                                 <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setFormData({ ...formData, assigned_to_id: '' });
+                                                            setIsAssigneeSelectOpen(false);
+                                                        }}
+                                                        className={`w-full text-left px-4 py-2 text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors truncate ${!formData.assigned_to_id ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                    >
+                                                        Bitte wählen...
+                                                    </button>
                                                     {assignableUsers.map(user => (
                                                         <button
                                                             key={user.id}
                                                             type="button"
                                                             onClick={() => {
-                                                                setFormData({ ...formData, assigned_to_id: user.id.toString() });
+                                                                setFormData({ ...formData, assigned_to_id: user.id.toString(), assigned_subcontractor_id: '' });
                                                                 setIsAssigneeSelectOpen(false);
                                                             }}
                                                             className={`w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate ${String(formData.assigned_to_id) === String(user.id) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
@@ -1340,6 +1408,58 @@ const Tasks = () => {
                                     {assignableUsers.length === 0 && (
                                         <p className="text-xs text-red-400 mt-1 pl-1">Keine verfügbaren Mitarbeiter gefunden.</p>
                                     )}
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-medium text-gray-400 pl-1">Zuweisen an Subunternehmer</label>
+                                    <div className="relative">
+                                        <i className="fa-solid fa-helmet-safety absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 z-10"></i>
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsSubcontractorSelectOpen(!isSubcontractorSelectOpen)}
+                                            className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-left text-sm text-white focus:border-blue-500 transition-colors flex items-center justify-between"
+                                        >
+                                            <span className="truncate pr-2">
+                                                {formData.assigned_subcontractor_id
+                                                    ? subcontractors.find(s => String(s.id) === String(formData.assigned_subcontractor_id))?.name || 'Subunternehmer wählen'
+                                                    : 'Keine Auswahl'}
+                                            </span>
+                                            <i className={`fa-solid fa-chevron-down text-gray-500 text-xs transition-transform duration-200 ${isSubcontractorSelectOpen ? 'rotate-180' : ''}`}></i>
+                                        </button>
+
+                                        {isSubcontractorSelectOpen && (
+                                            <>
+                                                <div 
+                                                    className="fixed inset-0 z-40" 
+                                                    onClick={() => setIsSubcontractorSelectOpen(false)}
+                                                />
+                                                <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setFormData({ ...formData, assigned_subcontractor_id: '' });
+                                                            setIsSubcontractorSelectOpen(false);
+                                                        }}
+                                                        className={`w-full text-left px-4 py-2 text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors truncate ${!formData.assigned_subcontractor_id ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                    >
+                                                        Keine Auswahl
+                                                    </button>
+                                                    {subcontractors.map(sub => (
+                                                        <button
+                                                            key={sub.id}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setFormData({ ...formData, assigned_subcontractor_id: sub.id.toString(), assigned_to_id: '' });
+                                                                setIsSubcontractorSelectOpen(false);
+                                                            }}
+                                                            className={`w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate ${String(formData.assigned_subcontractor_id) === String(sub.id) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                        >
+                                                            {sub.name} ({sub.trade})
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-xs font-medium text-gray-400 pl-1">Projekt (Optional)</label>

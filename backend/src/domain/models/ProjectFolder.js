@@ -34,6 +34,10 @@ const ProjectFolder = sequelize.define('ProjectFolder', {
         type: DataTypes.BOOLEAN,
         defaultValue: false
     },
+    visible_to_subcontractors: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: true
+    },
     share_token: {
         type: DataTypes.UUID,
         unique: true,
@@ -44,6 +48,14 @@ const ProjectFolder = sequelize.define('ProjectFolder', {
         allowNull: true,
         references: {
             model: 'users',
+            key: 'id'
+        }
+    },
+    created_by_subcontractor_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+            model: 'subcontractors',
             key: 'id'
         }
     }

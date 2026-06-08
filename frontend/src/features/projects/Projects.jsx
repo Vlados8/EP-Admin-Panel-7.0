@@ -24,6 +24,7 @@ const Projects = () => {
     const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
     
     const canManageProjects = usePermission('MANAGE_PROJECTS');
+    const isSubcontractor = currentUser?.role?.name === 'Subcontractor' || currentUser?.role === 'Subcontractor';
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -352,7 +353,7 @@ const Projects = () => {
                         {(project.client || [project.client_first_name, project.client_last_name].some(Boolean)) && (
                             <p className="text-slate-300 text-xs flex items-center gap-1.5 mb-1.5 flex-wrap">
                                 <i className="fa-solid fa-user-tie text-purple-400 text-[12px]"></i>
-                                {project.client ? (
+                                {project.client && !(isSubcontractor && [project.client_first_name, project.client_last_name].some(Boolean)) ? (
                                     <>
                                         <span className="font-medium">
                                             Kunde: <span className="text-white font-semibold">{project.client.name}</span>

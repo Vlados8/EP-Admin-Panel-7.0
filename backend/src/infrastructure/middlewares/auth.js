@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = require('../../config/jwtConfig');
-const { User, Role, Company } = require('../../domain/models');
+const { User, Role, Company, Subcontractor } = require('../../domain/models');
 const AppError = require('../../utils/appError');
 const { hasPermission } = require('../../utils/permissions');
 
@@ -24,13 +24,25 @@ exports.protect = async (req, res, next) => {
         // 2. Верификация токена
         const decoded = jwt.verify(token, JWT_SECRET);
 
-        // 3. Проверка, существует ли пользователь
-        const currentUser = await User.findByPk(decoded.id, {
-            include: [
-                { model: Role, as: 'role' },
-                { model: Company, as: 'company' }
-            ]
-        });
+        // 3. Проверка, существует ли пользователь или субподрядчик
+        let currentUser;
+        if (decoded.isSubcontractor) {
+            currentUser = await Subcontractor.findByPk(decoded.id, {
+                include: [
+                    { model: Company, as: 'company' }
+                ]
+            });
+            if (currentUser) {
+                currentUser.role = 'Subcontractor';
+            }
+        } else {
+            currentUser = await User.findByPk(decoded.id, {
+                include: [
+                    { model: Role, as: 'role' },
+                    { model: Company, as: 'company' }
+                ]
+            });
+        }
 
         if (!currentUser) {
             return next(new AppError('Пользователь, которому принадлежит этот токен, больше не существует.', 401));
@@ -40,11 +52,13 @@ exports.protect = async (req, res, next) => {
         req.user = currentUser;
 
         // 5. Update last_seen_at (Throttle to once per minute to avoid excessive DB writes)
-        const now = new Date();
-        const lastSeen = currentUser.last_seen_at ? new Date(currentUser.last_seen_at) : new Date(0);
-        if (now.getTime() - lastSeen.getTime() > 60000) {
-            currentUser.last_seen_at = now;
-            currentUser.save().catch(err => console.error('Error updating last_seen_at:', err.message));
+        if (!decoded.isSubcontractor) {
+            const now = new Date();
+            const lastSeen = currentUser.last_seen_at ? new Date(currentUser.last_seen_at) : new Date(0);
+            if (now.getTime() - lastSeen.getTime() > 60000) {
+                currentUser.last_seen_at = now;
+                currentUser.save().catch(err => console.error('Error updating last_seen_at:', err.message));
+            }
         }
 
         next();

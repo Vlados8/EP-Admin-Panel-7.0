@@ -27,7 +27,8 @@ const Subcontractors = () => {
         city: '',
         hourly_rate: '',
         status: 'active',
-        notes: ''
+        notes: '',
+        password: ''
     });
 
     const currentUserRole = currentUser?.role?.name || currentUser?.role;
@@ -60,7 +61,8 @@ const Subcontractors = () => {
             city: '',
             hourly_rate: '',
             status: 'active',
-            notes: ''
+            notes: '',
+            password: ''
         });
         setIsStatusSelectOpen(false);
     };
@@ -80,7 +82,8 @@ const Subcontractors = () => {
                 city: sub.city || '',
                 hourly_rate: sub.hourly_rate || '',
                 status: sub.status || 'active',
-                notes: sub.notes || ''
+                notes: sub.notes || '',
+                password: ''
             });
         } else {
             setIsEditing(false);
@@ -331,7 +334,7 @@ const Subcontractors = () => {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-200 mb-1">Spezialisierung</label>
+                                    <label className="block text-sm font-medium text-gray-200 mb-1">Spezialisierung *</label>
                                     <input
                                         type="text"
                                         required
@@ -342,16 +345,7 @@ const Subcontractors = () => {
                                     />
                                 </div>
 
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-200 mb-1">E-Mail</label>
-                                    <input
-                                        type="email"
-                                        value={formData.email}
-                                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                        className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500 focus:bg-white/10 transition-all"
-                                    />
-                                </div>
-                                <div>
+                                <div className="md:col-span-2">
                                     <label className="block text-sm font-medium text-gray-200 mb-1">Telefon</label>
                                     <input
                                         type="text"
@@ -359,6 +353,35 @@ const Subcontractors = () => {
                                         onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                                         className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500 focus:bg-white/10 transition-all"
                                     />
+                                </div>
+                            </div>
+
+                            {/* Portal-Zugangsdaten */}
+                            <div className="mb-4 border-t border-white/10 pt-4">
+                                <h3 className="text-xs font-semibold text-blue-400 mb-3 uppercase tracking-wider">Portal-Zugangsdaten</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-200 mb-1">Portal E-Mail</label>
+                                        <input
+                                            type="email"
+                                            value={formData.email}
+                                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                            placeholder="partner@firma.de"
+                                            className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500 focus:bg-white/10 transition-all placeholder:text-gray-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-200 mb-1">
+                                            {isEditing ? 'Passwort (leer lassen zum Beibehalten)' : 'Passwort'}
+                                        </label>
+                                        <input
+                                            type="password"
+                                            value={formData.password || ''}
+                                            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                            placeholder={isEditing ? '••••••••' : 'Passwort eingeben'}
+                                            className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500 focus:bg-white/10 transition-all placeholder:text-gray-500"
+                                        />
+                                    </div>
                                 </div>
                             </div>
 

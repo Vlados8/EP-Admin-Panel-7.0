@@ -40,8 +40,12 @@ const ProjectFileManager = ({ project }) => {
 
     // Workers can create, but not delete, folders. They can only delete their own files.
     // Management can do everything.
-    const canManagePermissions = isManagement;
-    const canManageFiles = true; // All roles can upload/create folders now
+    // Subcontractors can create folders, upload files, and delete their own files/folders.
+    const isSubcontractor = userRole === 'Subcontractor';
+    const canManagePermissions = isManagement && !isSubcontractor;
+    const canCreateFolder = true;
+    const canUploadFiles = true;
+    const canDeleteItems = true;
 
     // Gallery State
     const [isGalleryOpen, setIsGalleryOpen] = useState(false);
@@ -331,21 +335,25 @@ const ProjectFileManager = ({ project }) => {
                 </div>
 
                 <div className="flex items-center gap-3">
-                    {!isStagesDir && canManageFiles && (
+                    {!isStagesDir && (
                         <>
-                            <button
-                                onClick={handleCreateFolder}
-                                className="bg-white/5 hover:bg-white/10 border border-white/10 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2"
-                            >
-                                <i className="fa-solid fa-folder-plus text-blue-400"></i> Neuer Ordner
-                            </button>
+                            {canCreateFolder && (
+                                <button
+                                    onClick={handleCreateFolder}
+                                    className="bg-white/5 hover:bg-white/10 border border-white/10 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2"
+                                >
+                                    <i className="fa-solid fa-folder-plus text-blue-400"></i> Neuer Ordner
+                                </button>
+                            )}
 
-                            <button
-                                onClick={() => fileInputRef.current?.click()}
-                                className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl border border-blue-500/50 text-sm font-medium transition-colors shadow-[0_0_15px_rgba(37,99,235,0.3)] flex items-center gap-2"
-                            >
-                                <i className="fa-solid fa-cloud-arrow-up"></i> Hochladen
-                            </button>
+                            {canUploadFiles && (
+                                <button
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl border border-blue-500/50 text-sm font-medium transition-colors shadow-[0_0_15px_rgba(37,99,235,0.3)] flex items-center gap-2"
+                                >
+                                    <i className="fa-solid fa-cloud-arrow-up"></i> Hochladen
+                                </button>
+                            )}
                             <input
                                 type="file"
                                 multiple
@@ -390,7 +398,9 @@ const ProjectFileManager = ({ project }) => {
 
                             // RBAC check:
                             let canDelete = false;
-                            if (isManagement) {
+                            if (isSubcontractor) {
+                                canDelete = item.created_by_subcontractor_id === user.id;
+                            } else if (isManagement) {
                                 canDelete = !isSpecialFolder && !isStagesDir;
                             } else {
                                 // Worker: Can delete files if they are the owner, but NEVER folders.
@@ -400,7 +410,7 @@ const ProjectFileManager = ({ project }) => {
                             return (
                                 <div key={idx} className="group relative bg-white/5 border border-white/10 hover:border-blue-500/50 hover:bg-white/10 rounded-xl p-3 flex flex-col items-center justify-between transition-all aspect-square text-center">
                                     {/* Delete Button - Appears on Hover */}
-                                    {canDelete && canManageFiles && (
+                                    {canDelete && canDeleteItems && (
                                         <button
                                             onClick={(e) => { e.stopPropagation(); handleDelete(item); }}
                                             className="absolute top-2 right-2 w-6 h-6 rounded-md bg-red-500/80 text-white flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500 z-10 shadow-lg"
@@ -428,7 +438,11 @@ const ProjectFileManager = ({ project }) => {
                                         >
                                             <i className="fa-solid fa-folder text-5xl text-blue-400 mb-3 drop-shadow-md"></i>
                                             <span className="text-sm font-medium text-gray-200 truncate w-full px-2" title={`${displayName}${item.creator_name ? ` (Erstellt von ${item.creator_name})` : ''}`}>{displayName}</span>
-                                            {item.creator_name && <span className="text-[10px] text-gray-500 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">von {item.creator_name}</span>}
+                                            {item.creator_name && (
+                                                <span className={`text-[10px] mt-1 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1 ${item.created_by_subcontractor_id ? 'text-amber-400 font-bold' : 'text-gray-500'}`}>
+                                                    von {item.creator_name} {item.created_by_subcontractor_id && <i className="fa-solid fa-helmet-safety text-amber-400 text-[10px]"></i>}
+                                                </span>
+                                            )}
                                         </div>
                                     ) : (
                                         <div
@@ -454,7 +468,11 @@ const ProjectFileManager = ({ project }) => {
                                             <span className="text-xs font-medium text-gray-300 truncate w-full px-2" title={`${displayName}${item.creator_name ? ` (Hochgeladen von ${item.creator_name})` : ''}`}>{displayName}</span>
                                             <div className="flex flex-col items-center mt-1">
                                                 <span className="text-[10px] text-gray-500">{formatSize(item.size)}</span>
-                                                {item.creator_name && <span className="text-[10px] text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity">von {item.creator_name}</span>}
+                                                {item.creator_name && (
+                                                    <span className={`text-[10px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1 ${item.created_by_subcontractor_id ? 'text-amber-400 font-bold' : 'text-gray-500'}`}>
+                                                        von {item.creator_name} {item.created_by_subcontractor_id && <i className="fa-solid fa-helmet-safety text-amber-400 text-[10px]"></i>}
+                                                    </span>
+                                                )}
                                             </div>
 
                                             {/* Download Button */}

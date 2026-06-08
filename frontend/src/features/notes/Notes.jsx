@@ -8,6 +8,7 @@ import { getImageUrl } from '../../utils/config';
 
 const Notes = () => {
     const { user: currentUser } = useSelector(state => state.auth);
+    const isSubcontractor = currentUser?.role?.name === 'Subcontractor' || currentUser?.role === 'Subcontractor';
     const navigate = useNavigate();
     const [notes, setNotes] = useState([]);
     const [projects, setProjects] = useState([]);
@@ -234,7 +235,7 @@ const Notes = () => {
 
     const deleteNote = async (noteId, e) => {
         if (e) e.stopPropagation();
-        if (!window.confirm('Möchten Sie diese Notiz действительно löschen?')) return;
+        if (!window.confirm('Möchten Sie diese Notiz wirklich löschen?')) return;
         try {
             await api.delete(`/notes/${noteId}`);
             fetchData();
@@ -274,7 +275,7 @@ const Notes = () => {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b border-white/10 pb-4">
                 <div>
                     <h2 className="text-2xl font-bold text-white tracking-tight">Notizen</h2>
-                    <p className="text-gray-400 text-sm mt-1">Личные и проектные заметки.</p>
+                    <p className="text-gray-400 text-sm mt-1">Persönliche und Projekt-Notizen.</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
                     <div className="relative flex-grow md:flex-grow-0">
@@ -470,6 +471,8 @@ const Notes = () => {
                         ) : (
                             displayedNotes.map(note => {
                                 const isDone = note.isDone;
+                                const isNoteOwner = (isSubcontractor && note.subcontractor_id === currentUser?.id) ||
+                                                    (!isSubcontractor && note.user_id === currentUser?.id);
 
                                 return (
                                     <div key={note.id} onClick={() => handleOpenModal(note, false)} className={`glass-card p-5 rounded-2xl border-l-[6px] ${getColorClass(note.color)} ${isDone ? 'opacity-60' : ''} flex flex-col justify-between hover:-translate-y-1 transition-all duration-300 shadow-lg cursor-pointer`}>
@@ -482,29 +485,31 @@ const Notes = () => {
                                                         {note.time && ` ${note.time}`}
                                                     </span>
                                                 </div>
-                                                <div className="flex gap-2">
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); handleOpenModal(note, true); }}
-                                                        className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/5 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
-                                                        title="Notiz bearbeiten"
-                                                    >
-                                                        <i className="fa-solid fa-pen-to-square"></i>
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => toggleDone(note, e)}
-                                                        className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors bg-white/5 ${isDone ? 'text-emerald-400 bg-emerald-500/10' : 'text-gray-400 hover:text-white hover:bg-white/10'}`}
-                                                        title={isDone ? "Als nicht erledigt markieren" : "Als erledigt markieren"}
-                                                    >
-                                                        <i className="fa-solid fa-check"></i>
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => deleteNote(note.id, e)}
-                                                        className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                                                        title="Notiz löschen"
-                                                    >
-                                                        <i className="fa-solid fa-trash"></i>
-                                                    </button>
-                                                </div>
+                                                {isNoteOwner && (
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleOpenModal(note, true); }}
+                                                            className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/5 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
+                                                            title="Notiz bearbeiten"
+                                                        >
+                                                            <i className="fa-solid fa-pen-to-square"></i>
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => toggleDone(note, e)}
+                                                            className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors bg-white/5 ${isDone ? 'text-emerald-400 bg-emerald-500/10' : 'text-gray-400 hover:text-white hover:bg-white/10'}`}
+                                                            title={isDone ? "Als nicht erledigt markieren" : "Als erledigt markieren"}
+                                                        >
+                                                            <i className="fa-solid fa-check"></i>
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => deleteNote(note.id, e)}
+                                                            className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                                                            title="Notiz löschen"
+                                                        >
+                                                            <i className="fa-solid fa-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </div>
 
                                             <h4 className={`font-semibold text-lg text-white mb-2 ${isDone ? 'line-through text-gray-400' : ''}`}>{note.title}</h4>
@@ -627,7 +632,7 @@ const Notes = () => {
                                 </div>
 
                                 {/* Public construction diary toggle/switch */}
-                                {editingNote.project && (
+                                {editingNote.project && ((isSubcontractor && editingNote.subcontractor_id === currentUser?.id) || (!isSubcontractor && editingNote.user_id === currentUser?.id)) && (
                                     <div className="flex items-center justify-between bg-white/5 border border-white/10 p-4 rounded-xl">
                                         <div className="flex flex-col gap-0.5">
                                             <span className="text-sm font-semibold text-white">Im Bautagebuch anzeigen</span>
@@ -690,13 +695,15 @@ const Notes = () => {
                                     >
                                         Schließen
                                     </button>
-                                    <button 
-                                        type="button"
-                                        onClick={() => setIsModalEditMode(true)}
-                                        className="px-6 py-2.5 text-sm font-medium bg-blue-500 hover:bg-blue-600 text-white rounded-xl transition-all shadow-[0_4px_15px_rgba(59,130,246,0.3)] flex items-center gap-2"
-                                    >
-                                        <i className="fa-solid fa-pen-to-square"></i> Bearbeiten
-                                    </button>
+                                    {((isSubcontractor && editingNote.subcontractor_id === currentUser?.id) || (!isSubcontractor && editingNote.user_id === currentUser?.id)) && (
+                                        <button 
+                                            type="button"
+                                            onClick={() => setIsModalEditMode(true)}
+                                            className="px-6 py-2.5 text-sm font-medium bg-blue-500 hover:bg-blue-600 text-white rounded-xl transition-all shadow-[0_4px_15px_rgba(59,130,246,0.3)] flex items-center gap-2"
+                                        >
+                                            <i className="fa-solid fa-pen-to-square"></i> Bearbeiten
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         ) : (
@@ -843,7 +850,7 @@ const Notes = () => {
 
                                  {/* File Upload Grid Preview */}
                                  <div className="space-y-1">
-                                    <label className="text-xs font-medium text-gray-400 pl-1">Anhänge (Bilder, Videos, Dokumentе)</label>
+                                     <label className="text-xs font-medium text-gray-400 pl-1">Anhänge (Bilder, Videos, Dokumente)</label>
                                     
                                     {filePreviews.length > 0 && (
                                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3">

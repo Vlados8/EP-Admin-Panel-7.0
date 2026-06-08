@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const { Op } = require('sequelize');
-const { ProjectFolder, ProjectFile, Role, Project, User, ProjectImage, ProjectStageImage, ProjectStage } = require('../../domain/models');
+const { ProjectFolder, ProjectFile, Role, Project, User, ProjectImage, ProjectStageImage, ProjectStage, Subcontractor } = require('../../domain/models');
 const { uploadToR2, deleteFromR2, listFromR2 } = require('../utils/storage');
 
 // Base uploads directory
@@ -41,6 +41,21 @@ exports.listFiles = async (req, res) => {
         const { id } = req.params;
         const subPath = req.query.path || '';
         const userRole = req.user.role;
+        const userRoleName = userRole?.name || userRole;
+
+        if (subPath && userRoleName === 'Subcontractor') {
+            const pathParts = subPath.split('/').filter(Boolean);
+            const parentFolders = await ProjectFolder.findAll({
+                where: {
+                    project_id: id,
+                    name: pathParts
+                }
+            });
+            const hasHiddenParent = parentFolders.some(f => f.visible_to_subcontractors === false);
+            if (hasHiddenParent) {
+                return res.status(403).json({ error: 'Zugriff verweigert' });
+            }
+        }
 
         // --- 1. PREPARE UNIFIED LISTING MAP ---
         const itemMap = new Map();
@@ -129,18 +144,24 @@ exports.listFiles = async (req, res) => {
         // Assuming we want a flat list of all stage images for now, or we could group by stage.
         // Let's stick to the prompt's focus on Gallery for now, but handle 'stages' similarly if requested.
 
-        const isManagement = userRole && userRole.name ? ['Admin', 'Büro', 'Projektleiter', 'Gruppenleiter'].includes(userRole.name) : false;
+        const isManagement = ['Admin', 'Büro', 'Projektleiter', 'Gruppenleiter'].includes(userRoleName);
 
         // --- 3. STANDARD LISTING WITH R2 DISCOVERY ---
         // 1. Fetch DB Items
         console.log(`[DB] Fetching items for project ${id}, subPath: "${subPath}"`);
         const folderRecords = await ProjectFolder.findAll({
             where: { project_id: id, path: subPath },
-            include: [{ model: User, as: 'creator', attributes: ['id', 'name'] }]
+            include: [
+                { model: User, as: 'creator', attributes: ['id', 'name'] },
+                { model: Subcontractor, as: 'subcontractor_creator', attributes: ['id', 'name'] }
+            ]
         });
         const fileRecords = await ProjectFile.findAll({
             where: { project_id: id, path: subPath },
-            include: [{ model: User, as: 'creator', attributes: ['id', 'name'] }]
+            include: [
+                { model: User, as: 'creator', attributes: ['id', 'name'] },
+                { model: Subcontractor, as: 'subcontractor_creator', attributes: ['id', 'name'] }
+            ]
         });
         console.log(`[DB] Found ${folderRecords.length} folders, ${fileRecords.length} files.`);
 
@@ -226,11 +247,13 @@ exports.listFiles = async (req, res) => {
                 createdAt: r.createdAt,
                 updatedAt: r.updatedAt,
                 created_by_id: r.created_by_id,
-                creator_name: r.creator ? r.creator.name : null,
+                created_by_subcontractor_id: r.created_by_subcontractor_id,
+                creator_name: r.creator ? r.creator.name : (r.subcontractor_creator ? r.subcontractor_creator.name : null),
                 permissions: {
                     allowed_role_ids: r.allowed_role_ids,
                     is_public: r.is_public,
-                    share_token: r.share_token
+                    share_token: r.share_token,
+                    visible_to_subcontractors: r.visible_to_subcontractors
                 },
                 source: 'db'
             });
@@ -261,7 +284,8 @@ exports.listFiles = async (req, res) => {
                 updatedAt: r.updatedAt,
                 url: r.file_url,
                 created_by_id: r.created_by_id,
-                creator_name: r.creator ? r.creator.name : null,
+                created_by_subcontractor_id: r.created_by_subcontractor_id,
+                creator_name: r.creator ? r.creator.name : (r.subcontractor_creator ? r.subcontractor_creator.name : null),
                 source: 'db'
             });
         });
@@ -276,6 +300,15 @@ exports.listFiles = async (req, res) => {
             if (item.isDirectory) {
                 // Check folder-specific metadata from DB
                 if (item.permissions && item.permissions.is_public) return true;
+
+                // Subcontractor check
+                if (userRoleName === 'Subcontractor') {
+                    if (item.permissions && item.permissions.visible_to_subcontractors === false) {
+                        return false;
+                    }
+                    return true;
+                }
+
                 if (!item.permissions || !item.permissions.allowed_role_ids) return true;
 
                 const allowedRoles = Array.isArray(item.permissions.allowed_role_ids)
@@ -284,7 +317,8 @@ exports.listFiles = async (req, res) => {
                         ? JSON.parse(item.permissions.allowed_role_ids)
                         : []);
 
-                return userRole && allowedRoles.includes(userRole.id);
+                const currentRoleId = userRole && typeof userRole === 'object' ? userRole.id : null;
+                return currentRoleId && allowedRoles.includes(currentRoleId);
             }
             // For general files, we list them if they are in the folder
             return true;
@@ -329,12 +363,21 @@ exports.createFolder = async (req, res) => {
         }
 
         // Save metadata to DB
+        const userRole = req.user.role;
+        const userRoleName = userRole?.name || userRole;
+        const isSubcontractor = userRoleName === 'Subcontractor';
+
+        // Subcontractor defaults to true, anyone from user table defaults to false
+        const defaultVisible = isSubcontractor ? true : false;
+
         await ProjectFolder.create({
             project_id: id,
             name: name,
             path: folderPath || '',
             allowed_role_ids: allowed_role_ids || null,
-            created_by_id: req.user.id
+            visible_to_subcontractors: req.body.visible_to_subcontractors !== undefined ? req.body.visible_to_subcontractors : defaultVisible,
+            created_by_id: isSubcontractor ? null : req.user.id,
+            created_by_subcontractor_id: isSubcontractor ? req.user.id : null
         });
 
         res.status(201).json({
@@ -398,6 +441,7 @@ exports.uploadFiles = async (req, res) => {
                     const r2Key = `projects/${id}/${uploadPath ? uploadPath + '/' : ''}${storageName}`;
                     fileUrl = `${process.env.R2_PUBLIC_URL}/${r2Key}`;
 
+                    const isSubcontractor = req.user.role === 'Subcontractor' || req.user.role?.name === 'Subcontractor';
                     fileRecord = await ProjectFile.create({
                         project_id: id,
                         folder_id: folderId,
@@ -406,7 +450,8 @@ exports.uploadFiles = async (req, res) => {
                         size: file.size,
                         mime_type: file.mimetype,
                         file_url: fileUrl,
-                        created_by_id: req.user.id
+                        created_by_id: isSubcontractor ? null : req.user.id,
+                        created_by_subcontractor_id: isSubcontractor ? req.user.id : null
                     });
                 } catch (err) {
                     if (err.name === 'SequelizeUniqueConstraintError') {
@@ -485,23 +530,28 @@ exports.deleteItem = async (req, res) => {
     try {
         const { id } = req.params;
         const itemPath = req.query.path;
-        const userRole = req.user.role;
+ 
+        const userRoleName = req.user.role?.name || req.user.role;
         const userId = req.user.id;
-        const isManagement = ['Admin', 'Büro', 'Projektleiter', 'Gruppenleiter'].includes(userRole.name);
-
+        const isManagement = ['Admin', 'Büro', 'Projektleiter', 'Gruppenleiter'].includes(userRoleName);
+ 
         if (!itemPath) return res.status(400).json({ error: 'Pfad ist erforderlich' });
-
+ 
         const name = path.basename(itemPath);
         const parentRelativePath = path.dirname(itemPath) === '.' ? '' : path.dirname(itemPath);
-
+ 
         // 1. Check if it's a known folder in DB
         const folderRecord = await ProjectFolder.findOne({
             where: { project_id: id, path: parentRelativePath, name: name }
         });
-
+ 
         if (folderRecord) {
             // FOLDER DELETION
-            if (!isManagement) {
+            if (userRoleName === 'Subcontractor') {
+                if (folderRecord.created_by_subcontractor_id !== userId) {
+                    return res.status(403).json({ error: 'Zugriff verweigert: Sie können nur Ihre eigenen Ordner löschen' });
+                }
+            } else if (!isManagement) {
                 return res.status(403).json({ error: 'Zugriff verweigert: Nur Management kann Ordner löschen' });
             }
 
@@ -541,11 +591,18 @@ exports.deleteItem = async (req, res) => {
                 }
             });
 
-            if (!fileRecord && !isManagement) {
+            if (!fileRecord && !isManagement && userRoleName !== 'Subcontractor') {
                 return res.status(404).json({ error: 'Datei nicht gefunden oder keine Berechtigung' });
             }
-
-            if (isManagement || (fileRecord && fileRecord.created_by_id === userId)) {
+ 
+            let canDeleteFile = false;
+            if (userRoleName === 'Subcontractor') {
+                canDeleteFile = fileRecord && fileRecord.created_by_subcontractor_id === userId;
+            } else {
+                canDeleteFile = isManagement || (fileRecord && (fileRecord.created_by_id === userId || fileRecord.created_by_subcontractor_id === userId));
+            }
+ 
+            if (canDeleteFile) {
                 if (fileRecord) {
                     if (fileRecord.file_url && fileRecord.file_url.startsWith('http')) {
                         try {
@@ -645,24 +702,26 @@ exports.downloadFile = async (req, res) => {
 exports.updatePermissions = async (req, res) => {
     try {
         const { id } = req.params;
-        const { path: folderPath, name, allowed_role_ids } = req.body;
+        const { path: folderPath, name, allowed_role_ids, visible_to_subcontractors } = req.body;
         const userRole = req.user.role;
+        const userRoleName = userRole?.name || userRole;
 
         if (!name) return res.status(400).json({ error: 'Folder name is required' });
 
         // Restriction: Only Admin, Büro, Projektleiter, and Gruppenleiter can change permissions
-        const allowedToManage = ['Admin', 'Büro', 'Projektleiter', 'Gruppenleiter'].includes(userRole.name);
+        const allowedToManage = ['Admin', 'Büro', 'Projektleiter', 'Gruppenleiter'].includes(userRoleName);
         if (!allowedToManage) {
             return res.status(403).json({ error: 'Access denied: Insufficient permissions' });
         }
 
         const [folder, created] = await ProjectFolder.findOrCreate({
             where: { project_id: id, path: folderPath || '', name: name },
-            defaults: { allowed_role_ids, created_by_id: req.user.id }
+            defaults: { allowed_role_ids, visible_to_subcontractors: visible_to_subcontractors !== undefined ? visible_to_subcontractors : true, created_by_id: req.user.id }
         });
 
         if (!created) {
-            folder.allowed_role_ids = allowed_role_ids;
+            if (allowed_role_ids !== undefined) folder.allowed_role_ids = allowed_role_ids;
+            if (visible_to_subcontractors !== undefined) folder.visible_to_subcontractors = visible_to_subcontractors;
             await folder.save();
         }
 

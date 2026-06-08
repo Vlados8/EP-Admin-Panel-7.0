@@ -33,6 +33,7 @@ import TimeTerminal from './features/timetracking/TimeTerminal';
 import TimeLogs from './features/timetracking/TimeLogs';
 import TimeSettings from './features/timetracking/TimeSettings';
 import BulkEmail from './features/emails/BulkEmail';
+import SubcontractorLogin from './pages/SubcontractorLogin';
 
 import { useEffect } from 'react';
 import socketService from './services/socket';
@@ -79,6 +80,13 @@ import AdminCallHistoryPage from './features/communication/AdminCallHistoryPage'
 import PhoneSettingsPage from './features/communication/PhoneSettingsPage';
 import TelephonyInstructionsPage from './features/communication/TelephonyInstructionsPage';
 
+const RootRedirect = () => {
+    const { isAuthenticated } = useSelector((state) => state.auth);
+    if (!isAuthenticated) return <Navigate to="/login" replace />;
+    
+    return <Navigate to="/dashboard" replace />;
+};
+
 function App() {
     return (
         <CompanyProvider>
@@ -86,6 +94,7 @@ function App() {
                 <BrowserRouter>
                 <Routes>
                     <Route path="/login" element={<Login />} />
+                    <Route path="/subcontractor-login" element={<SubcontractorLogin />} />
                     <Route path="/shared/:token" element={<SharedFolderView />} />
 
                     <Route path="/" element={
@@ -93,7 +102,7 @@ function App() {
                             <MainLayout />
                         </RequireAuth>
                     }>
-                    <Route index element={<Navigate to="/dashboard" replace />} />
+                    <Route index element={<RootRedirect />} />
                     <Route path="dashboard" element={<Dashboard />} />
                     <Route path="notizen" element={<Notes />} />
                     <Route path="aufgaben" element={<Tasks />} />

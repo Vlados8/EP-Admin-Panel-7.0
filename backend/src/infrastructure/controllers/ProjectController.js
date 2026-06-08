@@ -27,6 +27,10 @@ exports.getAllProjects = async (req, res) => {
                 whereClause[Op.and] = [
                     sequelize.literal(`EXISTS (SELECT 1 FROM project_users AS pu WHERE pu.project_id = Project.id AND pu.user_id = '${req.user.id}')`)
                 ];
+            } else if (userRole === 'Subcontractor') {
+                whereClause[Op.and] = [
+                    sequelize.literal(`EXISTS (SELECT 1 FROM project_subcontractors AS ps WHERE ps.project_id = Project.id AND ps.subcontractor_id = ${req.user.id})`)
+                ];
             }
         }
 
@@ -36,6 +40,8 @@ exports.getAllProjects = async (req, res) => {
         } else if (req.query.excludeStatus) {
             whereClause.status = { [Op.ne]: req.query.excludeStatus };
         }
+
+        const canSeeInternalDesc = ['Admin', 'Büro', 'Projektleiter'].includes(userRole);
 
         const projects = await Project.findAll({
             where: whereClause,
@@ -57,6 +63,13 @@ exports.getAllProjects = async (req, res) => {
             ],
             order: [['createdAt', 'DESC']]
         });
+
+        if (!canSeeInternalDesc) {
+            projects.forEach(p => {
+                p.setDataValue('internal_description', undefined);
+            });
+        }
+
         res.status(200).json({
             status: 'success',
             results: projects.length,
@@ -150,6 +163,20 @@ exports.getProjectById = async (req, res) => {
                     return res.status(403).json({ error: 'Dieses Projekt ist bereits einem anderen Projektleiter zugeordnet' });
                 }
             }
+
+            if (userRole === 'Subcontractor') {
+                const isSubAssigned = await ProjectSubcontractor.findOne({
+                    where: { project_id: project.id, subcontractor_id: req.user.id }
+                });
+                if (!isSubAssigned) {
+                    return res.status(403).json({ error: 'Keine Berechtigung für dieses Projekt (Sie sind nicht als Subunternehmer zugewiesen)' });
+                }
+            }
+        }
+
+        const canSeeInternalDesc = ['Admin', 'Büro', 'Projektleiter'].includes(userRole);
+        if (!canSeeInternalDesc && project) {
+            project.setDataValue('internal_description', undefined);
         }
 
         res.status(200).json({
@@ -175,8 +202,11 @@ exports.createProject = async (req, res) => {
             title, description, address, status, progress, start_date, end_date, budget,
             client_id, category_id, subcategory_id, inquiry_id,
             client_first_name, client_last_name, client_phone, client_email, client_address, client_notes,
-            categories_json
+            categories_json, internal_description
         } = req.body;
+
+        const userRole = req.user.role?.name || req.user.role;
+        const canManageInternalDesc = ['Admin', 'Büro', 'Projektleiter'].includes(userRole);
 
         // Fetch all project numbers to find the true max
         const allProjects = await Project.findAll({
@@ -215,6 +245,7 @@ exports.createProject = async (req, res) => {
             project_number,
             title,
             description,
+            internal_description: canManageInternalDesc ? internal_description : null,
             address,
             status: status || 'Aktiv',
             progress: progress || 0,
@@ -399,6 +430,12 @@ exports.updateProject = async (req, res) => {
 
         // Extract assignments and answers from body to prevent Sequelize from trying to update them as basic attributes
         const { assigned_users, assigned_subcontractors, answers, ...basicInfo } = req.body;
+
+        const userRole = req.user.role?.name || req.user.role;
+        const canManageInternalDesc = ['Admin', 'Büro', 'Projektleiter'].includes(userRole);
+        if (!canManageInternalDesc) {
+            delete basicInfo.internal_description;
+        }
 
         const parseId = (val) => (val && val !== 'null' && val !== 'undefined' && val !== '') ? val : null;
         const parseDate = (val) => (val && val !== 'null' && val !== 'undefined' && val !== '') ? val : null;

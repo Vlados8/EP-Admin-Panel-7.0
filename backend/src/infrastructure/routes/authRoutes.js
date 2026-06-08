@@ -6,6 +6,7 @@ const auth = require('../middlewares/auth');
 const router = express.Router();
 
 router.post('/login', authController.login);
+router.post('/subcontractor/login', authController.subcontractorLogin);
 router.get('/me', auth.protect, authController.getMe);
 
 // Placeholder for other auth routes

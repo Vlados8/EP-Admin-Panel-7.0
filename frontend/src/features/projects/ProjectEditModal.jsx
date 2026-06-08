@@ -1,10 +1,16 @@
 import React, { useState, useEffect } from 'react';
+import { useSelector } from 'react-redux';
 import api from '../../services/api';
 
 const ProjectEditModal = ({ isOpen, onClose, project, onProjectUpdated }) => {
+    const { user } = useSelector(state => state.auth);
+    const userRole = user?.role?.name || user?.role;
+    const canSeeInternalDesc = ['Admin', 'Büro', 'Projektleiter'].includes(userRole);
+
     const [formData, setFormData] = useState({
         title: '',
         description: '',
+        internal_description: '',
         address: '',
         status: '',
         progress: 0,
@@ -86,6 +92,7 @@ const ProjectEditModal = ({ isOpen, onClose, project, onProjectUpdated }) => {
             setFormData({
                 title: project.title || '',
                 description: project.description || '',
+                internal_description: project.internal_description || '',
                 address: project.address || '',
                 status: project.status || 'Aktiv',
                 progress: project.progress || 0,
@@ -1019,6 +1026,21 @@ const ProjectEditModal = ({ isOpen, onClose, project, onProjectUpdated }) => {
                                 className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors resize-none"
                             ></textarea>
                         </div>
+
+                        {canSeeInternalDesc && (
+                            <div className="col-span-2">
+                                <label className="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-2 block flex items-center gap-1.5">
+                                    <i className="fa-solid fa-lock"></i> Interne Beschreibung
+                                </label>
+                                <textarea
+                                    value={formData.internal_description}
+                                    onChange={e => setFormData({ ...formData, internal_description: e.target.value })}
+                                    rows="3"
+                                    className="w-full bg-black/20 border border-blue-500/25 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors resize-none"
+                                    placeholder="Interne Notizen / sensible Informationen..."
+                                ></textarea>
+                            </div>
+                        )}
 
 
 

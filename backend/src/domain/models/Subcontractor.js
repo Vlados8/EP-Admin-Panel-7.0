@@ -60,6 +60,10 @@ const Subcontractor = sequelize.define('Subcontractor', {
     notes: {
         type: DataTypes.TEXT,
         allowNull: true
+    },
+    password_hash: {
+        type: DataTypes.STRING,
+        allowNull: true
     }
 }, {
     tableName: 'subcontractors',

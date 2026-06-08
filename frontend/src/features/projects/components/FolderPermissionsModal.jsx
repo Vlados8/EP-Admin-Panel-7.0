@@ -6,6 +6,7 @@ const FolderPermissionsModal = ({ isOpen, onClose, folder, projectId, onUpdate }
     const [selectedRoleIds, setSelectedRoleIds] = useState([]);
     const [isPublic, setIsPublic] = useState(false);
     const [shareToken, setShareToken] = useState('');
+    const [visibleToSubcontractors, setVisibleToSubcontractors] = useState(true);
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
@@ -18,10 +19,12 @@ const FolderPermissionsModal = ({ isOpen, onClose, folder, projectId, onUpdate }
                 setSelectedRoleIds(allowedRoles);
                 setIsPublic(folder.permissions.is_public || false);
                 setShareToken(folder.permissions.share_token || '');
+                setVisibleToSubcontractors(folder.permissions.visible_to_subcontractors !== false);
             } else {
                 setSelectedRoleIds([]);
                 setIsPublic(false);
                 setShareToken('');
+                setVisibleToSubcontractors(true);
             }
         }
     }, [isOpen, folder]);
@@ -50,7 +53,8 @@ const FolderPermissionsModal = ({ isOpen, onClose, folder, projectId, onUpdate }
             await api.patch(`/projects/${projectId}/files/permissions`, {
                 path: folder.parentPath || '',
                 name: folder.name,
-                allowed_role_ids: selectedRoleIds
+                allowed_role_ids: selectedRoleIds,
+                visible_to_subcontractors: visibleToSubcontractors
             });
             onUpdate();
             onClose();
@@ -131,6 +135,30 @@ const FolderPermissionsModal = ({ isOpen, onClose, folder, projectId, onUpdate }
                                 </label>
                             ))}
                         </div>
+                    </div>
+
+                    <div className="h-px bg-white/5"></div>
+
+                    {/* Subcontractor Visibility */}
+                    <div>
+                        <label className="text-gray-400 text-sm font-medium mb-3 block italic">Sichtbarkeit für Subunternehmer</label>
+                        <label 
+                            className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${visibleToSubcontractors ? 'bg-amber-500/15 border-amber-500/50 text-white' : 'bg-white/5 border-white/5 text-gray-400 hover:bg-white/10'}`}
+                        >
+                            <span className="font-bold flex items-center gap-2">
+                                <i className="fa-solid fa-helmet-safety text-amber-400"></i>
+                                Subunternehmer erlauben
+                            </span>
+                            <input 
+                                type="checkbox" 
+                                className="hidden" 
+                                checked={visibleToSubcontractors}
+                                onChange={() => setVisibleToSubcontractors(!visibleToSubcontractors)}
+                            />
+                            <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${visibleToSubcontractors ? 'bg-amber-500 border-amber-500' : 'border-white/20'}`}>
+                                {visibleToSubcontractors && <i className="fa-solid fa-check text-[10px] text-white"></i>}
+                            </div>
+                        </label>
                     </div>
 
                     <div className="h-px bg-white/5"></div>

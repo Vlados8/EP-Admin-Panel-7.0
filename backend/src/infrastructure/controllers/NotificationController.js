@@ -32,7 +32,7 @@ exports.getNotifications = async (req, res, next) => {
 exports.markNotificationsRead = async (req, res, next) => {
     try {
         const userId = req.user.id;
-        const { notificationIds } = req.body; // Optional array of specific notification IDs
+        const { notificationIds } = req.body || {}; // Optional array of specific notification IDs
 
         const whereClause = { user_id: userId, is_read: false };
         if (Array.isArray(notificationIds) && notificationIds.length > 0) {

@@ -126,6 +126,17 @@ const Login = () => {
                     <a href="#" className="text-center text-sm text-slate-400 hover:text-blue-400 transition-colors mt-2">
                         Passwort vergessen?
                     </a>
+
+                    <div className="flex flex-col gap-3 mt-2 pt-4 border-t border-white/5">
+                        <button
+                            type="button"
+                            onClick={() => navigate('/subcontractor-login')}
+                            className="w-full bg-white/5 hover:bg-white/10 text-emerald-400 font-medium py-3 px-4 rounded-xl border border-emerald-500/20 hover:border-emerald-500/40 transition-all text-sm flex items-center justify-center gap-2"
+                        >
+                            <i className="fa-solid fa-truck-fast"></i>
+                            Subunternehmer Portal
+                        </button>
+                    </div>
                 </form>
             </div>
         </div>

@@ -100,10 +100,14 @@ ProjectStageImage.belongsTo(ProjectStage, { foreignKey: 'project_stage_id', as: 
 
 ProjectStage.belongsTo(User, { foreignKey: 'assigned_to_id', as: 'assignee' });
 ProjectStage.belongsTo(User, { foreignKey: 'created_by_id', as: 'creator' });
+ProjectStage.belongsTo(Subcontractor, { foreignKey: 'created_by_subcontractor_id', as: 'subcontractor_creator' });
+Subcontractor.hasMany(ProjectStage, { foreignKey: 'created_by_subcontractor_id', as: 'created_stages' });
 
 // 4. Tasks (General)
 Task.belongsTo(User, { foreignKey: 'assigned_to_id', as: 'assignee' });
 Task.belongsTo(User, { foreignKey: 'created_by_id', as: 'creator' });
+Task.belongsTo(Subcontractor, { foreignKey: 'assigned_subcontractor_id', as: 'subcontractor' });
+Subcontractor.hasMany(Task, { foreignKey: 'assigned_subcontractor_id', as: 'assigned_tasks' });
 
 
 Task.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
@@ -112,6 +116,9 @@ Project.hasMany(Task, { foreignKey: 'project_id', as: 'tasks' });
 // 5. Notes
 Note.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 User.hasMany(Note, { foreignKey: 'user_id', as: 'notes' });
+
+Note.belongsTo(Subcontractor, { foreignKey: 'subcontractor_id', as: 'subcontractor' });
+Subcontractor.hasMany(Note, { foreignKey: 'subcontractor_id', as: 'subcontractorNotes' });
 
 Note.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
 Project.hasMany(Note, { foreignKey: 'project_id', as: 'notes' });
@@ -180,7 +187,9 @@ Project.hasMany(ProjectFile, { foreignKey: 'project_id', as: 'files', onDelete: 
 ProjectFile.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
 
 ProjectFolder.belongsTo(User, { foreignKey: 'created_by_id', as: 'creator' });
+ProjectFolder.belongsTo(Subcontractor, { foreignKey: 'created_by_subcontractor_id', as: 'subcontractor_creator' });
 ProjectFile.belongsTo(User, { foreignKey: 'created_by_id', as: 'creator' });
+ProjectFile.belongsTo(Subcontractor, { foreignKey: 'created_by_subcontractor_id', as: 'subcontractor_creator' });
 ProjectFile.belongsTo(ProjectFolder, { foreignKey: 'folder_id', as: 'folder' });
 ProjectFolder.hasMany(ProjectFile, { foreignKey: 'folder_id', as: 'files', onDelete: 'CASCADE' });
 

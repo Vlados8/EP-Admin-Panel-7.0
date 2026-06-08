@@ -35,6 +35,10 @@ const Task = sequelize.define('Task', {
         type: DataTypes.UUID,
         allowNull: true // User ID doing the task
     },
+    assigned_subcontractor_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true
+    },
     created_by_id: {
         type: DataTypes.UUID,
         allowNull: false // User ID assigning the task or creating it

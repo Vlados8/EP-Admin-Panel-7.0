@@ -130,12 +130,15 @@ export const PhoneProvider = ({ children }) => {
             });
         });
 
-        // Initialize state from backend
-        api.get('/phone/settings').then(res => {
-            if (res.data.status === 'success') {
-                setIsReceivingCallsState(res.data.data.is_receiving_calls);
-            }
-        }).catch(err => console.error('[Phone] Failed to fetch reception status:', err));
+        // Initialize state from backend only for internal employees, not for subcontractors
+        const isSubcontractor = user?.role === 'Subcontractor' || user?.role?.name === 'Subcontractor';
+        if (user && !isSubcontractor) {
+            api.get('/phone/settings').then(res => {
+                if (res.data.status === 'success') {
+                    setIsReceivingCallsState(res.data.data.is_receiving_calls);
+                }
+            }).catch(err => console.error('[Phone] Failed to fetch reception status:', err));
+        }
 
         return () => {
             if (ua) {

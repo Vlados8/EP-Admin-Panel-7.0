@@ -1,4 +1,4 @@
-const { Note, User, Project, Attachment } = require('../../domain/models');
+const { Note, User, Project, Attachment, Subcontractor } = require('../../domain/models');
 const fs = require('fs');
 const path = require('path');
 const AppError = require('../../utils/appError');
@@ -6,17 +6,29 @@ const { hasPermission } = require('../../utils/permissions');
 const { uploadToR2, deleteFromR2 } = require('../utils/storage');
 const sharp = require('sharp');
 const { processUploadedFile } = require('../../utils/imageConverter');
+const { Op } = require('sequelize');
+const sequelize = require('../../config/database');
 
 // Get all notes, potentially filtered by date or month
 exports.getNotes = async (req, res, next) => {
     try {
         const whereClause = {};
+        const userRole = req.user.role?.name || req.user.role;
         
-        if (req.query.projectId) {
-            whereClause.project_id = req.query.projectId;
-            whereClause.showInDiary = true;
+        if (userRole === 'Subcontractor') {
+            if (req.query.projectId) {
+                whereClause.project_id = req.query.projectId;
+                whereClause.showInDiary = true;
+            } else {
+                whereClause.subcontractor_id = req.user.id;
+            }
         } else {
-            whereClause.user_id = req.user.id;
+            if (req.query.projectId) {
+                whereClause.project_id = req.query.projectId;
+                whereClause.showInDiary = true;
+            } else {
+                whereClause.user_id = req.user.id;
+            }
         }
 
         const notes = await Note.findAll({
@@ -25,6 +37,11 @@ exports.getNotes = async (req, res, next) => {
                 {
                     model: User,
                     as: 'user',
+                    attributes: ['id', 'name']
+                },
+                {
+                    model: Subcontractor,
+                    as: 'subcontractor',
                     attributes: ['id', 'name']
                 },
                 {
@@ -56,7 +73,9 @@ exports.createNote = async (req, res, next) => {
     try {
         const { title, content, date, time, color, project_id, showInDiary } = req.body;
 
-        let user_id = req.user.id;
+        const userRole = req.user.role?.name || req.user.role;
+        let user_id = userRole === 'Subcontractor' ? null : req.user.id;
+        let subcontractor_id = userRole === 'Subcontractor' ? req.user.id : null;
 
         if (!title || !content || !date) {
             return next(new AppError('Bitte füllen Sie Titel, Inhalt und Datum aus', 400));
@@ -70,6 +89,7 @@ exports.createNote = async (req, res, next) => {
             color,
             project_id: (project_id === '' || project_id === 'null' || !project_id) ? null : project_id,
             user_id,
+            subcontractor_id,
             isPinned: req.body.isPinned || false,
             showInDiary: showInDiary === 'true' || showInDiary === true || false
         });
@@ -130,6 +150,7 @@ exports.createNote = async (req, res, next) => {
         const noteWithUser = await Note.findByPk(newNote.id, {
             include: [
                 { model: User, as: 'user', attributes: ['id', 'name'] },
+                { model: Subcontractor, as: 'subcontractor', attributes: ['id', 'name'] },
                 { model: Project, as: 'project', attributes: ['id', 'project_number', 'title'] },
                 { model: Attachment, as: 'attachments' }
             ]
@@ -155,7 +176,11 @@ exports.deleteNote = async (req, res, next) => {
             return next(new AppError('Notiz nicht gefunden', 404));
         }
 
-        if (note.user_id !== req.user.id) {
+        const userRole = req.user.role?.name || req.user.role;
+        const isOwner = (userRole === 'Subcontractor' && note.subcontractor_id === req.user.id) ||
+                        (userRole !== 'Subcontractor' && note.user_id === req.user.id);
+
+        if (!isOwner) {
             return next(new AppError('Keine Berechtigung zum Löschen dieser Notiz', 403));
         }
 
@@ -218,7 +243,11 @@ exports.updateNote = async (req, res, next) => {
             return next(new AppError('Notiz nicht gefunden', 404));
         }
 
-        if (note.user_id !== req.user.id) {
+        const userRole = req.user.role?.name || req.user.role;
+        const isOwner = (userRole === 'Subcontractor' && note.subcontractor_id === req.user.id) ||
+                        (userRole !== 'Subcontractor' && note.user_id === req.user.id);
+
+        if (!isOwner) {
             return next(new AppError('Keine Berechtigung zum Bearbeiten dieser Notiz', 403));
         }
 
@@ -294,6 +323,7 @@ exports.updateNote = async (req, res, next) => {
         const updatedNote = await Note.findByPk(note.id, {
             include: [
                 { model: User, as: 'user', attributes: ['id', 'name'] },
+                { model: Subcontractor, as: 'subcontractor', attributes: ['id', 'name'] },
                 { model: Project, as: 'project', attributes: ['id', 'project_number', 'title'] },
                 { model: Attachment, as: 'attachments' }
             ]

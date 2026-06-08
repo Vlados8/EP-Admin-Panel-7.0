@@ -1,4 +1,4 @@
-const { ProjectStage, User, ProjectStageImage, ProjectUser } = require('../../domain/models');
+const { ProjectStage, User, ProjectStageImage, ProjectUser, ProjectSubcontractor, Subcontractor } = require('../../domain/models');
 const AppError = require('../../utils/appError');
 const fs = require('fs');
 const path = require('path');
@@ -17,6 +17,7 @@ exports.getStages = async (req, res, next) => {
             include: [
                 { model: User, as: 'assignee', attributes: ['id', 'name'] },
                 { model: User, as: 'creator', attributes: ['id', 'name'] },
+                { model: Subcontractor, as: 'subcontractor_creator', attributes: ['id', 'name'] },
                 { model: ProjectStageImage, as: 'images' }
             ],
             order: [['createdAt', 'ASC']]
@@ -37,10 +38,18 @@ exports.createStage = async (req, res, next) => {
     try {
         const { title, description, assigned_to_id, status, project_id } = req.body;
 
-        let created_by_id = req.user?.id;
-        if (!created_by_id) {
-            const admin = await User.findOne({ where: { email: 'admin@ep-bau.de' } });
-            created_by_id = admin?.id;
+        const isSubcontractor = req.user?.role?.name === 'Subcontractor' || req.user?.role === 'Subcontractor';
+        let created_by_id = null;
+        let created_by_subcontractor_id = null;
+
+        if (isSubcontractor) {
+            created_by_subcontractor_id = req.user.id;
+        } else {
+            created_by_id = req.user?.id;
+            if (!created_by_id) {
+                const admin = await User.findOne({ where: { email: 'admin@ep-bau.de' } });
+                created_by_id = admin?.id;
+            }
         }
 
         if (!title || !project_id) {
@@ -49,7 +58,19 @@ exports.createStage = async (req, res, next) => {
 
         // Check if user is authorized for this project
         if (!hasPermission(req.user, 'MANAGE_API_KEYS')) {
-            const isAssigned = await ProjectUser.findOne({ where: { project_id, user_id: req.user.id } });
+            let isAssigned = false;
+            if (isSubcontractor) {
+                const isSubAssigned = await ProjectSubcontractor.findOne({
+                    where: { project_id, subcontractor_id: req.user.id }
+                });
+                if (isSubAssigned) isAssigned = true;
+            } else {
+                const isUserAssigned = await ProjectUser.findOne({
+                    where: { project_id, user_id: req.user.id }
+                });
+                if (isUserAssigned) isAssigned = true;
+            }
+
             if (!isAssigned) {
                 // For PL/GL, also check if project is unassigned
                 if (req.user.role?.name === 'Projektleiter' || req.user.role?.name === 'Gruppenleiter' || req.user.role === 'Projektleiter' || req.user.role === 'Gruppenleiter') {
@@ -67,6 +88,7 @@ exports.createStage = async (req, res, next) => {
             status: status || 'In Arbeit',
             assigned_to_id: assigned_to_id || null,
             created_by_id,
+            created_by_subcontractor_id,
             project_id
         });
 
@@ -95,6 +117,7 @@ exports.createStage = async (req, res, next) => {
             include: [
                 { model: User, as: 'assignee', attributes: ['id', 'name'] },
                 { model: User, as: 'creator', attributes: ['id', 'name'] },
+                { model: Subcontractor, as: 'subcontractor_creator', attributes: ['id', 'name'] },
                 { model: ProjectStageImage, as: 'images' }
             ]
         });
@@ -115,32 +138,60 @@ exports.updateStage = async (req, res, next) => {
         const stage = await ProjectStage.findByPk(req.params.id);
         if (!stage) return next(new AppError('Etappe nicht gefunden', 404));
 
-        // RBAC: Only creator or manager can update
+        // RBAC: Only creator or manager can update details. Subcontractor can toggle status if assigned to project.
         const userRole = req.user.role?.name || req.user.role;
-        if (!hasPermission(req.user, 'MANAGE_API_KEYS')) {
+        let allowed = false;
+        let statusOnly = false;
+
+        if (hasPermission(req.user, 'MANAGE_API_KEYS')) {
+            allowed = true;
+        } else {
             const isManager = userRole === 'Projektleiter' || userRole === 'Gruppenleiter';
-            const isOwner = stage.created_by_id === req.user.id;
+            const isOwner = (stage.created_by_id === req.user.id) || (stage.created_by_subcontractor_id === req.user.id);
             
-            if (!isOwner && !isManager) {
-                return next(new AppError('Keine Berechtigung zum Bearbeiten dieser Etappe', 403));
-            }
-            
-            // If manager, check if they are authorized for the project
-            if (isManager && !isOwner) {
+            if (isOwner) {
+                allowed = true;
+            } else if (isManager) {
+                allowed = true;
+                // If manager, check if they are authorized for the project
                 const isAssigned = await ProjectUser.findOne({ where: { project_id: stage.project_id, user_id: req.user.id } });
                 if (!isAssigned) {
                     const hasPL = await ProjectUser.findOne({ where: { project_id: stage.project_id, role: 'projektleiter' } });
-                    if (hasPL) return next(new AppError('Keine Berechtigung für dieses Projekt', 403));
+                    if (hasPL) allowed = false;
+                }
+            } else if (userRole === 'Subcontractor') {
+                // Check project assignment for subcontractor
+                const isSubAssigned = await ProjectSubcontractor.findOne({
+                    where: { project_id: stage.project_id, subcontractor_id: req.user.id }
+                });
+                if (isSubAssigned) {
+                    allowed = true;
+                    statusOnly = true;
                 }
             }
         }
 
+        if (!allowed) {
+            return next(new AppError('Keine Berechtigung zum Bearbeiten dieser Etappe', 403));
+        }
+
         const { status, title, description, assigned_to_id, imagesToDelete } = req.body;
 
+        if (statusOnly) {
+            const hasOtherFields = (title !== undefined && title !== stage.title) ||
+                                   (description !== undefined && description !== stage.description) ||
+                                   (assigned_to_id !== undefined && assigned_to_id !== stage.assigned_to_id) ||
+                                   (imagesToDelete !== undefined && imagesToDelete !== null) ||
+                                   (req.files && req.files.length > 0);
+            if (hasOtherFields) {
+                return next(new AppError('Als Subunternehmer können Sie nur den Status anderer Etappen ändern', 403));
+            }
+        }
+
         if (status !== undefined) stage.status = status;
-        if (title !== undefined) stage.title = title;
-        if (description !== undefined) stage.description = description;
-        if (assigned_to_id !== undefined) stage.assigned_to_id = assigned_to_id || null;
+        if (title !== undefined && !statusOnly) stage.title = title;
+        if (description !== undefined && !statusOnly) stage.description = description;
+        if (assigned_to_id !== undefined && !statusOnly) stage.assigned_to_id = assigned_to_id || null;
 
         await stage.save();
 
@@ -197,6 +248,7 @@ exports.updateStage = async (req, res, next) => {
             include: [
                 { model: User, as: 'assignee', attributes: ['id', 'name'] },
                 { model: User, as: 'creator', attributes: ['id', 'name'] },
+                { model: Subcontractor, as: 'subcontractor_creator', attributes: ['id', 'name'] },
                 { model: ProjectStageImage, as: 'images' }
             ]
         });
@@ -221,7 +273,7 @@ exports.deleteStage = async (req, res, next) => {
         const userRole = req.user.role?.name || req.user.role;
         if (!hasPermission(req.user, 'MANAGE_API_KEYS')) {
             const isManager = userRole === 'Projektleiter' || userRole === 'Gruppenleiter';
-            const isOwner = stage.created_by_id === req.user.id;
+            const isOwner = (stage.created_by_id === req.user.id) || (stage.created_by_subcontractor_id === req.user.id);
             
             if (!isOwner && !isManager) {
                 return next(new AppError('Keine Berechtigung zum Löschen dieser Etappe', 403));

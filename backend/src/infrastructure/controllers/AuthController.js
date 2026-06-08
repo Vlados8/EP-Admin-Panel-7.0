@@ -1,7 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = require('../../config/jwtConfig');
-const { User, Role, Company } = require('../../domain/models');
+const { User, Role, Company, Subcontractor } = require('../../domain/models');
 
 const generateToken = (id, roleName) => {
     return jwt.sign({ id, role: roleName }, JWT_SECRET, {
@@ -83,6 +83,68 @@ exports.getMe = async (req, res, next) => {
                 }
             }
         });
+    } catch (err) {
+        next(err);
+    }
+};
+
+const generateSubcontractorToken = (id, roleName) => {
+    return jwt.sign({ id, role: roleName, isSubcontractor: true }, JWT_SECRET, {
+        expiresIn: process.env.JWT_EXPIRES_IN || '90d',
+    });
+};
+
+exports.subcontractorLogin = async (req, res, next) => {
+    try {
+        const { email, password } = req.body;
+
+        // Validate Input
+        if (!email || !password) {
+            return res.status(400).json({ status: 'fail', message: 'Email and password are required' });
+        }
+
+        // Check subcontractor
+        const subcontractor = await Subcontractor.findOne({
+            where: { email }
+        });
+
+        if (!subcontractor || subcontractor.status !== 'active') {
+            return res.status(401).json({ status: 'fail', message: 'Invalid credentials or inactive user' });
+        }
+
+        if (!subcontractor.password_hash) {
+            return res.status(401).json({ status: 'fail', message: 'Credentials not set for this account. Please contact your administrator.' });
+        }
+
+        // Check password
+        const isMatch = await bcrypt.compare(password, subcontractor.password_hash);
+        if (!isMatch) {
+            return res.status(401).json({ status: 'fail', message: 'Invalid credentials' });
+        }
+
+        // Generate Token
+        const token = generateSubcontractorToken(subcontractor.id, 'Subcontractor');
+
+        const [firstName, ...lastNameParts] = (subcontractor.contact_person || subcontractor.name || '').split(' ');
+        const lastName = lastNameParts.join(' ');
+
+        res.status(200).json({
+            status: 'success',
+            token,
+            data: {
+                user: {
+                    id: subcontractor.id,
+                    name: subcontractor.name,
+                    contact_person: subcontractor.contact_person,
+                    firstName: firstName || subcontractor.name,
+                    lastName: lastName || '',
+                    email: subcontractor.email,
+                    role: 'Subcontractor',
+                    company_id: subcontractor.company_id
+                }
+            }
+        });
+
     } catch (err) {
         next(err);
     }

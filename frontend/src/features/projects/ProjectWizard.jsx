@@ -21,7 +21,7 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
 
     // Step 2: Basic Info
     const [basicInfo, setBasicInfo] = useState({
-        title: '', address: '', description: '', start_date: '', end_date: '', budget: ''
+        title: '', address: '', description: '', internal_description: '', start_date: '', end_date: '', budget: ''
     });
 
     // Step 3: Categories & Answers
@@ -70,7 +70,7 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
             // Reset state
             setStep(1);
             setIsNewClient(false); setSelectedClientId(''); setNewClientData({ name: '', type: 'company', contact_person: '', email: '', phone: '', address: '', zip_code: '', city: '' });
-            setBasicInfo({ title: '', address: '', description: '', start_date: '', end_date: '', budget: '' });
+            setBasicInfo({ title: '', address: '', description: '', internal_description: '', start_date: '', end_date: '', budget: '' });
             setSelectedCategory(null); setSelectedSubcategory(null); setCurrentQuestion(null);
             setDynamicAnswers({}); setCatViewLevel('main');
             setAssignedUsers([]); setAssignedSubcontractors([]);
@@ -79,7 +79,7 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
             setExpandedCategoryQuestions({});
             setMainPhoto(null);
             setPhotos([]);
-            
+
             setShowAdditionalClient(false);
             setClientFirstName('');
             setClientLastName('');
@@ -291,7 +291,7 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
 
     const handleAnswerQuestion = (question, answerValue, answerId, nextQuestionId) => {
         setDynamicAnswers(prev => ({ ...prev, [question.id]: { value: answerValue, answerId } }));
-        
+
         // Determine the next question ID
         let targetNextQId = nextQuestionId;
         if (!targetNextQId && question.answers && question.answers.length > 0) {
@@ -352,12 +352,13 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
             const formData = new FormData();
             formData.append('title', basicInfo.title);
             formData.append('description', basicInfo.description);
+            formData.append('internal_description', basicInfo.internal_description || '');
             formData.append('address', basicInfo.address);
             if (basicInfo.start_date) formData.append('start_date', basicInfo.start_date);
             if (basicInfo.end_date) formData.append('end_date', basicInfo.end_date);
             formData.append('budget', basicInfo.budget || 0);
             formData.append('client_id', selectedClientId);
-            
+
             const firstCategory = selectedCategories[0];
             formData.append('category_id', firstCategory?.category_id || '');
             formData.append('subcategory_id', firstCategory?.subcategory_id || '');
@@ -463,11 +464,11 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
                                                     className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors flex items-center justify-between text-center"
                                                 >
                                                     <span className="w-full text-center">
-                                                        {selectedClientId 
+                                                        {selectedClientId
                                                             ? (() => {
                                                                 const c = clients.find(cl => String(cl.id) === String(selectedClientId));
                                                                 return c ? `${c.name} ${c.contact_person ? `(${c.contact_person})` : ''}` : '-- Bitte wählen --';
-                                                              })()
+                                                            })()
                                                             : '-- Bitte wählen --'}
                                                     </span>
                                                     <i className={`fa-solid fa-chevron-down text-gray-500 text-xs transition-transform duration-200 ${isClientSelectOpen ? 'rotate-180' : ''}`}></i>
@@ -475,8 +476,8 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
 
                                                 {isClientSelectOpen && (
                                                     <>
-                                                        <div 
-                                                            className="fixed inset-0 z-40" 
+                                                        <div
+                                                            className="fixed inset-0 z-40"
                                                             onClick={() => setIsClientSelectOpen(false)}
                                                         />
                                                         <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar text-left">
@@ -520,8 +521,8 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
 
                                                     {isClientTypeSelectOpen && (
                                                         <>
-                                                            <div 
-                                                                className="fixed inset-0 z-40" 
+                                                            <div
+                                                                className="fixed inset-0 z-40"
                                                                 onClick={() => setIsClientTypeSelectOpen(false)}
                                                             />
                                                             <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] text-left">
@@ -717,6 +718,13 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
                                     <div>
                                         <label className="block text-sm font-medium text-gray-400 mb-2 text-center">Notizen / Beschreibung</label>
                                         <textarea value={basicInfo.description} onChange={e => setBasicInfo({ ...basicInfo, description: e.target.value })} className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-blue-500 focus:outline-none min-h-[100px] text-center" placeholder="Zusätzliche Informationen..."></textarea>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-blue-400 mb-2 text-center flex items-center justify-center gap-1.5">
+                                            <i className="fa-solid fa-lock"></i> Interne Beschreibung
+                                        </label>
+                                        <textarea value={basicInfo.internal_description} onChange={e => setBasicInfo({ ...basicInfo, internal_description: e.target.value })} className="w-full bg-slate-800 border border-blue-500/35 rounded-xl px-4 py-3 text-white focus:border-blue-500 focus:outline-none min-h-[100px] text-center" placeholder="Interne Notizen / sensible Informationen..."></textarea>
                                     </div>
                                 </div>
                             )}
@@ -926,7 +934,7 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
                                                                                         </button>
                                                                                     )}
                                                                                 </div>
-                                                                                
+
                                                                                 {/* 1. BUTTONS/RADIO (Default) */}
                                                                                 {(!q.type || q.type === 'buttons' || q.type === 'radio') && (
                                                                                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
@@ -1131,7 +1139,7 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
                                                                         ? (() => {
                                                                             const u = users.find(usr => String(usr.id) === String(treeTopUser));
                                                                             return u ? `${u.name} ${u.specialty ? `(${u.specialty})` : ''} (${u.role?.name || 'Keine Rolle'})` : '-- Person wählen --';
-                                                                          })()
+                                                                        })()
                                                                         : '-- Person wählen --'}
                                                                 </span>
                                                                 <i className={`fa-solid fa-chevron-down text-gray-500 text-xs transition-transform duration-200 ${isTopUserSelectOpen ? 'rotate-180' : ''}`}></i>
@@ -1139,8 +1147,8 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
 
                                                             {isTopUserSelectOpen && (
                                                                 <>
-                                                                    <div 
-                                                                        className="fixed inset-0 z-40" 
+                                                                    <div
+                                                                        className="fixed inset-0 z-40"
                                                                         onClick={() => setIsTopUserSelectOpen(false)}
                                                                     />
                                                                     <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar text-left">
@@ -1233,7 +1241,7 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
                                                                         ? (() => {
                                                                             const u = users.find(usr => String(usr.id) === String(treeGL));
                                                                             return u ? `${u.name} ${u.specialty ? `(${u.specialty})` : ''}` : '-- Person wählen --';
-                                                                          })()
+                                                                        })()
                                                                         : '-- Person wählen --'}
                                                                 </span>
                                                                 <i className={`fa-solid fa-chevron-down text-gray-500 text-xs transition-transform duration-200 ${isGLSelectOpen ? 'rotate-180' : ''}`}></i>
@@ -1241,8 +1249,8 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
 
                                                             {isGLSelectOpen && (
                                                                 <>
-                                                                    <div 
-                                                                        className="fixed inset-0 z-40" 
+                                                                    <div
+                                                                        className="fixed inset-0 z-40"
                                                                         onClick={() => setIsGLSelectOpen(false)}
                                                                     />
                                                                     <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar text-left">
@@ -1332,7 +1340,7 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
                                                                         ? (() => {
                                                                             const u = users.find(usr => String(usr.id) === String(treeWorker));
                                                                             return u ? `${u.name} ${u.specialty ? `(${u.specialty})` : ''}` : '-- Person wählen --';
-                                                                          })()
+                                                                        })()
                                                                         : '-- Person wählen --'}
                                                                 </span>
                                                                 <i className={`fa-solid fa-chevron-down text-gray-500 text-xs transition-transform duration-200 ${isWorkerSelectOpen ? 'rotate-180' : ''}`}></i>
@@ -1340,8 +1348,8 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
 
                                                             {isWorkerSelectOpen && (
                                                                 <>
-                                                                    <div 
-                                                                        className="fixed inset-0 z-40" 
+                                                                    <div
+                                                                        className="fixed inset-0 z-40"
                                                                         onClick={() => setIsWorkerSelectOpen(false)}
                                                                     />
                                                                     <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar text-left">

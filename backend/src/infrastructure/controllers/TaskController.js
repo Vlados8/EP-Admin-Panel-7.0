@@ -1,6 +1,7 @@
-const { Task, User, Project, Attachment } = require('../../domain/models');
+const { Task, User, Project, Attachment, Role, Subcontractor } = require('../../domain/models'); // trigger nodemon
 const AppError = require('../../utils/appError');
 const { Op } = require('sequelize');
+const sequelize = require('../../config/database');
 const fs = require('fs');
 const path = require('path');
 const { hasPermission } = require('../../utils/permissions');
@@ -21,6 +22,11 @@ exports.getTasks = async (req, res, next) => {
                     { assigned_to_id: req.user.id },
                     { created_by_id: req.user.id }
                 ];
+            } else if (role === 'Subcontractor') {
+                whereClause[Op.or] = [
+                    { assigned_subcontractor_id: req.user.id },
+                    sequelize.literal(`Task.project_id IS NOT NULL AND EXISTS (SELECT 1 FROM project_subcontractors AS ps WHERE ps.project_id = Task.project_id AND ps.subcontractor_id = ${req.user.id})`)
+                ];
             } else {
                 whereClause.assigned_to_id = req.user.id; // Fallback
             }
@@ -31,6 +37,7 @@ exports.getTasks = async (req, res, next) => {
             include: [
                 { model: User, as: 'assignee', attributes: ['id', 'name'] },
                 { model: User, as: 'creator', attributes: ['id', 'name'] },
+                { model: Subcontractor, as: 'subcontractor', attributes: ['id', 'name', 'trade'] },
                 { model: Attachment, as: 'attachments' },
                 { model: Project, as: 'project', attributes: ['id', 'project_number', 'title'] }
             ],
@@ -50,7 +57,7 @@ exports.getTasks = async (req, res, next) => {
 // Create a new task
 exports.createTask = async (req, res, next) => {
     try {
-        const { title, description, assigned_to_id, status, project_id, due_date, time } = req.body;
+        const { title, description, assigned_to_id, assigned_subcontractor_id, status, project_id, due_date, time } = req.body;
 
         let created_by_id = req.user?.id;
         if (!created_by_id) {
@@ -88,6 +95,7 @@ exports.createTask = async (req, res, next) => {
             description,
             status: status || 'In Arbeit',
             assigned_to_id: assigned_to_id || null,
+            assigned_subcontractor_id: assigned_subcontractor_id || null,
             project_id: project_id || null,
             due_date: due_date || null,
             time: time || null,
@@ -159,6 +167,7 @@ exports.createTask = async (req, res, next) => {
             include: [
                 { model: User, as: 'assignee', attributes: ['id', 'name'] },
                 { model: User, as: 'creator', attributes: ['id', 'name'] },
+                { model: Subcontractor, as: 'subcontractor', attributes: ['id', 'name', 'trade'] },
                 { model: Attachment, as: 'attachments' },
                 { model: Project, as: 'project', attributes: ['id', 'project_number', 'title'] }
             ]
@@ -177,12 +186,23 @@ exports.createTask = async (req, res, next) => {
 // Update task
 exports.updateTask = async (req, res, next) => {
     try {
+        const { status, title, description, assigned_to_id, assigned_subcontractor_id, project_id, due_date, time } = req.body;
         const task = await Task.findByPk(req.params.id);
         if (!task) return next(new AppError('Aufgabe nicht gefunden', 404));
 
         if (!hasPermission(req.user, 'MANAGE_USERS')) {
             const role = req.user.role?.name || req.user.role;
-            if (role === 'Worker') {
+            if (role === 'Subcontractor') {
+                if (task.assigned_subcontractor_id !== req.user.id) {
+                    return next(new AppError('Keine Berechtigung zum Bearbeiten dieser Aufgabe', 403));
+                }
+                // Subcontractor can ONLY update status
+                const keys = Object.keys(req.body);
+                const otherFields = keys.filter(key => key !== 'status');
+                if (otherFields.length > 0) {
+                    return next(new AppError('Sie haben keine Berechtigung, Aufgabendetails zu ändern. Sie können nur den Status aktualisieren.', 403));
+                }
+            } else if (role === 'Worker') {
                 if (task.assigned_to_id !== req.user.id) {
                     return next(new AppError('Keine Berechtigung zum Bearbeiten dieser Aufgabe', 403));
                 }
@@ -237,6 +257,7 @@ exports.updateTask = async (req, res, next) => {
         if (title !== undefined) task.title = title;
         if (description !== undefined) task.description = description;
         if (assigned_to_id !== undefined) task.assigned_to_id = assigned_to_id || null;
+        if (assigned_subcontractor_id !== undefined) task.assigned_subcontractor_id = assigned_subcontractor_id || null;
         if (project_id !== undefined) task.project_id = project_id || null;
         if (due_date !== undefined) task.due_date = due_date || null;
         if (time !== undefined) task.time = time || null;
@@ -305,6 +326,7 @@ exports.updateTask = async (req, res, next) => {
             include: [
                 { model: User, as: 'assignee', attributes: ['id', 'name'] },
                 { model: User, as: 'creator', attributes: ['id', 'name'] },
+                { model: Subcontractor, as: 'subcontractor', attributes: ['id', 'name', 'trade'] },
                 { model: Attachment, as: 'attachments' },
                 { model: Project, as: 'project', attributes: ['id', 'project_number', 'title'] }
             ]
@@ -331,6 +353,9 @@ exports.deleteTask = async (req, res, next) => {
 
         if (!hasPermission(req.user, 'MANAGE_USERS')) {
             const role = req.user.role?.name || req.user.role;
+            if (role === 'Subcontractor') {
+                return next(new AppError('Nachunternehmer können keine Aufgaben löschen', 403));
+            }
             if (role === 'Worker') {
                 return next(new AppError('Keine Berechtigung zum Löschen von Aufgaben', 403));
             } else if ((role === 'Gruppenleiter' || role === 'Projektleiter') && task.created_by_id !== req.user.id) {

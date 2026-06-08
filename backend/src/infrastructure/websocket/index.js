@@ -3,7 +3,7 @@ const { createAdapter } = require('@socket.io/redis-adapter');
 const redisClient = require('../../config/redis');
 const logger = require('../../utils/logger');
 const jwt = require('jsonwebtoken');
-const { User, Message, Participant, Conversation } = require('../../domain/models');
+const { User, Message, Participant, Conversation, Subcontractor } = require('../../domain/models');
 
 let io;
 
@@ -33,7 +33,19 @@ const initWebSocket = (server) => {
             }
 
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
-            const user = await User.findByPk(decoded.id);
+            let user = null;
+            let isSubcontractor = false;
+
+            if (decoded.isSubcontractor) {
+                user = await Subcontractor.findByPk(decoded.id);
+                if (user) {
+                    isSubcontractor = true;
+                    // Add a virtual role for compatibility
+                    user.role = 'Subcontractor';
+                }
+            } else {
+                user = await User.findByPk(decoded.id);
+            }
 
             if (!user) {
                 return next(new Error('Authentication error: User not found'));
@@ -41,6 +53,7 @@ const initWebSocket = (server) => {
 
             socket.userId = user.id;
             socket.companyId = user.company_id;
+            socket.isSubcontractor = isSubcontractor;
             next();
         } catch (err) {
             next(new Error('Authentication error: Invalid token'));
@@ -49,19 +62,24 @@ const initWebSocket = (server) => {
 
     io.on('connection', async (socket) => {
         const userId = socket.userId;
-        logger.info(`User Connected: ${userId} (Socket: ${socket.id})`);
+        logger.info(`${socket.isSubcontractor ? 'Subcontractor' : 'User'} Connected: ${userId} (Socket: ${socket.id})`);
 
-        // Join private user room for direct notifications
-        socket.join(`user_${userId}`);
-        
-        // Mark user as online in Redis
-        await redisClient.sadd(`online_users_${socket.companyId}`, userId);
-        
-        // Broadcast online status to company
-        io.to(`company_${socket.companyId}`).emit('user_online', { userId });
+        if (socket.isSubcontractor) {
+            // Join private subcontractor room to prevent ID collisions with regular users
+            socket.join(`subcontractor_${userId}`);
+        } else {
+            // Join private user room for direct notifications
+            socket.join(`user_${userId}`);
+            
+            // Mark user as online in Redis
+            await redisClient.sadd(`online_users_${socket.companyId}`, userId);
+            
+            // Broadcast online status to company
+            io.to(`company_${socket.companyId}`).emit('user_online', { userId });
 
-        // Join Company Room
-        socket.join(`company_${socket.companyId}`);
+            // Join Company Room
+            socket.join(`company_${socket.companyId}`);
+        }
 
         // Handle sending regular message
         socket.on('send_message', async (data) => {
@@ -121,10 +139,11 @@ const initWebSocket = (server) => {
         });
 
         socket.on('disconnect', async () => {
-            logger.info(`User Disconnected: ${userId}`);
+            logger.info(`${socket.isSubcontractor ? 'Subcontractor' : 'User'} Disconnected: ${userId}`);
             
-            // Notify about active calls ending if any
-            // (Client side usually handles this, but we can emit a broadcast if needed)
+            if (socket.isSubcontractor) {
+                return; // Subcontractors don't use phone calls or online status lists
+            }
             
             // Check if user has other active sockets
             const userSockets = await io.in(`user_${userId}`).fetchSockets();

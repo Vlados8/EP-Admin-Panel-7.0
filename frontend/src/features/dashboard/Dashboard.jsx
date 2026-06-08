@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import api from '../../services/api';
+import SubcontractorDashboard from './SubcontractorDashboard';
 
 const StatCard = ({ title, value, icon, colorClass, trend, delay }) => (
     <div 
@@ -140,6 +143,14 @@ const ActivityChart = ({ data }) => {
 };
 
 const Dashboard = () => {
+    const navigate = useNavigate();
+    const { user: authUser } = useSelector((state) => state.auth);
+    const isSubcontractor = authUser?.role?.name === 'Subcontractor' || authUser?.role === 'Subcontractor';
+
+    if (isSubcontractor) {
+        return <SubcontractorDashboard user={authUser} />;
+    }
+
     const [stats, setStats] = useState({
         projects: 0,
         tasks: 0,
@@ -159,6 +170,10 @@ const Dashboard = () => {
     const [recentActivities, setRecentActivities] = useState([]);
 
     useEffect(() => {
+        if (isSubcontractor) {
+            setLoading(false);
+            return;
+        }
         const fetchDashboardData = async () => {
             try {
                 const [projectsRes, tasksRes, inquiriesRes, usersRes] = await Promise.all([

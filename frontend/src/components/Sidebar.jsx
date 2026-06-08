@@ -60,9 +60,10 @@ const NavGroup = ({ label, items, currentPath, search }) => {
 
 const Sidebar = ({ isOpen, onClose, currentPath }) => {
     const { user } = useSelector(state => state.auth);
+    const isSubcontractor = user?.role?.name === 'Subcontractor' || user?.role === 'Subcontractor';
     const isWorker = user?.role?.name === 'Worker' || user?.role === 'Worker';
     const isGroupLeader = user?.role?.name === 'Gruppenleiter' || user?.role === 'Gruppenleiter';
-    const isRestricted = isWorker || isGroupLeader;
+    const isRestricted = isWorker || isGroupLeader || isSubcontractor;
     const isAdminOrOffice = user?.role?.name === 'Admin' || user?.role?.name === 'Büro' || user?.role === 'Admin' || user?.role === 'Büro';
     const { companyData, getAssetUrl } = useCompany();
     const location = useLocation();
@@ -83,7 +84,7 @@ const Sidebar = ({ isOpen, onClose, currentPath }) => {
     const canViewTasks = usePermission('VIEW_TASKS');
 
     const fetchAccounts = async () => {
-        if (!canViewEmails) return;
+        if (!canViewEmails || isSubcontractor) return;
         try {
             const res = await api.get('/emails');
             setEmailAccounts(res.data.data.accounts || []);
@@ -93,6 +94,7 @@ const Sidebar = ({ isOpen, onClose, currentPath }) => {
     };
 
     const fetchChatUnread = async () => {
+        if (isSubcontractor) return;
         try {
             const res = await api.get('/chat/unread-count');
             setChatUnreadCount(res.data.data.count || 0);
@@ -129,36 +131,36 @@ const Sidebar = ({ isOpen, onClose, currentPath }) => {
     }, [user, canViewEmails]); // Re-fetch/re-listen if user changes
 
     const baseMenu = [
-        { path: '/dashboard', icon: 'fa-chart-line', label: 'Dashboard', show: true }, // Everyone sees Dashboard
+        { path: '/dashboard', icon: isSubcontractor ? 'fa-circle-user' : 'fa-chart-line', label: isSubcontractor ? 'Ansprechpartner' : 'Dashboard', show: true },
         { path: '/notizen', icon: 'fa-note-sticky', label: 'Notizen', show: canViewNotes },
         { path: '/aufgaben', icon: 'fa-clipboard-list', label: 'Aufgaben', show: canViewTasks },
-        { path: '/dateien', icon: 'fa-folder-open', label: 'Dateimanager', show: true },
-        { path: '/benutzer', icon: 'fa-users-gear', label: 'Benutzer', show: canViewUsers },
-        { path: '/subunternehmer', icon: 'fa-truck-fast', label: 'Subunternehmer', show: canViewSubcontractors },
-        { path: '/kunden', icon: 'fa-users', label: 'Kunden', show: canViewCustomers },
+        { path: '/dateien', icon: 'fa-folder-open', label: 'Dateimanager', show: !isSubcontractor },
+        { path: '/benutzer', icon: 'fa-users-gear', label: 'Benutzer', show: canViewUsers && !isSubcontractor },
+        { path: '/subunternehmer', icon: 'fa-truck-fast', label: 'Subunternehmer', show: canViewSubcontractors && !isSubcontractor },
+        { path: '/kunden', icon: 'fa-users', label: 'Kunden', show: canViewCustomers && !isSubcontractor },
         { path: '/projekte', icon: 'fa-building', label: 'Projekte', show: canViewProjects },
-        { path: '/angebote', icon: 'fa-file-invoice-dollar', label: 'Angebote', show: true },
-        { path: '/kategorien', icon: 'fa-tags', label: 'Kategorien', show: canViewCategories },
-        { path: '/anfragen', icon: 'fa-inbox', label: 'Anfragen', show: canViewInquiries },
-        { path: '/support', icon: 'fa-headset', label: 'Support', show: canViewSupport }
+        { path: '/angebote', icon: 'fa-file-invoice-dollar', label: 'Angebote', show: !isSubcontractor },
+        { path: '/kategorien', icon: 'fa-tags', label: 'Kategorien', show: canViewCategories && !isSubcontractor },
+        { path: '/anfragen', icon: 'fa-inbox', label: 'Anfragen', show: canViewInquiries && !isSubcontractor },
+        { path: '/support', icon: 'fa-headset', label: 'Support', show: canViewSupport && !isSubcontractor }
     ].filter(item => item.show);
 
     const communicationItems = [
-        { path: '/chat', icon: 'fa-comments', label: 'Chat', show: true, badge: chatUnreadCount > 0 ? chatUnreadCount : null },
-        { path: '/telefon', icon: 'fa-phone', label: 'Telefon', show: true },
-        { path: '/telefon/verlauf', icon: 'fa-clock-rotate-left', label: 'Anrufverlauf', show: true },
-        { path: '/telefon/globaler-verlauf', icon: 'fa-earth-europe', label: 'Globaler Verlauf', show: canManageApiKeys },
-        { path: '/telefon/einstellungen', icon: 'fa-gears', label: 'Einstellungen', show: isAdminOrOffice }
+        { path: '/chat', icon: 'fa-comments', label: 'Chat', show: !isSubcontractor, badge: chatUnreadCount > 0 ? chatUnreadCount : null },
+        { path: '/telefon', icon: 'fa-phone', label: 'Telefon', show: !isSubcontractor },
+        { path: '/telefon/verlauf', icon: 'fa-clock-rotate-left', label: 'Anrufverlauf', show: !isSubcontractor },
+        { path: '/telefon/globaler-verlauf', icon: 'fa-earth-europe', label: 'Globaler Verlauf', show: canManageApiKeys && !isSubcontractor },
+        { path: '/telefon/einstellungen', icon: 'fa-gears', label: 'Einstellungen', show: isAdminOrOffice && !isSubcontractor }
     ].filter(item => item.show);
 
     const timeTrackingItems = [
-        { path: '/zeiterfassung/terminal', icon: 'fa-clock', label: 'Terminal', show: isAdminOrOffice },
-        { path: '/zeiterfassung/protokolle', icon: 'fa-clipboard-list', label: 'Protokolle', show: isAdminOrOffice },
-        { path: '/settings/zeiterfassung', icon: 'fa-gears', label: 'Einstellungen', show: isAdminOrOffice }
+        { path: '/zeiterfassung/terminal', icon: 'fa-clock', label: 'Terminal', show: isAdminOrOffice && !isSubcontractor },
+        { path: '/zeiterfassung/protokolle', icon: 'fa-clipboard-list', label: 'Protokolle', show: isAdminOrOffice && !isSubcontractor },
+        { path: '/settings/zeiterfassung', icon: 'fa-gears', label: 'Einstellungen', show: isAdminOrOffice && !isSubcontractor }
     ].filter(item => item.show);
 
     const reonicItems = [
-        { path: '/angebote/reonic', icon: 'fa-plug', label: 'Reonic API', show: !isRestricted }
+        { path: '/angebote/reonic', icon: 'fa-plug', label: 'Reonic API', show: !isRestricted && !isSubcontractor }
     ].filter(item => item.show);
 
     let emailMenuItems = [];
