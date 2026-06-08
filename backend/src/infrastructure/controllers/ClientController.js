@@ -1,5 +1,6 @@
 const { Client, Company } = require('../../domain/models');
 const AppError = require('../../utils/appError');
+const bcrypt = require('bcryptjs');
 
 exports.getAllClients = async (req, res, next) => {
     try {
@@ -40,7 +41,8 @@ exports.createClient = async (req, res, next) => {
     try {
         const {
             name, contact_person, email, phone,
-            address, zip_code, city, type, status, notes, company_id, source
+            address, zip_code, city, type, status, notes, company_id, source,
+            client_partner, password
         } = req.body;
 
         // Ensure company_id is provided, normally extracted from logged in user req.user.company_id
@@ -62,7 +64,9 @@ exports.createClient = async (req, res, next) => {
             status: status || 'active',
             source: source || 'funnelforms',
             notes: notes === '' ? null : notes,
-            company_id: cid
+            company_id: cid,
+            client_partner: client_partner || 'client',
+            password_hash: (client_partner === 'partner' && password) ? await bcrypt.hash(password, 10) : null
         });
 
         res.status(201).json({
@@ -84,7 +88,8 @@ exports.updateClient = async (req, res, next) => {
 
         const {
             name, contact_person, email, phone,
-            address, zip_code, city, type, status, notes
+            address, zip_code, city, type, status, notes,
+            client_partner, password
         } = req.body;
 
         if (name !== undefined) client.name = name;
@@ -97,6 +102,10 @@ exports.updateClient = async (req, res, next) => {
         if (type !== undefined) client.type = type;
         if (status !== undefined) client.status = status;
         if (notes !== undefined) client.notes = notes === '' ? null : notes;
+        if (client_partner !== undefined) client.client_partner = client_partner;
+        if (password !== undefined && password !== '') {
+            client.password_hash = await bcrypt.hash(password, 10);
+        }
 
         await client.save();
 

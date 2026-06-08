@@ -49,6 +49,11 @@ const Client = sequelize.define('Client', {
         type: DataTypes.ENUM('company', 'private'),
         defaultValue: 'company'
     },
+    client_partner: {
+        type: DataTypes.ENUM('client', 'partner'),
+        allowNull: false,
+        defaultValue: 'client'
+    },
     status: {
         type: DataTypes.ENUM('active', 'inactive', 'lead'),
         defaultValue: 'active'

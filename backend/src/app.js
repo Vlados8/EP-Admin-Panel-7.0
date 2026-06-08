@@ -822,6 +822,14 @@ if (require.main === module) {
                     }
                 });
 
+                await runStep('clients client_partner', async () => {
+                    const [cols] = await sequelize.query("SHOW COLUMNS FROM clients LIKE 'client_partner'");
+                    if (cols.length === 0) {
+                        console.log('Adding client_partner to clients...');
+                        await sequelize.query("ALTER TABLE clients ADD COLUMN client_partner ENUM('client', 'partner') NOT NULL DEFAULT 'client'");
+                    }
+                });
+
                 console.log('Schema verification complete.');
 
                 console.log('Running initial seeding...');
