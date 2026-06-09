@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { useCompany } from '../../context/CompanyContext';
+import { toast } from 'react-hot-toast';
 
 const StatCard = ({ title, value, icon, colorClass, delay }) => (
     <div 
@@ -27,6 +28,19 @@ const SubcontractorDashboard = ({ user }) => {
     const { companyData } = useCompany();
     const [projects, setProjects] = useState([]);
     const [loading, setLoading] = useState(true);
+
+    const handleCopyEmail = (email, e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        navigator.clipboard.writeText(email)
+            .then(() => {
+                toast.success('E-Mail-Adresse kopiert!');
+            })
+            .catch((err) => {
+                console.error('Failed to copy email:', err);
+                toast.error('Kopieren fehlgeschlagen');
+            });
+    };
 
     useEffect(() => {
         const fetchProjects = async () => {
@@ -183,21 +197,22 @@ const SubcontractorDashboard = ({ user }) => {
 
                                         {/* Email link (if provided) */}
                                         {contact.email && (
-                                            <a 
-                                                href={`mailto:${contact.email}`}
-                                                className="bg-white/5 hover:bg-white/10 border border-white/10 text-white p-3 rounded-xl flex items-center justify-between transition-all duration-300 group/btn2"
+                                            <button 
+                                                onClick={(e) => handleCopyEmail(contact.email, e)}
+                                                className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white p-3 rounded-xl flex items-center justify-between transition-all duration-300 group/btn2 cursor-pointer text-left font-normal text-xs"
+                                                title="E-Mail-Adresse kopieren"
                                             >
                                                 <div className="flex items-center gap-3">
                                                     <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-gray-400 shrink-0 group-hover/btn2:scale-105 transition-transform">
                                                         <i className="fa-solid fa-envelope text-xs"></i>
                                                     </div>
                                                     <div>
-                                                        <div className="text-[9px] text-gray-400 uppercase font-bold tracking-wider">E-Mail schreiben</div>
+                                                        <div className="text-[9px] text-gray-400 uppercase font-bold tracking-wider">E-Mail kopieren</div>
                                                         <div className="text-xs font-bold text-gray-200">{contact.email}</div>
                                                     </div>
                                                 </div>
                                                 <i className="fa-solid fa-chevron-right text-white/30 text-xs group-hover/btn2:translate-x-1 transition-transform mr-1"></i>
-                                            </a>
+                                            </button>
                                         )}
                                     </div>
                                 ))
@@ -222,21 +237,22 @@ const SubcontractorDashboard = ({ user }) => {
                                     )}
 
                                     {companyData.settings.email && (
-                                        <a 
-                                            href={`mailto:${companyData.settings.email}`}
-                                            className="bg-white/5 hover:bg-white/10 border border-white/10 text-white p-4 rounded-2xl flex items-center justify-between transition-all duration-300 group/btn2"
+                                        <button 
+                                            onClick={(e) => handleCopyEmail(companyData.settings.email, e)}
+                                            className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white p-4 rounded-2xl flex items-center justify-between transition-all duration-300 group/btn2 cursor-pointer text-left font-normal text-xs"
+                                            title="E-Mail-Adresse kopieren"
                                         >
                                             <div className="flex items-center gap-4">
                                                 <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-gray-400 shrink-0 group-hover/btn2:scale-105 transition-transform">
                                                     <i className="fa-solid fa-envelope"></i>
                                                 </div>
                                                 <div>
-                                                    <div className="text-[10px] text-gray-400 uppercase font-black tracking-widest">E-Mail schreiben</div>
+                                                    <div className="text-[10px] text-gray-400 uppercase font-black tracking-widest">E-Mail kopieren</div>
                                                     <div className="text-sm font-bold text-gray-200">{companyData.settings.email}</div>
                                                 </div>
                                             </div>
                                             <i className="fa-solid fa-chevron-right text-white/30 group-hover/btn2:translate-x-1 transition-transform mr-2"></i>
-                                        </a>
+                                        </button>
                                     )}
                                 </>
                             )}

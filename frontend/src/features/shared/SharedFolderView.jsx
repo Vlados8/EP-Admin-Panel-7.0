@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import api from '../../services/api';
+import { toast } from 'react-hot-toast';
 import JSZip from 'jszip';
 import MediaViewer from '../../components/common/MediaViewer';
 import { 
@@ -712,9 +713,19 @@ const BrandingFooter = ({ companyInfo }) => {
                             <p className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-1.5">Kontakt</p>
                             {phone && <p className="flex items-center gap-1.5"><i className="fa-solid fa-phone text-gray-500 text-[10px]"></i> {phone}</p>}
                             {email && (
-                                <a href={`mailto:${email}`} className="flex items-center gap-1.5 hover:text-blue-400 transition-colors mt-0.5">
+                                <button 
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        navigator.clipboard.writeText(email)
+                                            .then(() => toast.success('E-Mail-Adresse kopiert!'))
+                                            .catch(() => toast.error('Kopieren fehlgeschlagen'));
+                                    }}
+                                    className="flex items-center gap-1.5 hover:text-blue-400 transition-colors mt-0.5 text-left bg-transparent border-none p-0 cursor-pointer text-white/50 text-xs font-normal"
+                                    title="E-Mail-Adresse kopieren"
+                                >
                                     <i className="fa-solid fa-envelope text-gray-500 text-[10px]"></i> {email}
-                                </a>
+                                </button>
                             )}
                         </div>
                     )}
