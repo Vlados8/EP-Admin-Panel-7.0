@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const { Op } = require('sequelize');
-const { ProjectFolder, ProjectFile, Role, Project, User, ProjectImage, ProjectStageImage, ProjectStage, Subcontractor } = require('../../domain/models');
+const { ProjectFolder, ProjectFile, Role, Project, User, ProjectImage, ProjectStageImage, ProjectStage, Subcontractor, Client } = require('../../domain/models');
 const { uploadToR2, deleteFromR2, listFromR2 } = require('../utils/storage');
 
 // Base uploads directory

@@ -1,4 +1,4 @@
-const { Note, User, Project, Attachment, Subcontractor } = require('../../domain/models');
+const { Note, User, Project, Attachment, Subcontractor, Client } = require('../../domain/models');
 const fs = require('fs');
 const path = require('path');
 const AppError = require('../../utils/appError');
