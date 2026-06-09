@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import api from '../../services/api';
+import JSZip from 'jszip';
 import MediaViewer from '../../components/common/MediaViewer';
 import { 
     File, 
@@ -120,16 +121,46 @@ const SharedFolderView = () => {
     const handleDownloadAll = async () => {
         if (!contentData?.items || downloadingAll) return;
         setDownloadingAll(true);
-        const filesOnly = contentData.items.filter(i => !i.isDirectory);
-        for (let i = 0; i < filesOnly.length; i++) {
-            const file = filesOnly[i];
-            const url = file.url || file.file_url;
-            if (url) {
-                await triggerDownload(url, file.name);
-                await new Promise(resolve => setTimeout(resolve, 600));
+        try {
+            const filesOnly = contentData.items.filter(i => !i.isDirectory);
+            if (filesOnly.length === 0) return;
+
+            const zip = new JSZip();
+            
+            for (let i = 0; i < filesOnly.length; i++) {
+                const file = filesOnly[i];
+                const url = file.url || file.file_url;
+                if (url) {
+                    try {
+                        const response = await fetch(url);
+                        if (!response.ok) throw new Error(`Failed to fetch ${file.name}`);
+                        const blob = await response.blob();
+                        zip.file(file.name, blob);
+                    } catch (err) {
+                        console.error(`Failed to add ${file.name} to zip:`, err);
+                    }
+                }
             }
+
+            const content = await zip.generateAsync({ type: 'blob' });
+            const blobUrl = window.URL.createObjectURL(content);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            
+            // Name the zip archive after the project title or folder name
+            const folderName = contentData.folderName || (contentData.project && contentData.project.title) || 'Dateien';
+            const zipName = `${folderName.replace(/[\/\\?%*:|"<>\s]/g, '_')}.zip`;
+            
+            a.download = zipName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (err) {
+            console.error('Failed to generate zip archive:', err);
+        } finally {
+            setDownloadingAll(false);
         }
-        setDownloadingAll(false);
     };
 
     const navigateToFolder = (folder) => {
