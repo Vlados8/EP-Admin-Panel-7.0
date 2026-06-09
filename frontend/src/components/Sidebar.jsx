@@ -134,7 +134,7 @@ const Sidebar = ({ isOpen, onClose, currentPath }) => {
         { path: '/dashboard', icon: isSubcontractor ? 'fa-circle-user' : 'fa-chart-line', label: isSubcontractor ? 'Ansprechpartner' : 'Dashboard', show: true },
         { path: '/notizen', icon: 'fa-note-sticky', label: 'Notizen', show: canViewNotes },
         { path: '/aufgaben', icon: 'fa-clipboard-list', label: 'Aufgaben', show: canViewTasks && !user?.isPartner },
-        { path: '/dateien', icon: 'fa-folder-open', label: 'Dateimanager', show: !isSubcontractor || user?.isPartner },
+        { path: '/dateien', icon: 'fa-folder-open', label: 'Dateimanager', show: !isSubcontractor && !user?.isPartner },
         { path: '/benutzer', icon: 'fa-users-gear', label: 'Benutzer', show: canViewUsers && !isSubcontractor },
         { path: '/subunternehmer', icon: 'fa-truck-fast', label: 'Subunternehmer', show: canViewSubcontractors && !isSubcontractor },
         { path: '/kunden', icon: 'fa-users', label: 'Kunden', show: canViewCustomers && !isSubcontractor },
@@ -292,7 +292,7 @@ const Sidebar = ({ isOpen, onClose, currentPath }) => {
                     <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'User')}&background=0D8ABC&color=fff`} alt="User" className="w-10 h-10 rounded-full border border-white/20" />
                     <div>
                         <p className="text-sm font-semibold truncate w-32">{user?.name || 'User'}</p>
-                        <p className="text-xs text-gray-400">{user?.role?.name || user?.role || 'Mitarbeiter'}</p>
+                        <p className="text-xs text-gray-400">{user?.isPartner ? 'Partner' : (user?.role?.name || user?.role || 'Mitarbeiter')}</p>
                     </div>
                 </div>
             </div>

@@ -265,7 +265,7 @@ const Header = ({ title, onMenuClick }) => {
                     </div>
                     <div className="hidden md:block text-sm">
                         <p className="font-medium text-white group-hover:text-red-400 transition-colors">Abmelden <i className="fa-solid fa-right-from-bracket ml-1 text-xs"></i></p>
-                        <p className="text-gray-400 text-xs text-left">{user?.name || 'Admin'} <span className="text-gray-500">({user?.role || 'Rolle'})</span></p>
+                        <p className="text-gray-400 text-xs text-left">{user?.name || 'Admin'} <span className="text-gray-500">({user?.isPartner ? 'Partner' : (user?.role || 'Rolle')})</span></p>
                     </div>
                 </div>
             </div>

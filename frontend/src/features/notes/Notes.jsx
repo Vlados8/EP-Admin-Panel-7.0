@@ -471,8 +471,9 @@ const Notes = () => {
                         ) : (
                             displayedNotes.map(note => {
                                 const isDone = note.isDone;
-                                const isNoteOwner = (isSubcontractor && note.subcontractor_id === currentUser?.id) ||
-                                                    (!isSubcontractor && note.user_id === currentUser?.id);
+                                const isNoteOwner = (currentUser?.isPartner && note.client_id === currentUser?.id) ||
+                                                    (!currentUser?.isPartner && isSubcontractor && note.subcontractor_id === currentUser?.id) ||
+                                                    (!currentUser?.isPartner && !isSubcontractor && note.user_id === currentUser?.id);
 
                                 return (
                                     <div key={note.id} onClick={() => handleOpenModal(note, false)} className={`glass-card p-5 rounded-2xl border-l-[6px] ${getColorClass(note.color)} ${isDone ? 'opacity-60' : ''} flex flex-col justify-between hover:-translate-y-1 transition-all duration-300 shadow-lg cursor-pointer`}>
@@ -632,7 +633,7 @@ const Notes = () => {
                                 </div>
 
                                 {/* Public construction diary toggle/switch */}
-                                {editingNote.project && ((isSubcontractor && editingNote.subcontractor_id === currentUser?.id) || (!isSubcontractor && editingNote.user_id === currentUser?.id)) && (
+                                {editingNote.project && ((currentUser?.isPartner && editingNote.client_id === currentUser?.id) || (!currentUser?.isPartner && isSubcontractor && editingNote.subcontractor_id === currentUser?.id) || (!currentUser?.isPartner && !isSubcontractor && editingNote.user_id === currentUser?.id)) && (
                                     <div className="flex items-center justify-between bg-white/5 border border-white/10 p-4 rounded-xl">
                                         <div className="flex flex-col gap-0.5">
                                             <span className="text-sm font-semibold text-white">Im Bautagebuch anzeigen</span>
@@ -695,7 +696,7 @@ const Notes = () => {
                                     >
                                         Schließen
                                     </button>
-                                    {((isSubcontractor && editingNote.subcontractor_id === currentUser?.id) || (!isSubcontractor && editingNote.user_id === currentUser?.id)) && (
+                                    {((currentUser?.isPartner && editingNote.client_id === currentUser?.id) || (!currentUser?.isPartner && isSubcontractor && editingNote.subcontractor_id === currentUser?.id) || (!currentUser?.isPartner && !isSubcontractor && editingNote.user_id === currentUser?.id)) && (
                                         <button 
                                             type="button"
                                             onClick={() => setIsModalEditMode(true)}

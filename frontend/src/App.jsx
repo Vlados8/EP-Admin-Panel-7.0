@@ -73,6 +73,15 @@ const RequirePermission = ({ permission, children }) => {
     return children;
 };
 
+const RequireStaff = ({ children }) => {
+    const { user } = useSelector((state) => state.auth);
+    const isSubcontractor = user?.role === 'Subcontractor' || user?.role?.name === 'Subcontractor';
+    if (isSubcontractor || user?.isPartner) {
+        return <Navigate to="/dashboard" replace />;
+    }
+    return children;
+};
+
 import { CompanyProvider } from './context/CompanyContext';
 import { PhoneProvider } from './context/PhoneContext';
 import PhonePage from './features/communication/PhonePage';
@@ -120,7 +129,7 @@ function App() {
                     <Route path="angebote" element={<Offers />} />
                     <Route path="angebote/neu" element={<OfferCreate />} />
                     <Route path="angebote/reonic" element={<Reonic />} />
-                    <Route path="dateien" element={<FileManager />} />
+                    <Route path="dateien" element={<RequireStaff><FileManager /></RequireStaff>} />
                     <Route path="telefon" element={<PhonePage />} />
                     <Route path="telefon/verlauf" element={<CallHistoryPage />} />
                     <Route path="telefon/globaler-verlauf" element={<AdminCallHistoryPage />} />

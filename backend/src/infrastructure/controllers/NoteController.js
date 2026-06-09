@@ -15,7 +15,9 @@ exports.getNotes = async (req, res, next) => {
         const whereClause = {};
         const userRole = req.user.role?.name || req.user.role;
         
-        if (userRole === 'Subcontractor') {
+        if (req.user.isPartner) {
+            whereClause.client_id = req.user.id;
+        } else if (userRole === 'Subcontractor') {
             if (req.query.projectId) {
                 whereClause.project_id = req.query.projectId;
                 whereClause.showInDiary = true;
@@ -42,6 +44,11 @@ exports.getNotes = async (req, res, next) => {
                 {
                     model: Subcontractor,
                     as: 'subcontractor',
+                    attributes: ['id', 'name']
+                },
+                {
+                    model: Client,
+                    as: 'client',
                     attributes: ['id', 'name']
                 },
                 {
@@ -74,8 +81,10 @@ exports.createNote = async (req, res, next) => {
         const { title, content, date, time, color, project_id, showInDiary } = req.body;
 
         const userRole = req.user.role?.name || req.user.role;
-        let user_id = userRole === 'Subcontractor' ? null : req.user.id;
-        let subcontractor_id = userRole === 'Subcontractor' ? req.user.id : null;
+        const isPartner = req.user.isPartner === true;
+        let user_id = (userRole === 'Subcontractor' || isPartner) ? null : req.user.id;
+        let subcontractor_id = (userRole === 'Subcontractor' && !isPartner) ? req.user.id : null;
+        let client_id = isPartner ? req.user.id : null;
 
         if (!title || !content || !date) {
             return next(new AppError('Bitte füllen Sie Titel, Inhalt und Datum aus', 400));
@@ -90,6 +99,7 @@ exports.createNote = async (req, res, next) => {
             project_id: (project_id === '' || project_id === 'null' || !project_id) ? null : project_id,
             user_id,
             subcontractor_id,
+            client_id,
             isPinned: req.body.isPinned || false,
             showInDiary: showInDiary === 'true' || showInDiary === true || false
         });
@@ -151,6 +161,7 @@ exports.createNote = async (req, res, next) => {
             include: [
                 { model: User, as: 'user', attributes: ['id', 'name'] },
                 { model: Subcontractor, as: 'subcontractor', attributes: ['id', 'name'] },
+                { model: Client, as: 'client', attributes: ['id', 'name'] },
                 { model: Project, as: 'project', attributes: ['id', 'project_number', 'title'] },
                 { model: Attachment, as: 'attachments' }
             ]
@@ -177,8 +188,9 @@ exports.deleteNote = async (req, res, next) => {
         }
 
         const userRole = req.user.role?.name || req.user.role;
-        const isOwner = (userRole === 'Subcontractor' && note.subcontractor_id === req.user.id) ||
-                        (userRole !== 'Subcontractor' && note.user_id === req.user.id);
+        const isOwner = (req.user.isPartner && note.client_id === req.user.id) ||
+                        (!req.user.isPartner && userRole === 'Subcontractor' && note.subcontractor_id === req.user.id) ||
+                        (!req.user.isPartner && userRole !== 'Subcontractor' && note.user_id === req.user.id);
 
         if (!isOwner) {
             return next(new AppError('Keine Berechtigung zum Löschen dieser Notiz', 403));
@@ -244,8 +256,9 @@ exports.updateNote = async (req, res, next) => {
         }
 
         const userRole = req.user.role?.name || req.user.role;
-        const isOwner = (userRole === 'Subcontractor' && note.subcontractor_id === req.user.id) ||
-                        (userRole !== 'Subcontractor' && note.user_id === req.user.id);
+        const isOwner = (req.user.isPartner && note.client_id === req.user.id) ||
+                        (!req.user.isPartner && userRole === 'Subcontractor' && note.subcontractor_id === req.user.id) ||
+                        (!req.user.isPartner && userRole !== 'Subcontractor' && note.user_id === req.user.id);
 
         if (!isOwner) {
             return next(new AppError('Keine Berechtigung zum Bearbeiten dieser Notiz', 403));
@@ -324,6 +337,7 @@ exports.updateNote = async (req, res, next) => {
             include: [
                 { model: User, as: 'user', attributes: ['id', 'name'] },
                 { model: Subcontractor, as: 'subcontractor', attributes: ['id', 'name'] },
+                { model: Client, as: 'client', attributes: ['id', 'name'] },
                 { model: Project, as: 'project', attributes: ['id', 'project_number', 'title'] },
                 { model: Attachment, as: 'attachments' }
             ]

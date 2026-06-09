@@ -120,6 +120,9 @@ User.hasMany(Note, { foreignKey: 'user_id', as: 'notes' });
 Note.belongsTo(Subcontractor, { foreignKey: 'subcontractor_id', as: 'subcontractor' });
 Subcontractor.hasMany(Note, { foreignKey: 'subcontractor_id', as: 'subcontractorNotes' });
 
+Note.belongsTo(Client, { foreignKey: 'client_id', as: 'client' });
+Client.hasMany(Note, { foreignKey: 'client_id', as: 'clientNotes' });
+
 Note.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
 Project.hasMany(Note, { foreignKey: 'project_id', as: 'notes' });
 

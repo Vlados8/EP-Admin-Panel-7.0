@@ -854,6 +854,14 @@ if (require.main === module) {
                     }
                 });
 
+                await runStep('notes client_id', async () => {
+                    const [cols] = await sequelize.query("SHOW COLUMNS FROM notes LIKE 'client_id'");
+                    if (cols.length === 0) {
+                        console.log('Adding client_id to notes...');
+                        await sequelize.query("ALTER TABLE notes ADD COLUMN client_id INT NULL");
+                    }
+                });
+
                 console.log('Schema verification complete.');
 
                 console.log('Running initial seeding...');
