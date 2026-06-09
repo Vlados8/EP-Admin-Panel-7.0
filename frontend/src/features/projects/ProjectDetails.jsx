@@ -24,7 +24,7 @@ const ProjectDetails = () => {
     const isWorker = currentUser?.role?.name === 'Worker' || currentUser?.role === 'Worker';
     const isGroupLeader = currentUser?.role?.name === 'Gruppenleiter' || currentUser?.role === 'Gruppenleiter';
     const isSubcontractor = currentUser?.role?.name === 'Subcontractor' || currentUser?.role === 'Subcontractor';
-    const hideBudget = isWorker || isGroupLeader || isSubcontractor;
+    const hideBudget = isWorker || isGroupLeader || (isSubcontractor && !currentUser?.isPartner);
     const hasEndClient = project ? !!(project.client_first_name || project.client_last_name || project.client_phone || project.client_email) : false;
     const [activeTab, setActiveTab] = useState('info'); // 'info', 'steps', or 'files'
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -620,7 +620,7 @@ const ProjectDetails = () => {
                                 </button>
                             )}
                         </div>
-                        {project.client && !(isSubcontractor && hasEndClient) && (
+                        {project.client && (!(isSubcontractor && hasEndClient) || currentUser?.isPartner) && (
                             <p className="text-sm text-gray-400 mt-1 flex items-center gap-2">
                                 <i className="fa-solid fa-building text-gray-500"></i>
                                 {project.client.company_name || project.client.name || project.client.contact_person}
@@ -1189,7 +1189,7 @@ const ProjectDetails = () => {
                                 <i className="fa-solid fa-user-tie text-emerald-400"></i>
                             </h3>
                             
-                            {project.client && !(isSubcontractor && hasEndClient) && (
+                            {project.client && (!(isSubcontractor && hasEndClient) || currentUser?.isPartner) && (
                                 <div className="flex items-start gap-4 mb-4 pb-4 border-b border-white/5">
                                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-white/10 flex items-center justify-center text-blue-400 text-sm font-bold shrink-0">
                                         <i className="fa-solid fa-building"></i>
@@ -1197,13 +1197,13 @@ const ProjectDetails = () => {
                                     <div className="min-w-0 flex-1">
                                         <div className="text-[10px] text-gray-500 uppercase font-bold mb-0.5">Kundenfirma</div>
                                         <div className="font-semibold text-white truncate">{project.client.company_name || project.client.name}</div>
-                                        {project.client.contact_person && !isSubcontractor && (
+                                        {project.client.contact_person && (!isSubcontractor || currentUser?.isPartner) && (
                                             <div className="text-xs text-emerald-400 font-medium mt-0.5 flex items-center gap-1.5">
                                                 <i className="fa-regular fa-user text-emerald-400/80 text-[10px]"></i>
                                                 {project.client.contact_person}
                                             </div>
                                         )}
-                                        {project.client.email && !isSubcontractor ? (
+                                        {project.client.email && (!isSubcontractor || currentUser?.isPartner) ? (
                                             <button 
                                                 onClick={(e) => handleEmailClick(project.client.email, e)}
                                                 className="text-xs text-blue-400 hover:underline truncate mt-0.5 block text-left"
@@ -1211,7 +1211,7 @@ const ProjectDetails = () => {
                                                 {project.client.email}
                                             </button>
                                         ) : null}
-                                        {project.client.phone && !isSubcontractor && (
+                                        {project.client.phone && (!isSubcontractor || currentUser?.isPartner) && (
                                             <div className="text-xs text-gray-400 truncate mt-0.5">{project.client.phone}</div>
                                         )}
                                     </div>
@@ -1261,7 +1261,7 @@ const ProjectDetails = () => {
                                         </div>
                                     )}
 
-                                    {project.client_notes && !isSubcontractor && (
+                                    {project.client_notes && (!isSubcontractor || currentUser?.isPartner) && (
                                         <div className="pt-2 border-t border-white/5">
                                             <div className="text-[10px] text-emerald-400 uppercase font-bold mb-1">Kunden-Notizen (intern)</div>
                                             <div className="text-xs text-gray-300 bg-emerald-500/5 border border-emerald-500/10 p-2.5 rounded-lg leading-relaxed whitespace-pre-wrap">
