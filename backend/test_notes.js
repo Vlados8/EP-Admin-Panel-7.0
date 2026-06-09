@@ -6,8 +6,14 @@ async function test() {
         await sequelize.authenticate();
         console.log('Database connected!');
         
-        const [notes] = await sequelize.query("SELECT id, title, project_id, user_id, subcontractor_id, show_in_diary FROM notes WHERE project_id IS NOT NULL");
-        console.log('Notes with project:', JSON.stringify(notes, null, 2));
+        const [projects] = await sequelize.query("SELECT id, project_number, title, client_id FROM projects LIMIT 5");
+        console.log('Projects:', projects);
+
+        const [folders] = await sequelize.query("SELECT id, project_id, name, path, visible_to_partners, visible_to_subcontractors, created_by_client_id FROM project_folders LIMIT 20");
+        console.log('Folders:', folders);
+
+        const [files] = await sequelize.query("SELECT id, project_id, name, path, created_by_client_id FROM project_files LIMIT 20");
+        console.log('Files:', files);
         
         process.exit(0);
     } catch (err) {

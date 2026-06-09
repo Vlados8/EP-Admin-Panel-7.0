@@ -862,6 +862,11 @@ if (require.main === module) {
                     }
                 });
 
+                await runStep('project_folders visible_to_partners default true', async () => {
+                    console.log('Updating project_folders visible_to_partners to true for existing folders...');
+                    await sequelize.query("UPDATE project_folders SET visible_to_partners = 1 WHERE visible_to_partners = 0 AND created_by_client_id IS NULL");
+                });
+
                 console.log('Schema verification complete.');
 
                 console.log('Running initial seeding...');

@@ -40,7 +40,7 @@ const ProjectFolder = sequelize.define('ProjectFolder', {
     },
     visible_to_partners: {
         type: DataTypes.BOOLEAN,
-        defaultValue: false
+        defaultValue: true
     },
     share_token: {
         type: DataTypes.UUID,

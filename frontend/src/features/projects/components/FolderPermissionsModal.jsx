@@ -21,13 +21,13 @@ const FolderPermissionsModal = ({ isOpen, onClose, folder, projectId, onUpdate }
                 setIsPublic(folder.permissions.is_public || false);
                 setShareToken(folder.permissions.share_token || '');
                 setVisibleToSubcontractors(folder.permissions.visible_to_subcontractors !== false);
-                setVisibleToPartners(folder.permissions.visible_to_partners || false);
+                setVisibleToPartners(folder.permissions.visible_to_partners !== false);
             } else {
                 setSelectedRoleIds([]);
                 setIsPublic(false);
                 setShareToken('');
                 setVisibleToSubcontractors(true);
-                setVisibleToPartners(false);
+                setVisibleToPartners(true);
             }
         }
     }, [isOpen, folder]);

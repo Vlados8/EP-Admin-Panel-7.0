@@ -383,7 +383,7 @@ exports.createFolder = async (req, res) => {
 
         // Defaults based on who is creating the folder
         let defaultSub = true;
-        let defaultPartner = false;
+        let defaultPartner = true;
         if (isPartner) {
             defaultSub = false;
             defaultPartner = true;
@@ -735,7 +735,7 @@ exports.downloadFile = async (req, res) => {
 exports.updatePermissions = async (req, res) => {
     try {
         const { id } = req.params;
-        const { path: folderPath, name, allowed_role_ids, visible_to_subcontractors } = req.body;
+        const { path: folderPath, name, allowed_role_ids, visible_to_subcontractors, visible_to_partners } = req.body;
         const userRole = req.user.role;
         const userRoleName = userRole?.name || userRole;
 
@@ -749,12 +749,18 @@ exports.updatePermissions = async (req, res) => {
 
         const [folder, created] = await ProjectFolder.findOrCreate({
             where: { project_id: id, path: folderPath || '', name: name },
-            defaults: { allowed_role_ids, visible_to_subcontractors: visible_to_subcontractors !== undefined ? visible_to_subcontractors : true, created_by_id: req.user.id }
+            defaults: { 
+                allowed_role_ids, 
+                visible_to_subcontractors: visible_to_subcontractors !== undefined ? visible_to_subcontractors : true, 
+                visible_to_partners: visible_to_partners !== undefined ? visible_to_partners : true, 
+                created_by_id: req.user.id 
+            }
         });
 
         if (!created) {
             if (allowed_role_ids !== undefined) folder.allowed_role_ids = allowed_role_ids;
             if (visible_to_subcontractors !== undefined) folder.visible_to_subcontractors = visible_to_subcontractors;
+            if (visible_to_partners !== undefined) folder.visible_to_partners = visible_to_partners;
             await folder.save();
         }
 
