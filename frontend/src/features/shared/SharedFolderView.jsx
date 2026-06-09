@@ -25,6 +25,7 @@ const SharedFolderView = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [companyInfo, setCompanyInfo] = useState(null);
+    const [downloadingAll, setDownloadingAll] = useState(false);
     
     // Gallery State
     const [isGalleryOpen, setIsGalleryOpen] = useState(false);
@@ -95,6 +96,21 @@ const SharedFolderView = () => {
         if (url) {
             window.open(url, '_blank');
         }
+    };
+
+    const handleDownloadAll = async () => {
+        if (!contentData?.items || downloadingAll) return;
+        setDownloadingAll(true);
+        const filesOnly = contentData.items.filter(i => !i.isDirectory);
+        for (let i = 0; i < filesOnly.length; i++) {
+            const file = filesOnly[i];
+            const url = file.url || file.file_url;
+            if (url) {
+                window.open(url, '_blank');
+                await new Promise(resolve => setTimeout(resolve, 600));
+            }
+        }
+        setDownloadingAll(false);
     };
 
     const navigateToFolder = (folder) => {
@@ -335,12 +351,34 @@ const SharedFolderView = () => {
 
                 {/* File List */}
                 <div className="bg-white/[0.02] border border-white/10 rounded-3xl overflow-hidden shadow-2xl backdrop-blur-xl">
-                    <div className="p-6 border-b border-white/5 bg-white/[0.02] flex justify-between items-center">
-                        <h2 className="text-[10px] font-black text-white/30 uppercase tracking-[0.3em]">Dateien & Ordner</h2>
-                        <div className="flex items-center gap-2 text-emerald-400 text-[10px] font-bold uppercase tracking-widest">
-                            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                            Live-Zugriff
+                    <div className="p-6 border-b border-white/5 bg-white/[0.02] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                            <h2 className="text-[10px] font-black text-white/30 uppercase tracking-[0.3em] whitespace-nowrap">Dateien & Ordner</h2>
+                            <div className="flex items-center gap-2 text-emerald-400 text-[10px] font-bold uppercase tracking-widest">
+                                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                                Live-Zugriff
+                            </div>
                         </div>
+                        
+                        {contentData?.items && contentData.items.filter(i => !i.isDirectory).length > 0 && (
+                            <button
+                                onClick={handleDownloadAll}
+                                disabled={downloadingAll}
+                                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-xs font-bold transition-all shadow-lg active:scale-[0.98] self-end sm:self-auto ${downloadingAll ? 'bg-blue-600/50 cursor-not-allowed shadow-none' : 'bg-blue-600 hover:bg-blue-500 shadow-blue-600/10'}`}
+                            >
+                                {downloadingAll ? (
+                                    <>
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                        Dateien werden heruntergeladen...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Download className="w-3.5 h-3.5" />
+                                        Alle Dateien herunterladen ({contentData.items.filter(i => !i.isDirectory).length})
+                                    </>
+                                )}
+                            </button>
+                        )}
                     </div>
 
                     <div className="divide-y divide-white/[0.03]">
