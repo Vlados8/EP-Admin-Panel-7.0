@@ -16,6 +16,7 @@ import {
     ChevronUp
 } from 'lucide-react';
 import api from '../../services/api';
+import JSZip from 'jszip';
 import MediaViewer from '../../components/common/MediaViewer';
 import FolderPermissionsModal from './components/FolderPermissionsModal';
 import { getImageUrl } from '../../utils/config';
@@ -26,6 +27,7 @@ const ProjectFileManager = ({ project }) => {
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isUploading, setIsUploading] = useState(false);
+    const [downloadingFolders, setDownloadingFolders] = useState({});
     const fileInputRef = useRef(null);
 
     // Upload Queue State
@@ -288,6 +290,99 @@ const ProjectFileManager = ({ project }) => {
         }
     };
 
+    const fetchFolderFilesRecursively = async (rootFolderPath) => {
+        let allFiles = [];
+        const queue = [rootFolderPath];
+        
+        while (queue.length > 0) {
+            const current = queue.shift();
+            try {
+                const res = await api.get(`/projects/${projectId}/files`, {
+                    params: { path: current }
+                });
+                if (res.data?.status === 'success') {
+                    const itemsList = res.data.data;
+                    for (const item of itemsList) {
+                        const itemPhysicalName = item.physicalName || item.name;
+                        const itemPath = item.path || (current ? `${current}/${itemPhysicalName}` : itemPhysicalName);
+                        
+                        if (item.isDirectory) {
+                            queue.push(itemPath);
+                        } else {
+                            let zipPath = '';
+                            if (current !== rootFolderPath) {
+                                zipPath = current.replace(new RegExp(`^${rootFolderPath}/?`), '');
+                            }
+                            allFiles.push({
+                                name: item.name,
+                                fullPath: itemPath,
+                                zipPath: zipPath
+                            });
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error(`Failed to list files in ${current}:`, err);
+            }
+        }
+        return allFiles;
+    };
+
+    const handleDownloadFolder = async (item, e) => {
+        e.stopPropagation();
+        const folderPhysicalName = item.physicalName || item.name;
+        const folderPath = item.path || (currentPath ? `${currentPath}/${folderPhysicalName}` : folderPhysicalName);
+        
+        if (downloadingFolders[folderPath]) return;
+        
+        setDownloadingFolders(prev => ({ ...prev, [folderPath]: true }));
+        try {
+            const files = await fetchFolderFilesRecursively(folderPath);
+            if (files.length === 0) {
+                alert('Dieser Ordner enthält keine Dateien zum Herunterladen.');
+                return;
+            }
+            
+            const zip = new JSZip();
+            
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                try {
+                    const res = await api.get(`/projects/${projectId}/files/download`, {
+                        params: { path: file.fullPath },
+                        responseType: 'blob'
+                    });
+                    
+                    const zipFilePath = file.zipPath ? `${file.zipPath}/${file.name}` : file.name;
+                    zip.file(zipFilePath, res.data);
+                } catch (fileErr) {
+                    console.error(`Failed to download file ${file.fullPath} for zip:`, fileErr);
+                }
+            }
+            
+            const content = await zip.generateAsync({ type: 'blob' });
+            const blobUrl = window.URL.createObjectURL(content);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            
+            const zipName = `${item.name.replace(/[\/\\?%*:|"<>\s]/g, '_')}.zip`;
+            a.download = zipName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (err) {
+            console.error('Failed to download folder as zip:', err);
+            alert('Fehler beim Herunterladen des Ordners als ZIP.');
+        } finally {
+            setDownloadingFolders(prev => {
+                const copy = { ...prev };
+                delete copy[folderPath];
+                return copy;
+            });
+        }
+    };
+
     const handleOpenPermissions = (item, e) => {
         e.stopPropagation();
         setSelectedFolderForPermissions({
@@ -436,18 +531,34 @@ const ProjectFileManager = ({ project }) => {
                                     )}
 
                                     {item.isDirectory ? (
-                                        <div
-                                            onClick={() => navigateTo(item)}
-                                            className="flex-1 w-full flex flex-col items-center justify-center cursor-pointer"
-                                        >
-                                            <i className="fa-solid fa-folder text-5xl text-blue-400 mb-3 drop-shadow-md"></i>
-                                            <span className="text-sm font-medium text-gray-200 truncate w-full px-2" title={`${displayName}${item.creator_name ? ` (Erstellt von ${item.creator_name})` : ''}`}>{displayName}</span>
-                                            {item.creator_name && (
-                                                <span className={`text-[10px] mt-1 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1 ${item.created_by_subcontractor_id ? 'text-amber-400 font-bold' : (item.created_by_client_id ? 'text-purple-400 font-bold' : 'text-gray-500')}`}>
-                                                    von {item.creator_name} {item.created_by_subcontractor_id && <i className="fa-solid fa-helmet-safety text-amber-400 text-[10px]"></i>} {item.created_by_client_id && <i className="fa-solid fa-handshake text-purple-400 text-[10px]"></i>}
-                                                </span>
+                                        <>
+                                            <div
+                                                onClick={() => navigateTo(item)}
+                                                className="flex-1 w-full flex flex-col items-center justify-center cursor-pointer"
+                                            >
+                                                <i className="fa-solid fa-folder text-5xl text-blue-400 mb-3 drop-shadow-md"></i>
+                                                <span className="text-sm font-medium text-gray-200 truncate w-full px-2" title={`${displayName}${item.creator_name ? ` (Erstellt von ${item.creator_name})` : ''}`}>{displayName}</span>
+                                                {item.creator_name && (
+                                                    <span className={`text-[10px] mt-1 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1 ${item.created_by_subcontractor_id ? 'text-amber-400 font-bold' : (item.created_by_client_id ? 'text-purple-400 font-bold' : 'text-gray-500')}`}>
+                                                        von {item.creator_name} {item.created_by_subcontractor_id && <i className="fa-solid fa-helmet-safety text-amber-400 text-[10px]"></i>} {item.created_by_client_id && <i className="fa-solid fa-handshake text-purple-400 text-[10px]"></i>}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {!isSpecialFolder && (
+                                                <button
+                                                    onClick={(e) => handleDownloadFolder(item, e)}
+                                                    disabled={downloadingFolders[item.path || (currentPath ? `${currentPath}/${item.physicalName || item.name}` : (item.physicalName || item.name))]}
+                                                    className="absolute bottom-2 right-2 w-7 h-7 bg-blue-500/80 hover:bg-blue-500 disabled:bg-blue-500/50 text-white rounded-md flex items-center justify-center text-[12px] opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                                                    title="Ordner als ZIP herunterladen"
+                                                >
+                                                    {downloadingFolders[item.path || (currentPath ? `${currentPath}/${item.physicalName || item.name}` : (item.physicalName || item.name))] ? (
+                                                        <i className="fa-solid fa-circle-notch fa-spin"></i>
+                                                    ) : (
+                                                        <i className="fa-solid fa-download"></i>
+                                                    )}
+                                                </button>
                                             )}
-                                        </div>
+                                        </>
                                     ) : (
                                         <div
                                             className="flex-1 w-full flex flex-col items-center justify-center relative group/file"

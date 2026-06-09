@@ -27,6 +27,7 @@ const SharedFolderView = () => {
     const [error, setError] = useState(null);
     const [companyInfo, setCompanyInfo] = useState(null);
     const [downloadingAll, setDownloadingAll] = useState(false);
+    const [downloadingFolders, setDownloadingFolders] = useState({});
     
     // Gallery State
     const [isGalleryOpen, setIsGalleryOpen] = useState(false);
@@ -160,6 +161,121 @@ const SharedFolderView = () => {
             console.error('Failed to generate zip archive:', err);
         } finally {
             setDownloadingAll(false);
+        }
+    };
+
+    const fetchSharedFolderFilesRecursively = async (rootFolderId, isLegacy, rootPath) => {
+        let allFiles = [];
+        
+        if (isLegacy) {
+            const queue = [rootPath];
+            while (queue.length > 0) {
+                const current = queue.shift();
+                const res = await api.get(`/public/shared-folder/${token}`, {
+                    params: { path: current }
+                });
+                if (res.data?.status === 'success') {
+                    const itemsList = res.data.data.items;
+                    for (const item of itemsList) {
+                        const itemPath = current ? `${current}/${item.name}` : item.name;
+                        if (item.isDirectory) {
+                            queue.push(itemPath);
+                        } else {
+                            let zipPath = '';
+                            if (current !== rootPath) {
+                                zipPath = current.replace(new RegExp(`^${rootPath}/?`), '');
+                            }
+                            allFiles.push({
+                                name: item.name,
+                                url: item.url || item.file_url,
+                                zipPath: zipPath
+                            });
+                        }
+                    }
+                }
+            }
+        } else {
+            const queue = [{ id: rootFolderId, path: '' }];
+            while (queue.length > 0) {
+                const current = queue.shift();
+                const res = await api.get(`/public/assets/${token}`, {
+                    params: { folder_id: current.id }
+                });
+                if (res.data?.status === 'success') {
+                    const itemsList = res.data.data.items;
+                    for (const item of itemsList) {
+                        if (item.isDirectory) {
+                            const subPath = current.path ? `${current.path}/${item.name}` : item.name;
+                            queue.push({ id: item.id, path: subPath });
+                        } else {
+                            allFiles.push({
+                                name: item.name,
+                                url: item.url || item.file_url,
+                                zipPath: current.path
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        return allFiles;
+    };
+
+    const handleDownloadFolder = async (folderItem, e) => {
+        e.stopPropagation();
+        const folderId = folderItem.id;
+        const isLegacy = contentData?.isLegacy;
+        const legacyPath = folderItem.path || (contentData?.currentPath ? `${contentData.currentPath}/${folderItem.name}` : folderItem.name);
+        
+        const folderKey = isLegacy ? legacyPath : folderId;
+        if (downloadingFolders[folderKey]) return;
+
+        setDownloadingFolders(prev => ({ ...prev, [folderKey]: true }));
+        try {
+            const files = await fetchSharedFolderFilesRecursively(folderId, isLegacy, legacyPath);
+            if (files.length === 0) {
+                alert('Dieser Ordner enthält keine Dateien.');
+                return;
+            }
+
+            const zip = new JSZip();
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const url = file.url;
+                if (url) {
+                    try {
+                        const response = await fetch(url);
+                        if (!response.ok) throw new Error(`Failed to fetch ${file.name}`);
+                        const blob = await response.blob();
+                        const zipFilePath = file.zipPath ? `${file.zipPath}/${file.name}` : file.name;
+                        zip.file(zipFilePath, blob);
+                    } catch (err) {
+                        console.error(`Failed to add ${file.name} to zip:`, err);
+                    }
+                }
+            }
+
+            const content = await zip.generateAsync({ type: 'blob' });
+            const blobUrl = window.URL.createObjectURL(content);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            
+            const zipName = `${folderItem.name.replace(/[\/\\?%*:|"<>\s]/g, '_')}.zip`;
+            a.download = zipName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (err) {
+            console.error('Failed to download folder as zip:', err);
+            alert('Fehler beim Herunterladen des Ordners.');
+        } finally {
+            setDownloadingFolders(prev => {
+                const copy = { ...prev };
+                delete copy[folderKey];
+                return copy;
+            });
         }
     };
 
@@ -465,7 +581,23 @@ const SharedFolderView = () => {
                                     </div>
                                     
                                     <div className="flex items-center gap-3">
-                                        {!item.isDirectory && (
+                                        {item.isDirectory ? (
+                                            <>
+                                                <button 
+                                                    onClick={(e) => { e.stopPropagation(); handleDownloadFolder(item, e); }}
+                                                    disabled={downloadingFolders[isLegacy ? (item.path || (contentData?.currentPath ? `${contentData.currentPath}/${item.name}` : item.name)) : item.id]}
+                                                    className="p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl border border-white/10 transition-all opacity-0 group-hover:opacity-100 flex items-center justify-center disabled:opacity-50"
+                                                    title="Ordner als ZIP herunterladen"
+                                                >
+                                                    {downloadingFolders[isLegacy ? (item.path || (contentData?.currentPath ? `${contentData.currentPath}/${item.name}` : item.name)) : item.id] ? (
+                                                        <Loader2 className="w-4.5 h-4.5 animate-spin text-white" />
+                                                    ) : (
+                                                        <Download className="w-4 h-4" />
+                                                    )}
+                                                </button>
+                                                <ChevronRight className="w-5 h-5 text-white/10 group-hover:text-white transition-colors" />
+                                            </>
+                                        ) : (
                                             <button 
                                                 onClick={(e) => { e.stopPropagation(); handleDownload(item); }}
                                                 className="p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl border border-white/10 transition-all opacity-0 group-hover:opacity-100"
@@ -473,7 +605,6 @@ const SharedFolderView = () => {
                                                 <Download className="w-4 h-4" />
                                             </button>
                                         )}
-                                        {item.isDirectory && <ChevronRight className="w-5 h-5 text-white/10 group-hover:text-white transition-colors" />}
                                     </div>
                                 </div>
                             ))
