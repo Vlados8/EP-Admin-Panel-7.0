@@ -117,9 +117,9 @@ const SubcontractorDashboard = ({ user }) => {
             </div>
 
             {/* Content Split Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
                 {/* Left: Contact Person (Ansprechpartner) */}
-                <div className="glass-card p-6 md:p-8 rounded-3xl border border-white/10 flex flex-col justify-between animate-[slideUp_0.5s_ease-out_0.3s_forwards] opacity-0 relative overflow-hidden group">
+                <div className="lg:col-span-1 glass-card p-6 md:p-8 rounded-3xl border border-white/10 flex flex-col justify-between animate-[slideUp_0.5s_ease-out_0.3s_forwards] opacity-0 relative overflow-hidden group">
                     <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none"></div>
                     
                     <div>
@@ -245,7 +245,7 @@ const SubcontractorDashboard = ({ user }) => {
                 </div>
 
                 {/* Right: Assigned Projects */}
-                <div className="glass-card p-6 md:p-8 rounded-3xl border border-white/10 flex flex-col justify-between animate-[slideUp_0.5s_ease-out_0.4s_forwards] opacity-0">
+                <div className="lg:col-span-2 glass-card p-6 md:p-8 rounded-3xl border border-white/10 flex flex-col justify-between animate-[slideUp_0.5s_ease-out_0.4s_forwards] opacity-0">
                     <div>
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
@@ -260,45 +260,60 @@ const SubcontractorDashboard = ({ user }) => {
                             </button>
                         </div>
 
-                        <div className="space-y-4 flex-1 max-h-[360px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-white/5">
+                        <div className="overflow-x-auto w-full max-h-[380px] scrollbar-thin scrollbar-thumb-white/5 pr-1">
                             {loading ? (
                                 <div className="text-gray-400 text-center py-12">Lade Projekte...</div>
                             ) : projects.length > 0 ? (
-                                projects.map((project, idx) => (
-                                    <div 
-                                        key={project.id} 
-                                        onClick={() => navigate(`/projekte/${project.id}`)}
-                                        className="bg-white/[0.02] border border-white/5 p-4 rounded-2xl hover:bg-white/[0.05] transition-all duration-300 cursor-pointer flex flex-col gap-3 group"
-                                    >
-                                        <div className="flex justify-between items-start gap-4">
-                                            <div>
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    <span className="text-[10px] text-gray-500 font-mono font-semibold">{project.project_number}</span>
+                                <table className="w-full text-left text-sm border-collapse">
+                                    <thead>
+                                        <tr className="border-b border-white/10 text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                                            <th className="pb-3 pr-4">Projekt-Nr.</th>
+                                            <th className="pb-3 pr-4">Projektname</th>
+                                            <th className="pb-3 pr-4">Status</th>
+                                            <th className="pb-3 pr-4">Fortschritt</th>
+                                            <th className="pb-3 text-right">Aktionen</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-white/5">
+                                        {projects.map((project) => (
+                                            <tr 
+                                                key={project.id}
+                                                onClick={() => navigate(`/projekte/${project.id}`)}
+                                                className="hover:bg-white/[0.02] cursor-pointer group transition-colors"
+                                            >
+                                                <td className="py-4 pr-4 font-mono text-xs font-semibold text-gray-400">
+                                                    {project.project_number}
+                                                </td>
+                                                <td className="py-4 pr-4 font-semibold text-white group-hover:text-blue-400 transition-colors">
+                                                    <div className="max-w-[180px] md:max-w-[240px] truncate" title={project.title}>
+                                                        {project.title}
+                                                    </div>
+                                                </td>
+                                                <td className="py-4 pr-4">
                                                     <span className={`text-[10px] px-2 py-0.5 rounded-md border font-medium ${getStatusStyles(project.status)}`}>
                                                         {project.status}
                                                     </span>
-                                                </div>
-                                                <h4 className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors mt-1">
-                                                    {project.title}
-                                                </h4>
-                                            </div>
-                                            <i className="fa-solid fa-arrow-right text-gray-600 group-hover:text-blue-400 group-hover:translate-x-1 transition-all self-center"></i>
-                                        </div>
-                                        
-                                        <div className="space-y-1">
-                                            <div className="flex justify-between text-[10px] text-gray-500">
-                                                <span>Fortschritt</span>
-                                                <span className="font-bold text-white">{project.progress}%</span>
-                                            </div>
-                                            <div className="w-full bg-black/40 rounded-full h-1.5 overflow-hidden">
-                                                <div 
-                                                    className={`h-full rounded-full ${getProgressColor(project.progress)} transition-all duration-500`}
-                                                    style={{ width: `${project.progress}%` }}
-                                                ></div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))
+                                                </td>
+                                                <td className="py-4 pr-4">
+                                                    <div className="flex items-center gap-3 w-32">
+                                                        <div className="flex-1 bg-black/40 rounded-full h-1.5 overflow-hidden">
+                                                            <div 
+                                                                className={`h-full rounded-full ${getProgressColor(project.progress)} transition-all duration-500`}
+                                                                style={{ width: `${project.progress}%` }}
+                                                            ></div>
+                                                        </div>
+                                                        <span className="font-mono text-xs font-bold text-white shrink-0">{project.progress}%</span>
+                                                    </div>
+                                                </td>
+                                                <td className="py-4 text-right">
+                                                    <button className="text-xs text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1 ml-auto group-hover:translate-x-1 transition-transform">
+                                                        Ansehen <i className="fa-solid fa-chevron-right text-[10px]"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
                             ) : (
                                 <div className="flex flex-col items-center justify-center py-12 text-gray-500 italic">
                                     <i className="fa-solid fa-folder-open text-3xl mb-3 opacity-40"></i>
