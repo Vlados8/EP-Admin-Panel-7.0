@@ -19,6 +19,7 @@ import ApiIntegration from './pages/Settings/ApiIntegration';
 import NotificationSettings from './pages/Settings/NotificationSettings';
 import CompanySettings from './features/system/CompanySettings';
 import DatabaseSettings from './features/system/DatabaseSettings';
+import PortalSettings from './pages/Settings/PortalSettings';
 import Emails from './features/emails/Emails';
 import StorageManagement from './features/system/StorageManagement';
 import EmailMessages from './features/emails/EmailMessages';
@@ -147,6 +148,7 @@ function App() {
                         <Route path="company" element={<CompanySettings />} />
                         <Route path="database" element={<DatabaseSettings />} />
                         <Route path="zeiterfassung" element={<TimeSettings />} />
+                        <Route path="portal" element={<PortalSettings />} />
                     </Route>
                     <Route path="zeiterfassung">
                         <Route path="terminal" element={<TimeTerminal />} />

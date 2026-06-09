@@ -155,41 +155,90 @@ const SubcontractorDashboard = ({ user }) => {
                                 </div>
                             </div>
 
-                            {/* Hotline Direct Links */}
-                            {companyData.settings.phone && (
-                                <a 
-                                    href={`tel:${companyData.settings.phone}`}
-                                    className="bg-blue-600 hover:bg-blue-500 text-white p-4 rounded-2xl flex items-center justify-between transition-all duration-300 shadow-lg shadow-blue-600/20 group/btn"
-                                >
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center text-white shrink-0 group-hover/btn:rotate-12 transition-transform">
-                                            <i className="fa-solid fa-phone"></i>
-                                        </div>
-                                        <div>
-                                            <div className="text-[10px] text-blue-200 uppercase font-black tracking-widest">Telefonisch anrufen</div>
-                                            <div className="text-sm font-bold">{companyData.settings.phone}</div>
-                                        </div>
-                                    </div>
-                                    <i className="fa-solid fa-chevron-right text-white/50 group-hover/btn:translate-x-1 transition-transform mr-2"></i>
-                                </a>
-                            )}
+                            {/* Hotline Direct Links or Custom Contacts */}
+                            {companyData.settings.subcontractorDashboardContacts && companyData.settings.subcontractorDashboardContacts.length > 0 ? (
+                                companyData.settings.subcontractorDashboardContacts.map((contact, cIdx) => (
+                                    <div key={contact.id || cIdx} className="bg-white/[0.02] border border-white/5 p-4 rounded-2xl space-y-3">
+                                        {/* Contact label */}
+                                        <div className="text-[10px] text-blue-400 uppercase font-black tracking-widest pl-1">{contact.label}</div>
+                                        
+                                        {/* Phone link */}
+                                        {contact.phone && (
+                                            <a 
+                                                href={`tel:${contact.phone}`}
+                                                className="bg-blue-600 hover:bg-blue-500 text-white p-3 rounded-xl flex items-center justify-between transition-all duration-300 shadow-lg shadow-blue-600/20 group/btn"
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center text-white shrink-0 group-hover/btn:rotate-12 transition-transform">
+                                                        <i className="fa-solid fa-phone text-xs"></i>
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-[9px] text-blue-200 uppercase font-bold tracking-wider">Telefonisch anrufen</div>
+                                                        <div className="text-xs font-bold">{contact.phone}</div>
+                                                    </div>
+                                                </div>
+                                                <i className="fa-solid fa-chevron-right text-white/50 text-xs group-hover/btn:translate-x-1 transition-transform mr-1"></i>
+                                            </a>
+                                        )}
 
-                            {companyData.settings.email && (
-                                <a 
-                                    href={`mailto:${companyData.settings.email}`}
-                                    className="bg-white/5 hover:bg-white/10 border border-white/10 text-white p-4 rounded-2xl flex items-center justify-between transition-all duration-300 group/btn2"
-                                >
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-gray-400 shrink-0 group-hover/btn2:scale-105 transition-transform">
-                                            <i className="fa-solid fa-envelope"></i>
-                                        </div>
-                                        <div>
-                                            <div className="text-[10px] text-gray-400 uppercase font-black tracking-widest">E-Mail schreiben</div>
-                                            <div className="text-sm font-bold text-gray-200">{companyData.settings.email}</div>
-                                        </div>
+                                        {/* Email link (if provided) */}
+                                        {contact.email && (
+                                            <a 
+                                                href={`mailto:${contact.email}`}
+                                                className="bg-white/5 hover:bg-white/10 border border-white/10 text-white p-3 rounded-xl flex items-center justify-between transition-all duration-300 group/btn2"
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-gray-400 shrink-0 group-hover/btn2:scale-105 transition-transform">
+                                                        <i className="fa-solid fa-envelope text-xs"></i>
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-[9px] text-gray-400 uppercase font-bold tracking-wider">E-Mail schreiben</div>
+                                                        <div className="text-xs font-bold text-gray-200">{contact.email}</div>
+                                                    </div>
+                                                </div>
+                                                <i className="fa-solid fa-chevron-right text-white/30 text-xs group-hover/btn2:translate-x-1 transition-transform mr-1"></i>
+                                            </a>
+                                        )}
                                     </div>
-                                    <i className="fa-solid fa-chevron-right text-white/30 group-hover/btn2:translate-x-1 transition-transform mr-2"></i>
-                                </a>
+                                ))
+                            ) : (
+                                <>
+                                    {companyData.settings.phone && (
+                                        <a 
+                                            href={`tel:${companyData.settings.phone}`}
+                                            className="bg-blue-600 hover:bg-blue-500 text-white p-4 rounded-2xl flex items-center justify-between transition-all duration-300 shadow-lg shadow-blue-600/20 group/btn"
+                                        >
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center text-white shrink-0 group-hover/btn:rotate-12 transition-transform">
+                                                    <i className="fa-solid fa-phone"></i>
+                                                </div>
+                                                <div>
+                                                    <div className="text-[10px] text-blue-200 uppercase font-black tracking-widest">Telefonisch anrufen</div>
+                                                    <div className="text-sm font-bold">{companyData.settings.phone}</div>
+                                                </div>
+                                            </div>
+                                            <i className="fa-solid fa-chevron-right text-white/50 group-hover/btn:translate-x-1 transition-transform mr-2"></i>
+                                        </a>
+                                    )}
+
+                                    {companyData.settings.email && (
+                                        <a 
+                                            href={`mailto:${companyData.settings.email}`}
+                                            className="bg-white/5 hover:bg-white/10 border border-white/10 text-white p-4 rounded-2xl flex items-center justify-between transition-all duration-300 group/btn2"
+                                        >
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-gray-400 shrink-0 group-hover/btn2:scale-105 transition-transform">
+                                                    <i className="fa-solid fa-envelope"></i>
+                                                </div>
+                                                <div>
+                                                    <div className="text-[10px] text-gray-400 uppercase font-black tracking-widest">E-Mail schreiben</div>
+                                                    <div className="text-sm font-bold text-gray-200">{companyData.settings.email}</div>
+                                                </div>
+                                            </div>
+                                            <i className="fa-solid fa-chevron-right text-white/30 group-hover/btn2:translate-x-1 transition-transform mr-2"></i>
+                                        </a>
+                                    )}
+                                </>
                             )}
                         </div>
                     </div>

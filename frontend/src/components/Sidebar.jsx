@@ -187,6 +187,7 @@ const Sidebar = ({ isOpen, onClose, currentPath }) => {
     const apiSettingsItems = [];
     if (canManageApiKeys) {
         apiSettingsItems.push({ path: '/settings/company', icon: 'fa-building-shield', label: 'Firmenangaben' });
+        apiSettingsItems.push({ path: '/settings/portal', icon: 'fa-user-gear', label: 'Partner-Portal' });
         apiSettingsItems.push({ path: '/settings/storage', icon: 'fa-hard-drive', label: 'Speicherverwaltung' });
         apiSettingsItems.push({ path: '/settings/database', icon: 'fa-database', label: 'Datenbank' });
         apiSettingsItems.push({ path: '/settings/api-keys', icon: 'fa-key', label: 'API-Schlüssel' });
