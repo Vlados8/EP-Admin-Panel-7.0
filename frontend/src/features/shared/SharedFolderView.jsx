@@ -91,10 +91,29 @@ const SharedFolderView = () => {
         fetchSharedContent();
     }, [token, currentFolderId]);
 
-    const handleDownload = (file) => {
+    const triggerDownload = async (url, filename) => {
+        try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Network response was not ok');
+            const blob = await response.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (err) {
+            console.error('Fetch download failed, falling back to window.open', err);
+            window.open(url, '_blank');
+        }
+    };
+
+    const handleDownload = async (file) => {
         const url = file.url || file.file_url;
         if (url) {
-            window.open(url, '_blank');
+            await triggerDownload(url, file.name);
         }
     };
 
@@ -106,7 +125,7 @@ const SharedFolderView = () => {
             const file = filesOnly[i];
             const url = file.url || file.file_url;
             if (url) {
-                window.open(url, '_blank');
+                await triggerDownload(url, file.name);
                 await new Promise(resolve => setTimeout(resolve, 600));
             }
         }
@@ -454,7 +473,7 @@ const BrandingHeader = ({ title, subtitle, companyInfo }) => {
     const logoUrl = settings.logoSmallWhite || settings.logoLargeWhite || settings.logoSmall || settings.logoLarge;
 
     return (
-        <div className="mb-12 text-center md:text-left flex flex-col md:flex-row justify-between items-end gap-6">
+        <div className="mb-12 text-center md:text-left flex flex-col md:flex-row justify-between items-center md:items-end gap-6">
             <div>
                 <div className="flex items-center gap-4 mb-4 justify-center md:justify-start">
                     {logoUrl ? (
