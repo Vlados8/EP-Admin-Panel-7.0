@@ -24,7 +24,7 @@ const ProjectDetails = () => {
     const isWorker = currentUser?.role?.name === 'Worker' || currentUser?.role === 'Worker';
     const isGroupLeader = currentUser?.role?.name === 'Gruppenleiter' || currentUser?.role === 'Gruppenleiter';
     const isSubcontractor = currentUser?.role?.name === 'Subcontractor' || currentUser?.role === 'Subcontractor';
-    const hideBudget = isWorker || isGroupLeader || (isSubcontractor && !currentUser?.isPartner);
+    const hideBudget = isWorker || isGroupLeader || isSubcontractor;
     const hasEndClient = project ? !!(project.client_first_name || project.client_last_name || project.client_phone || project.client_email) : false;
     const [activeTab, setActiveTab] = useState('info'); // 'info', 'steps', or 'files'
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);

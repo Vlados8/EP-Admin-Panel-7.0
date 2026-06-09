@@ -382,11 +382,14 @@ exports.createFolder = async (req, res) => {
         const isSubcontractor = !isPartner && (userRoleName === 'Subcontractor');
 
         // Defaults based on who is creating the folder
-        let defaultSub = true;
-        let defaultPartner = true;
+        let defaultSub = false;
+        let defaultPartner = false;
         if (isPartner) {
             defaultSub = false;
             defaultPartner = true;
+        } else if (isSubcontractor) {
+            defaultSub = true;
+            defaultPartner = false;
         }
 
         await ProjectFolder.create({
