@@ -399,7 +399,11 @@ const ProjectFileManager = ({ project }) => {
                             // RBAC check:
                             let canDelete = false;
                             if (isSubcontractor) {
-                                canDelete = item.created_by_subcontractor_id === user.id;
+                                if (user?.isPartner) {
+                                    canDelete = item.created_by_client_id === user.id;
+                                } else {
+                                    canDelete = item.created_by_subcontractor_id === user.id;
+                                }
                             } else if (isManagement) {
                                 canDelete = !isSpecialFolder && !isStagesDir;
                             } else {
@@ -439,8 +443,8 @@ const ProjectFileManager = ({ project }) => {
                                             <i className="fa-solid fa-folder text-5xl text-blue-400 mb-3 drop-shadow-md"></i>
                                             <span className="text-sm font-medium text-gray-200 truncate w-full px-2" title={`${displayName}${item.creator_name ? ` (Erstellt von ${item.creator_name})` : ''}`}>{displayName}</span>
                                             {item.creator_name && (
-                                                <span className={`text-[10px] mt-1 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1 ${item.created_by_subcontractor_id ? 'text-amber-400 font-bold' : 'text-gray-500'}`}>
-                                                    von {item.creator_name} {item.created_by_subcontractor_id && <i className="fa-solid fa-helmet-safety text-amber-400 text-[10px]"></i>}
+                                                <span className={`text-[10px] mt-1 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1 ${item.created_by_subcontractor_id ? 'text-amber-400 font-bold' : (item.created_by_client_id ? 'text-purple-400 font-bold' : 'text-gray-500')}`}>
+                                                    von {item.creator_name} {item.created_by_subcontractor_id && <i className="fa-solid fa-helmet-safety text-amber-400 text-[10px]"></i>} {item.created_by_client_id && <i className="fa-solid fa-handshake text-purple-400 text-[10px]"></i>}
                                                 </span>
                                             )}
                                         </div>
@@ -469,8 +473,8 @@ const ProjectFileManager = ({ project }) => {
                                             <div className="flex flex-col items-center mt-1">
                                                 <span className="text-[10px] text-gray-500">{formatSize(item.size)}</span>
                                                 {item.creator_name && (
-                                                    <span className={`text-[10px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1 ${item.created_by_subcontractor_id ? 'text-amber-400 font-bold' : 'text-gray-500'}`}>
-                                                        von {item.creator_name} {item.created_by_subcontractor_id && <i className="fa-solid fa-helmet-safety text-amber-400 text-[10px]"></i>}
+                                                    <span className={`text-[10px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1 ${item.created_by_subcontractor_id ? 'text-amber-400 font-bold' : (item.created_by_client_id ? 'text-purple-400 font-bold' : 'text-gray-500')}`}>
+                                                        von {item.creator_name} {item.created_by_subcontractor_id && <i className="fa-solid fa-helmet-safety text-amber-400 text-[10px]"></i>} {item.created_by_client_id && <i className="fa-solid fa-handshake text-purple-400 text-[10px]"></i>}
                                                     </span>
                                                 )}
                                             </div>

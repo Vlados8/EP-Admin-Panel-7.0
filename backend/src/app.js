@@ -830,6 +830,30 @@ if (require.main === module) {
                     }
                 });
 
+                await runStep('project_folders visible_to_partners', async () => {
+                    const [cols] = await sequelize.query("SHOW COLUMNS FROM project_folders LIKE 'visible_to_partners'");
+                    if (cols.length === 0) {
+                        console.log('Adding visible_to_partners to project_folders...');
+                        await sequelize.query("ALTER TABLE project_folders ADD COLUMN visible_to_partners TINYINT(1) NOT NULL DEFAULT 0");
+                    }
+                });
+
+                await runStep('project_folders created_by_client_id', async () => {
+                    const [cols] = await sequelize.query("SHOW COLUMNS FROM project_folders LIKE 'created_by_client_id'");
+                    if (cols.length === 0) {
+                        console.log('Adding created_by_client_id to project_folders...');
+                        await sequelize.query("ALTER TABLE project_folders ADD COLUMN created_by_client_id INT NULL");
+                    }
+                });
+
+                await runStep('project_files created_by_client_id', async () => {
+                    const [cols] = await sequelize.query("SHOW COLUMNS FROM project_files LIKE 'created_by_client_id'");
+                    if (cols.length === 0) {
+                        console.log('Adding created_by_client_id to project_files...');
+                        await sequelize.query("ALTER TABLE project_files ADD COLUMN created_by_client_id INT NULL");
+                    }
+                });
+
                 console.log('Schema verification complete.');
 
                 console.log('Running initial seeding...');

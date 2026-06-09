@@ -133,8 +133,8 @@ const Sidebar = ({ isOpen, onClose, currentPath }) => {
     const baseMenu = [
         { path: '/dashboard', icon: isSubcontractor ? 'fa-circle-user' : 'fa-chart-line', label: isSubcontractor ? 'Ansprechpartner' : 'Dashboard', show: true },
         { path: '/notizen', icon: 'fa-note-sticky', label: 'Notizen', show: canViewNotes },
-        { path: '/aufgaben', icon: 'fa-clipboard-list', label: 'Aufgaben', show: canViewTasks },
-        { path: '/dateien', icon: 'fa-folder-open', label: 'Dateimanager', show: !isSubcontractor },
+        { path: '/aufgaben', icon: 'fa-clipboard-list', label: 'Aufgaben', show: canViewTasks && !user?.isPartner },
+        { path: '/dateien', icon: 'fa-folder-open', label: 'Dateimanager', show: !isSubcontractor || user?.isPartner },
         { path: '/benutzer', icon: 'fa-users-gear', label: 'Benutzer', show: canViewUsers && !isSubcontractor },
         { path: '/subunternehmer', icon: 'fa-truck-fast', label: 'Subunternehmer', show: canViewSubcontractors && !isSubcontractor },
         { path: '/kunden', icon: 'fa-users', label: 'Kunden', show: canViewCustomers && !isSubcontractor },

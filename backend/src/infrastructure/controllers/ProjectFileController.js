@@ -51,7 +51,9 @@ exports.listFiles = async (req, res) => {
                     name: pathParts
                 }
             });
-            const hasHiddenParent = parentFolders.some(f => f.visible_to_subcontractors === false);
+            const hasHiddenParent = req.user.isPartner
+                ? parentFolders.some(f => f.visible_to_partners === false)
+                : parentFolders.some(f => f.visible_to_subcontractors === false);
             if (hasHiddenParent) {
                 return res.status(403).json({ error: 'Zugriff verweigert' });
             }
@@ -153,14 +155,16 @@ exports.listFiles = async (req, res) => {
             where: { project_id: id, path: subPath },
             include: [
                 { model: User, as: 'creator', attributes: ['id', 'name'] },
-                { model: Subcontractor, as: 'subcontractor_creator', attributes: ['id', 'name'] }
+                { model: Subcontractor, as: 'subcontractor_creator', attributes: ['id', 'name'] },
+                { model: Client, as: 'client_creator', attributes: ['id', 'name'] }
             ]
         });
         const fileRecords = await ProjectFile.findAll({
             where: { project_id: id, path: subPath },
             include: [
                 { model: User, as: 'creator', attributes: ['id', 'name'] },
-                { model: Subcontractor, as: 'subcontractor_creator', attributes: ['id', 'name'] }
+                { model: Subcontractor, as: 'subcontractor_creator', attributes: ['id', 'name'] },
+                { model: Client, as: 'client_creator', attributes: ['id', 'name'] }
             ]
         });
         console.log(`[DB] Found ${folderRecords.length} folders, ${fileRecords.length} files.`);
@@ -248,12 +252,14 @@ exports.listFiles = async (req, res) => {
                 updatedAt: r.updatedAt,
                 created_by_id: r.created_by_id,
                 created_by_subcontractor_id: r.created_by_subcontractor_id,
-                creator_name: r.creator ? r.creator.name : (r.subcontractor_creator ? r.subcontractor_creator.name : null),
+                created_by_client_id: r.created_by_client_id,
+                creator_name: r.creator ? r.creator.name : (r.subcontractor_creator ? r.subcontractor_creator.name : (r.client_creator ? r.client_creator.name : null)),
                 permissions: {
                     allowed_role_ids: r.allowed_role_ids,
                     is_public: r.is_public,
                     share_token: r.share_token,
-                    visible_to_subcontractors: r.visible_to_subcontractors
+                    visible_to_subcontractors: r.visible_to_subcontractors,
+                    visible_to_partners: r.visible_to_partners
                 },
                 source: 'db'
             });
@@ -285,7 +291,8 @@ exports.listFiles = async (req, res) => {
                 url: r.file_url,
                 created_by_id: r.created_by_id,
                 created_by_subcontractor_id: r.created_by_subcontractor_id,
-                creator_name: r.creator ? r.creator.name : (r.subcontractor_creator ? r.subcontractor_creator.name : null),
+                created_by_client_id: r.created_by_client_id,
+                creator_name: r.creator ? r.creator.name : (r.subcontractor_creator ? r.subcontractor_creator.name : (r.client_creator ? r.client_creator.name : null)),
                 source: 'db'
             });
         });
@@ -303,6 +310,12 @@ exports.listFiles = async (req, res) => {
 
                 // Subcontractor check
                 if (userRoleName === 'Subcontractor') {
+                    if (req.user.isPartner) {
+                        if (item.permissions && item.permissions.visible_to_partners === false) {
+                            return false;
+                        }
+                        return true;
+                    }
                     if (item.permissions && item.permissions.visible_to_subcontractors === false) {
                         return false;
                     }
@@ -365,19 +378,27 @@ exports.createFolder = async (req, res) => {
         // Save metadata to DB
         const userRole = req.user.role;
         const userRoleName = userRole?.name || userRole;
-        const isSubcontractor = userRoleName === 'Subcontractor';
+        const isPartner = req.user.isPartner === true;
+        const isSubcontractor = !isPartner && (userRoleName === 'Subcontractor');
 
-        // Subcontractor defaults to true, anyone from user table defaults to false
-        const defaultVisible = isSubcontractor ? true : false;
+        // Defaults based on who is creating the folder
+        let defaultSub = true;
+        let defaultPartner = false;
+        if (isPartner) {
+            defaultSub = false;
+            defaultPartner = true;
+        }
 
         await ProjectFolder.create({
             project_id: id,
             name: name,
             path: folderPath || '',
             allowed_role_ids: allowed_role_ids || null,
-            visible_to_subcontractors: req.body.visible_to_subcontractors !== undefined ? req.body.visible_to_subcontractors : defaultVisible,
-            created_by_id: isSubcontractor ? null : req.user.id,
-            created_by_subcontractor_id: isSubcontractor ? req.user.id : null
+            visible_to_subcontractors: req.body.visible_to_subcontractors !== undefined ? req.body.visible_to_subcontractors : defaultSub,
+            visible_to_partners: req.body.visible_to_partners !== undefined ? req.body.visible_to_partners : defaultPartner,
+            created_by_id: (isSubcontractor || isPartner) ? null : req.user.id,
+            created_by_subcontractor_id: isSubcontractor ? req.user.id : null,
+            created_by_client_id: isPartner ? req.user.id : null
         });
 
         res.status(201).json({
@@ -441,7 +462,8 @@ exports.uploadFiles = async (req, res) => {
                     const r2Key = `projects/${id}/${uploadPath ? uploadPath + '/' : ''}${storageName}`;
                     fileUrl = `${process.env.R2_PUBLIC_URL}/${r2Key}`;
 
-                    const isSubcontractor = req.user.role === 'Subcontractor' || req.user.role?.name === 'Subcontractor';
+                    const isPartner = req.user.isPartner === true;
+                    const isSubcontractor = !isPartner && (req.user.role === 'Subcontractor' || req.user.role?.name === 'Subcontractor');
                     fileRecord = await ProjectFile.create({
                         project_id: id,
                         folder_id: folderId,
@@ -450,8 +472,9 @@ exports.uploadFiles = async (req, res) => {
                         size: file.size,
                         mime_type: file.mimetype,
                         file_url: fileUrl,
-                        created_by_id: isSubcontractor ? null : req.user.id,
-                        created_by_subcontractor_id: isSubcontractor ? req.user.id : null
+                        created_by_id: (isSubcontractor || isPartner) ? null : req.user.id,
+                        created_by_subcontractor_id: isSubcontractor ? req.user.id : null,
+                        created_by_client_id: isPartner ? req.user.id : null
                     });
                 } catch (err) {
                     if (err.name === 'SequelizeUniqueConstraintError') {
@@ -548,8 +571,14 @@ exports.deleteItem = async (req, res) => {
         if (folderRecord) {
             // FOLDER DELETION
             if (userRoleName === 'Subcontractor') {
-                if (folderRecord.created_by_subcontractor_id !== userId) {
-                    return res.status(403).json({ error: 'Zugriff verweigert: Sie können nur Ihre eigenen Ordner löschen' });
+                if (req.user.isPartner) {
+                    if (folderRecord.created_by_client_id !== userId) {
+                        return res.status(403).json({ error: 'Zugriff verweigert: Sie können nur Ihre eigenen Ordner löschen' });
+                    }
+                } else {
+                    if (folderRecord.created_by_subcontractor_id !== userId) {
+                        return res.status(403).json({ error: 'Zugriff verweigert: Sie können nur Ihre eigenen Ordner löschen' });
+                    }
                 }
             } else if (!isManagement) {
                 return res.status(403).json({ error: 'Zugriff verweigert: Nur Management kann Ordner löschen' });
@@ -597,9 +626,13 @@ exports.deleteItem = async (req, res) => {
  
             let canDeleteFile = false;
             if (userRoleName === 'Subcontractor') {
-                canDeleteFile = fileRecord && fileRecord.created_by_subcontractor_id === userId;
+                if (req.user.isPartner) {
+                    canDeleteFile = fileRecord && fileRecord.created_by_client_id === userId;
+                } else {
+                    canDeleteFile = fileRecord && fileRecord.created_by_subcontractor_id === userId;
+                }
             } else {
-                canDeleteFile = isManagement || (fileRecord && (fileRecord.created_by_id === userId || fileRecord.created_by_subcontractor_id === userId));
+                canDeleteFile = isManagement || (fileRecord && (fileRecord.created_by_id === userId || fileRecord.created_by_subcontractor_id === userId || fileRecord.created_by_client_id === userId));
             }
  
             if (canDeleteFile) {

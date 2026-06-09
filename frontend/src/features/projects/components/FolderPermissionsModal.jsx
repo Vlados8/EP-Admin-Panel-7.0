@@ -7,6 +7,7 @@ const FolderPermissionsModal = ({ isOpen, onClose, folder, projectId, onUpdate }
     const [isPublic, setIsPublic] = useState(false);
     const [shareToken, setShareToken] = useState('');
     const [visibleToSubcontractors, setVisibleToSubcontractors] = useState(true);
+    const [visibleToPartners, setVisibleToPartners] = useState(false);
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
@@ -20,11 +21,13 @@ const FolderPermissionsModal = ({ isOpen, onClose, folder, projectId, onUpdate }
                 setIsPublic(folder.permissions.is_public || false);
                 setShareToken(folder.permissions.share_token || '');
                 setVisibleToSubcontractors(folder.permissions.visible_to_subcontractors !== false);
+                setVisibleToPartners(folder.permissions.visible_to_partners || false);
             } else {
                 setSelectedRoleIds([]);
                 setIsPublic(false);
                 setShareToken('');
                 setVisibleToSubcontractors(true);
+                setVisibleToPartners(false);
             }
         }
     }, [isOpen, folder]);
@@ -54,7 +57,8 @@ const FolderPermissionsModal = ({ isOpen, onClose, folder, projectId, onUpdate }
                 path: folder.parentPath || '',
                 name: folder.name,
                 allowed_role_ids: selectedRoleIds,
-                visible_to_subcontractors: visibleToSubcontractors
+                visible_to_subcontractors: visibleToSubcontractors,
+                visible_to_partners: visibleToPartners
             });
             onUpdate();
             onClose();
@@ -157,6 +161,30 @@ const FolderPermissionsModal = ({ isOpen, onClose, folder, projectId, onUpdate }
                             />
                             <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${visibleToSubcontractors ? 'bg-amber-500 border-amber-500' : 'border-white/20'}`}>
                                 {visibleToSubcontractors && <i className="fa-solid fa-check text-[10px] text-white"></i>}
+                            </div>
+                        </label>
+                    </div>
+
+                    <div className="h-px bg-white/5"></div>
+
+                    {/* Partner Visibility */}
+                    <div>
+                        <label className="text-gray-400 text-sm font-medium mb-3 block italic">Sichtbarkeit für Partner</label>
+                        <label 
+                            className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${visibleToPartners ? 'bg-purple-500/15 border-purple-500/50 text-white' : 'bg-white/5 border-white/5 text-gray-400 hover:bg-white/10'}`}
+                        >
+                            <span className="font-bold flex items-center gap-2">
+                                <i className="fa-solid fa-handshake text-purple-400"></i>
+                                Partner erlauben
+                            </span>
+                            <input 
+                                type="checkbox" 
+                                className="hidden" 
+                                checked={visibleToPartners}
+                                onChange={() => setVisibleToPartners(!visibleToPartners)}
+                            />
+                            <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${visibleToPartners ? 'bg-purple-500 border-purple-500' : 'border-white/20'}`}>
+                                {visibleToPartners && <i className="fa-solid fa-check text-[10px] text-white"></i>}
                             </div>
                         </label>
                     </div>

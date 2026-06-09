@@ -188,8 +188,10 @@ ProjectFile.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
 
 ProjectFolder.belongsTo(User, { foreignKey: 'created_by_id', as: 'creator' });
 ProjectFolder.belongsTo(Subcontractor, { foreignKey: 'created_by_subcontractor_id', as: 'subcontractor_creator' });
+ProjectFolder.belongsTo(Client, { foreignKey: 'created_by_client_id', as: 'client_creator' });
 ProjectFile.belongsTo(User, { foreignKey: 'created_by_id', as: 'creator' });
 ProjectFile.belongsTo(Subcontractor, { foreignKey: 'created_by_subcontractor_id', as: 'subcontractor_creator' });
+ProjectFile.belongsTo(Client, { foreignKey: 'created_by_client_id', as: 'client_creator' });
 ProjectFile.belongsTo(ProjectFolder, { foreignKey: 'folder_id', as: 'folder' });
 ProjectFolder.hasMany(ProjectFile, { foreignKey: 'folder_id', as: 'files', onDelete: 'CASCADE' });
 

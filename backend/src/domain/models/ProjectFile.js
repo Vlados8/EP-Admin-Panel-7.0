@@ -57,6 +57,14 @@ const ProjectFile = sequelize.define('ProjectFile', {
             key: 'id'
         }
     },
+    created_by_client_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+            model: 'clients',
+            key: 'id'
+        }
+    },
     file_url: {
         type: DataTypes.TEXT,
         allowNull: true,
