@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Copy, CheckCircle, Code, Terminal, Server, Globe, Download } from 'lucide-react';
+import { useSelector } from 'react-redux';
+import { Copy, CheckCircle, Code, Terminal, Server, Globe, Download, Briefcase } from 'lucide-react';
 
 const htmlTemplate = `<!DOCTYPE html>
 <html lang="de">
@@ -1075,6 +1076,8 @@ const CodeBlock = ({ code, language = 'json' }) => {
 };
 
 const ApiIntegration = () => {
+    const { user } = useSelector((state) => state.auth);
+    const companyId = user?.company_id || 'IHR_COMPANY_ID';
     const baseUrl = `${window.location.origin}/api/v1`;
 
     return (
@@ -1216,10 +1219,44 @@ const ApiIntegration = () => {
                         </p>
                     </section>
 
+                    {/* Bewerbungen Section */}
+                    <section className="card p-6">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center border border-green-500/30 text-green-400">
+                                <Briefcase className="w-5 h-5" />
+                            </div>
+                            <h2 className="text-xl font-bold text-white">4. Bewerbungen (Kurzbewerbungen)</h2>
+                        </div>
+                        <p className="text-gray-300 mb-4">
+                            Binden Sie Bewerbungsformulare auf Ihrer Karriere- oder Landingpage ein, um Bewerbungen direkt ins CRM zu leiten.
+                        </p>
+
+                        <div className="mb-4">
+                            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-green-500/20 text-green-400 font-mono text-sm border border-green-500/30">
+                                <span className="font-bold">POST</span> {baseUrl}/bewerbungen/public/{companyId}
+                            </span>
+                        </div>
+
+                        <h3 className="font-semibold text-white mb-2 mt-6">Beispiel-Anfrage (JSON)</h3>
+                        <CodeBlock
+                            language="json"
+                            code={`{
+  "stelle": "Bauleiter (m/w/d)",
+  "email": "max.mustermann@web.de",
+  "telefon": "+49 176 98765432",
+  "erfahrung": "Mehrere Jahre Erfahrung im Hochbau...",
+  "nachricht": "Hallo Empire-Team, anbei meine Bewerbung..." // Optional
+}`}
+                        />
+                        <p className="text-sm text-gray-400 mt-2">
+                            * Die Felder <code className="text-blue-300">stelle</code>, <code className="text-blue-300">email</code>, <code className="text-blue-300">telefon</code> und <code className="text-blue-300">erfahrung</code> sind Pflichtfelder. Das Feld <code className="text-blue-300">nachricht</code> ist optional. Stellen Sie sicher, dass Sie den Header <code className="text-blue-300">x-api-key</code> mit Ihrem gültigen API-Schlüssel mitsenden, um die Anfrage zu autorisieren.
+                        </p>
+                    </section>
+
                     {/* Fetching Categories Section */}
                     <section className="card p-6 text-gray-300">
                         <div className="flex items-center gap-3 mb-4 text-white">
-                            <h2 className="text-xl font-bold">4. Kategorien für Formulare abrufen</h2>
+                            <h2 className="text-xl font-bold">5. Kategorien für Formulare abrufen</h2>
                         </div>
                         <p className="mb-4">
                             Wenn Sie dynamische Formulare bauen möchten, können Sie die Liste der Kategorien, Unterkategorien und Fragen direkt aus dem CRM abrufen.

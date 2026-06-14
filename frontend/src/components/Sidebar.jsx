@@ -142,6 +142,7 @@ const Sidebar = ({ isOpen, onClose, currentPath }) => {
         { path: '/angebote', icon: 'fa-file-invoice-dollar', label: 'Angebote', show: !isSubcontractor },
         { path: '/kategorien', icon: 'fa-tags', label: 'Kategorien', show: canViewCategories && !isSubcontractor },
         { path: '/anfragen', icon: 'fa-inbox', label: 'Anfragen', show: canViewInquiries && !isSubcontractor },
+        { path: '/bewerbungen', icon: 'fa-id-card-clip', label: 'Bewerbungen', show: !isSubcontractor && !user?.isPartner },
         { path: '/support', icon: 'fa-headset', label: 'Support', show: canViewSupport && !isSubcontractor }
     ].filter(item => item.show);
 

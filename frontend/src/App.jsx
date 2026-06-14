@@ -13,6 +13,7 @@ import Subcontractors from './features/subcontractors/Subcontractors';
 import Customers from './features/customers/Customers';
 import Categories from './features/categories/Categories';
 import Inquiries from './features/inquiries/Inquiries';
+import Bewerbungen from './features/bewerbungen/Bewerbungen';
 import ProjectDetails from './features/projects/ProjectDetails';
 import ApiKeys from './pages/Settings/ApiKeys';
 import ApiIntegration from './pages/Settings/ApiIntegration';
@@ -125,6 +126,7 @@ function App() {
                     <Route path="projekte/:id" element={<ProjectDetails />} />
                     <Route path="kategorien" element={<RequirePermission permission="VIEW_CATEGORIES"><Categories /></RequirePermission>} />
                     <Route path="anfragen" element={<RequirePermission permission="VIEW_INQUIRIES"><Inquiries /></RequirePermission>} />
+                    <Route path="bewerbungen" element={<Bewerbungen />} />
                     <Route path="support" element={<Support />} />
                     <Route path="chat" element={<Chat />} />
                     <Route path="angebote" element={<Offers />} />

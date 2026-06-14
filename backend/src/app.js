@@ -132,6 +132,7 @@ try {
     const reonicRoutes = require('./infrastructure/routes/reonicRoutes');
     const systemRoutes = require('./infrastructure/routes/systemRoutes');
     const notificationRoutes = require('./infrastructure/routes/notificationRoutes');
+    const bewerbungRoutes = require('./infrastructure/routes/bewerbungRoutes');
 
     // --- PUBLIC WEBHOOKS ---
     // CRM Integrations (e.g. MyGo) - Uses simple multer for attachments
@@ -171,6 +172,7 @@ try {
     app.use('/api/v1/reonic', reonicRoutes);
     app.use('/api/v1/system', systemRoutes);
     app.use('/api/v1/notifications', notificationRoutes);
+    app.use('/api/v1/bewerbungen', bewerbungRoutes);
 
     // The problematic route
     const apiKeyRoutes = require(apiKeyRoutesPath);

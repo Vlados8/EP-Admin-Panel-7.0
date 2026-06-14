@@ -38,6 +38,7 @@ const TimeLog = require('./TimeLog');
 const ReonicLead = require('./ReonicLead');
 const Notification = require('./Notification');
 const NotificationSetting = require('./NotificationSetting');
+const Bewerbung = require('./Bewerbung');
 
 // Associations
 
@@ -272,6 +273,10 @@ Notification.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 User.hasMany(NotificationSetting, { foreignKey: 'user_id', as: 'notification_settings', onDelete: 'CASCADE' });
 NotificationSetting.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
+// 17. Bewerbungen
+Company.hasMany(Bewerbung, { foreignKey: 'company_id', as: 'bewerbungen' });
+Bewerbung.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+
 module.exports = {
     sequelize,
     Company,
@@ -312,5 +317,6 @@ module.exports = {
     TimeLog,
     ReonicLead,
     Notification,
-    NotificationSetting
+    NotificationSetting,
+    Bewerbung
 };
