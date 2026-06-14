@@ -55,6 +55,14 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
     const [isGLSelectOpen, setIsGLSelectOpen] = useState(false);
     const [isWorkerSelectOpen, setIsWorkerSelectOpen] = useState(false);
 
+    // Search query states
+    const [clientSearchQuery, setClientSearchQuery] = useState('');
+    const [categorySearchQuery, setCategorySearchQuery] = useState('');
+    const [plSearchQuery, setPlSearchQuery] = useState('');
+    const [glSearchQuery, setGlSearchQuery] = useState('');
+    const [workerSearchQuery, setWorkerSearchQuery] = useState('');
+    const [subcontractorSearchQuery, setSubcontractorSearchQuery] = useState('');
+
     // Dynamic Client-Custom Project Fields
     const [showAdditionalClient, setShowAdditionalClient] = useState(false);
     const [clientFirstName, setClientFirstName] = useState('');
@@ -92,6 +100,12 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
             setIsTopUserSelectOpen(false);
             setIsGLSelectOpen(false);
             setIsWorkerSelectOpen(false);
+            setClientSearchQuery('');
+            setCategorySearchQuery('');
+            setPlSearchQuery('');
+            setGlSearchQuery('');
+            setWorkerSearchQuery('');
+            setSubcontractorSearchQuery('');
 
             if (initialData) {
                 // Prefill from Inquiry
@@ -478,22 +492,46 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
                                                     <>
                                                         <div
                                                             className="fixed inset-0 z-40"
-                                                            onClick={() => setIsClientSelectOpen(false)}
+                                                            onClick={() => {
+                                                                setIsClientSelectOpen(false);
+                                                                setClientSearchQuery('');
+                                                            }}
                                                         />
-                                                        <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar text-left">
-                                                            {clients.map(c => (
-                                                                <button
-                                                                    key={c.id}
-                                                                    type="button"
-                                                                    onClick={() => {
-                                                                        setSelectedClientId(c.id.toString());
-                                                                        setIsClientSelectOpen(false);
-                                                                    }}
-                                                                    className={`w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate ${String(selectedClientId) === String(c.id) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
-                                                                >
-                                                                    {c.name} {c.contact_person ? `(${c.contact_person})` : ''}
-                                                                </button>
-                                                            ))}
+                                                        <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto p-2.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar text-left flex flex-col gap-2">
+                                                            <input
+                                                                type="text"
+                                                                value={clientSearchQuery}
+                                                                onChange={e => setClientSearchQuery(e.target.value)}
+                                                                placeholder="Kunde suchen..."
+                                                                className="w-full bg-slate-800 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                                                            />
+                                                            <div className="overflow-y-auto max-h-48 custom-scrollbar">
+                                                                {clients.filter(c => {
+                                                                    const nameMatch = c.name?.toLowerCase().includes(clientSearchQuery.toLowerCase());
+                                                                    const contactMatch = c.contact_person?.toLowerCase().includes(clientSearchQuery.toLowerCase());
+                                                                    return nameMatch || contactMatch;
+                                                                }).map(c => (
+                                                                    <button
+                                                                        key={c.id}
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setSelectedClientId(c.id.toString());
+                                                                            setIsClientSelectOpen(false);
+                                                                            setClientSearchQuery('');
+                                                                        }}
+                                                                        className={`w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate rounded-lg ${String(selectedClientId) === String(c.id) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                                    >
+                                                                        {c.name} {c.contact_person ? `(${c.contact_person})` : ''}
+                                                                    </button>
+                                                                ))}
+                                                                {clients.filter(c => {
+                                                                    const nameMatch = c.name?.toLowerCase().includes(clientSearchQuery.toLowerCase());
+                                                                    const contactMatch = c.contact_person?.toLowerCase().includes(clientSearchQuery.toLowerCase());
+                                                                    return nameMatch || contactMatch;
+                                                                }).length === 0 && (
+                                                                    <div className="text-xs text-gray-500 text-center py-3">Keine Kunden gefunden.</div>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     </>
                                                 )}
@@ -736,9 +774,21 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
 
                                     {/* Multi-Category Selection Grid */}
                                     <div className="space-y-4">
-                                        <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 block text-center md:text-left">Kategorien auswählen</label>
+                                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-2">
+                                            <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block text-center md:text-left">Kategorien auswählen</label>
+                                            <div className="relative max-w-xs w-full mx-auto md:mx-0">
+                                                <input
+                                                    type="text"
+                                                    value={categorySearchQuery}
+                                                    onChange={e => setCategorySearchQuery(e.target.value)}
+                                                    placeholder="Kategorie filtern..."
+                                                    className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors pl-9"
+                                                />
+                                                <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 text-xs"></i>
+                                            </div>
+                                        </div>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                                            {categories.map(c => {
+                                            {categories.filter(c => c.name?.toLowerCase().includes(categorySearchQuery.toLowerCase())).map(c => {
                                                 const isSelected = selectedCategories.some(sc => sc.category_id === c.id);
                                                 return (
                                                     <button
@@ -782,6 +832,11 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
                                                     </button>
                                                 );
                                             })}
+                                            {categories.filter(c => c.name?.toLowerCase().includes(categorySearchQuery.toLowerCase())).length === 0 && (
+                                                <div className="text-center py-6 text-gray-500 text-sm col-span-1 sm:col-span-2 md:col-span-3">
+                                                    Keine Kategorien gefunden.
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
@@ -1149,27 +1204,50 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
                                                                 <>
                                                                     <div
                                                                         className="fixed inset-0 z-40"
-                                                                        onClick={() => setIsTopUserSelectOpen(false)}
+                                                                        onClick={() => {
+                                                                            setIsTopUserSelectOpen(false);
+                                                                            setPlSearchQuery('');
+                                                                        }}
                                                                     />
-                                                                    <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar text-left">
-                                                                        {users.filter(u => {
-                                                                            const roleName = u.role?.name?.toLowerCase();
-                                                                            return roleName === 'projektleiter' || roleName === 'pl' || roleName === 'admin' || roleName === 'büro' || roleName === 'buero';
-                                                                        }).map(u => (
-                                                                            <button
-                                                                                key={u.id}
-                                                                                type="button"
-                                                                                onClick={() => {
-                                                                                    setTreeTopUser(u.id.toString());
-                                                                                    setTreeGL('');
-                                                                                    setTreeWorker('');
-                                                                                    setIsTopUserSelectOpen(false);
-                                                                                }}
-                                                                                className={`w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate ${String(treeTopUser) === String(u.id) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
-                                                                            >
-                                                                                {u.name} {u.specialty ? `(${u.specialty})` : ''} ({u.role?.name || 'Keine Rolle'})
-                                                                            </button>
-                                                                        ))}
+                                                                    <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto p-2.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar text-left flex flex-col gap-2">
+                                                                        <input
+                                                                            type="text"
+                                                                            value={plSearchQuery}
+                                                                            onChange={e => setPlSearchQuery(e.target.value)}
+                                                                            placeholder="Projektleiter suchen..."
+                                                                            className="w-full bg-slate-800 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                                                                        />
+                                                                        <div className="overflow-y-auto max-h-48 custom-scrollbar">
+                                                                            {users.filter(u => {
+                                                                                const roleName = u.role?.name?.toLowerCase();
+                                                                                const isPL = roleName === 'projektleiter' || roleName === 'pl' || roleName === 'admin' || roleName === 'büro' || roleName === 'buero';
+                                                                                const matches = u.name?.toLowerCase().includes(plSearchQuery.toLowerCase()) || u.specialty?.toLowerCase().includes(plSearchQuery.toLowerCase());
+                                                                                return isPL && matches;
+                                                                            }).map(u => (
+                                                                                <button
+                                                                                    key={u.id}
+                                                                                    type="button"
+                                                                                    onClick={() => {
+                                                                                        setTreeTopUser(u.id.toString());
+                                                                                        setTreeGL('');
+                                                                                        setTreeWorker('');
+                                                                                        setIsTopUserSelectOpen(false);
+                                                                                        setPlSearchQuery('');
+                                                                                    }}
+                                                                                    className={`w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate rounded-lg ${String(treeTopUser) === String(u.id) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                                                >
+                                                                                    {u.name} {u.specialty ? `(${u.specialty})` : ''} ({u.role?.name || 'Keine Rolle'})
+                                                                                </button>
+                                                                            ))}
+                                                                            {users.filter(u => {
+                                                                                const roleName = u.role?.name?.toLowerCase();
+                                                                                const isPL = roleName === 'projektleiter' || roleName === 'pl' || roleName === 'admin' || roleName === 'büro' || roleName === 'buero';
+                                                                                const matches = u.name?.toLowerCase().includes(plSearchQuery.toLowerCase()) || u.specialty?.toLowerCase().includes(plSearchQuery.toLowerCase());
+                                                                                return isPL && matches;
+                                                                            }).length === 0 && (
+                                                                                <div className="text-xs text-gray-500 text-center py-3">Keine Personen gefunden.</div>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
                                                                 </>
                                                             )}
@@ -1251,23 +1329,47 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
                                                                 <>
                                                                     <div
                                                                         className="fixed inset-0 z-40"
-                                                                        onClick={() => setIsGLSelectOpen(false)}
+                                                                        onClick={() => {
+                                                                            setIsGLSelectOpen(false);
+                                                                            setGlSearchQuery('');
+                                                                        }}
                                                                     />
-                                                                    <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar text-left">
-                                                                        {users.filter(u => u.role?.name?.toLowerCase() === 'gruppenleiter').map(u => (
-                                                                            <button
-                                                                                key={u.id}
-                                                                                type="button"
-                                                                                onClick={() => {
-                                                                                    setTreeGL(u.id.toString());
-                                                                                    setTreeWorker('');
-                                                                                    setIsGLSelectOpen(false);
-                                                                                }}
-                                                                                className={`w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate ${String(treeGL) === String(u.id) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
-                                                                            >
-                                                                                {u.name} {u.specialty ? `(${u.specialty})` : ''} - Manager: {users.find(m => m.id === u.manager_id)?.name || 'N/A'}
-                                                                            </button>
-                                                                        ))}
+                                                                    <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto p-2.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar text-left flex flex-col gap-2">
+                                                                        <input
+                                                                            type="text"
+                                                                            value={glSearchQuery}
+                                                                            onChange={e => setGlSearchQuery(e.target.value)}
+                                                                            placeholder="Gruppenleiter suchen..."
+                                                                            className="w-full bg-slate-800 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                                                                        />
+                                                                        <div className="overflow-y-auto max-h-48 custom-scrollbar">
+                                                                            {users.filter(u => {
+                                                                                const isGL = u.role?.name?.toLowerCase() === 'gruppenleiter';
+                                                                                const matches = u.name?.toLowerCase().includes(glSearchQuery.toLowerCase()) || u.specialty?.toLowerCase().includes(glSearchQuery.toLowerCase());
+                                                                                return isGL && matches;
+                                                                            }).map(u => (
+                                                                                <button
+                                                                                    key={u.id}
+                                                                                    type="button"
+                                                                                    onClick={() => {
+                                                                                        setTreeGL(u.id.toString());
+                                                                                        setTreeWorker('');
+                                                                                        setIsGLSelectOpen(false);
+                                                                                        setGlSearchQuery('');
+                                                                                    }}
+                                                                                    className={`w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate rounded-lg ${String(treeGL) === String(u.id) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                                                >
+                                                                                    {u.name} {u.specialty ? `(${u.specialty})` : ''} - Manager: {users.find(m => m.id === u.manager_id)?.name || 'N/A'}
+                                                                                </button>
+                                                                            ))}
+                                                                            {users.filter(u => {
+                                                                                const isGL = u.role?.name?.toLowerCase() === 'gruppenleiter';
+                                                                                const matches = u.name?.toLowerCase().includes(glSearchQuery.toLowerCase()) || u.specialty?.toLowerCase().includes(glSearchQuery.toLowerCase());
+                                                                                return isGL && matches;
+                                                                            }).length === 0 && (
+                                                                                <div className="text-xs text-gray-500 text-center py-3">Keine Personen gefunden.</div>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
                                                                 </>
                                                             )}
@@ -1350,22 +1452,46 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
                                                                 <>
                                                                     <div
                                                                         className="fixed inset-0 z-40"
-                                                                        onClick={() => setIsWorkerSelectOpen(false)}
+                                                                        onClick={() => {
+                                                                            setIsWorkerSelectOpen(false);
+                                                                            setWorkerSearchQuery('');
+                                                                        }}
                                                                     />
-                                                                    <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar text-left">
-                                                                        {users.filter(u => u.role?.name?.toLowerCase() === 'worker').map(u => (
-                                                                            <button
-                                                                                key={u.id}
-                                                                                type="button"
-                                                                                onClick={() => {
-                                                                                    setTreeWorker(u.id.toString());
-                                                                                    setIsWorkerSelectOpen(false);
-                                                                                }}
-                                                                                className={`w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate ${String(treeWorker) === String(u.id) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
-                                                                            >
-                                                                                {u.name} {u.specialty ? `(${u.specialty})` : ''} - Manager: {users.find(m => m.id === u.manager_id)?.name || 'N/A'}
-                                                                            </button>
-                                                                        ))}
+                                                                    <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto p-2.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar text-left flex flex-col gap-2">
+                                                                        <input
+                                                                            type="text"
+                                                                            value={workerSearchQuery}
+                                                                            onChange={e => setWorkerSearchQuery(e.target.value)}
+                                                                            placeholder="Mitarbeiter suchen..."
+                                                                            className="w-full bg-slate-800 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                                                                        />
+                                                                        <div className="overflow-y-auto max-h-48 custom-scrollbar">
+                                                                            {users.filter(u => {
+                                                                                const isWorker = u.role?.name?.toLowerCase() === 'worker';
+                                                                                const matches = u.name?.toLowerCase().includes(workerSearchQuery.toLowerCase()) || u.specialty?.toLowerCase().includes(workerSearchQuery.toLowerCase());
+                                                                                return isWorker && matches;
+                                                                            }).map(u => (
+                                                                                <button
+                                                                                    key={u.id}
+                                                                                    type="button"
+                                                                                    onClick={() => {
+                                                                                        setTreeWorker(u.id.toString());
+                                                                                        setIsWorkerSelectOpen(false);
+                                                                                        setWorkerSearchQuery('');
+                                                                                    }}
+                                                                                    className={`w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate rounded-lg ${String(treeWorker) === String(u.id) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                                                >
+                                                                                    {u.name} {u.specialty ? `(${u.specialty})` : ''} - Manager: {users.find(m => m.id === u.manager_id)?.name || 'N/A'}
+                                                                                </button>
+                                                                            ))}
+                                                                            {users.filter(u => {
+                                                                                const isWorker = u.role?.name?.toLowerCase() === 'worker';
+                                                                                const matches = u.name?.toLowerCase().includes(workerSearchQuery.toLowerCase()) || u.specialty?.toLowerCase().includes(workerSearchQuery.toLowerCase());
+                                                                                return isWorker && matches;
+                                                                            }).length === 0 && (
+                                                                                <div className="text-xs text-gray-500 text-center py-3">Keine Personen gefunden.</div>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
                                                                 </>
                                                             )}
@@ -1410,24 +1536,40 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
                                                                     <i className="fa-solid fa-trash-can"></i>
                                                                 </button>
                                                             </div>
-                                                        ) : null;
+                                                                        ) : null;
                                                     })}
                                                 </div>
                                             )}
                                         </div>
                                     </div>
-
                                     {/* SUBCONTRACTORS */}
                                     <div className="bg-white/5 border border-white/10 rounded-xl p-6 w-full max-w-4xl">
-                                        <h4 className="text-lg font-medium text-white mb-4 flex items-center justify-center gap-2">
-                                            <i className="fa-solid fa-helmet-safety text-amber-400"></i> Nachunternehmer
-                                        </h4>
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                                            <h4 className="text-lg font-medium text-white flex items-center justify-center sm:justify-start gap-2">
+                                                <i className="fa-solid fa-helmet-safety text-amber-400"></i> Nachunternehmer
+                                            </h4>
+                                            <div className="relative max-w-xs w-full mx-auto sm:mx-0">
+                                                <input
+                                                    type="text"
+                                                    value={subcontractorSearchQuery}
+                                                    onChange={e => setSubcontractorSearchQuery(e.target.value)}
+                                                    placeholder="Nachunternehmer filtern..."
+                                                    className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors pl-9"
+                                                />
+                                                <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 text-xs"></i>
+                                            </div>
+                                        </div>
                                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 justify-center">
-                                            {subcontractors.map(sub => {
+                                            {subcontractors.filter(sub => {
+                                                const nameMatch = sub.name?.toLowerCase().includes(subcontractorSearchQuery.toLowerCase());
+                                                const tradeMatch = sub.trade?.toLowerCase().includes(subcontractorSearchQuery.toLowerCase());
+                                                return nameMatch || tradeMatch;
+                                             }).map(sub => {
                                                 const isAssigned = assignedSubcontractors.includes(sub.id);
                                                 return (
                                                     <button
                                                         key={sub.id}
+                                                        type="button"
                                                         onClick={() => toggleSubcontractor(sub.id)}
                                                         className={`p-3 rounded-xl border text-center transition-all ${isAssigned ? 'bg-amber-500/10 border-amber-500/50 text-white shadow-[0_0_10px_rgba(245,158,11,0.2)]' : 'bg-slate-800 border-white/10 text-gray-400 hover:bg-slate-700 hover:text-white'}`}
                                                     >
@@ -1439,7 +1581,13 @@ const ProjectWizard = ({ isOpen, onClose, onProjectCreated, initialData = null }
                                                     </button>
                                                 );
                                             })}
-                                            {subcontractors.length === 0 && <span className="text-gray-500 col-span-3 text-center">Keine Nachunternehmer gefunden.</span>}
+                                            {subcontractors.filter(sub => {
+                                                const nameMatch = sub.name?.toLowerCase().includes(subcontractorSearchQuery.toLowerCase());
+                                                const tradeMatch = sub.trade?.toLowerCase().includes(subcontractorSearchQuery.toLowerCase());
+                                                return nameMatch || tradeMatch;
+                                            }).length === 0 && (
+                                                <span className="text-gray-500 col-span-3 text-center py-3">Keine Nachunternehmer gefunden.</span>
+                                            )}
                                         </div>
                                     </div>
                                 </div>

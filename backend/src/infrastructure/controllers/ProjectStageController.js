@@ -1,4 +1,4 @@
-const { ProjectStage, User, ProjectStageImage, ProjectUser, ProjectSubcontractor, Subcontractor } = require('../../domain/models');
+const { ProjectStage, User, ProjectStageImage, ProjectUser, ProjectSubcontractor, Subcontractor, Client, Project } = require('../../domain/models');
 const AppError = require('../../utils/appError');
 const fs = require('fs');
 const path = require('path');
@@ -18,6 +18,7 @@ exports.getStages = async (req, res, next) => {
                 { model: User, as: 'assignee', attributes: ['id', 'name'] },
                 { model: User, as: 'creator', attributes: ['id', 'name'] },
                 { model: Subcontractor, as: 'subcontractor_creator', attributes: ['id', 'name'] },
+                { model: Client, as: 'client_creator', attributes: ['id', 'name'] },
                 { model: ProjectStageImage, as: 'images' }
             ],
             order: [['createdAt', 'ASC']]
@@ -38,11 +39,15 @@ exports.createStage = async (req, res, next) => {
     try {
         const { title, description, assigned_to_id, status, project_id } = req.body;
 
-        const isSubcontractor = req.user?.role?.name === 'Subcontractor' || req.user?.role === 'Subcontractor';
+        const isPartner = req.user?.isPartner === true;
+        const isSubcontractor = !isPartner && (req.user?.role?.name === 'Subcontractor' || req.user?.role === 'Subcontractor');
         let created_by_id = null;
         let created_by_subcontractor_id = null;
+        let created_by_client_id = null;
 
-        if (isSubcontractor) {
+        if (isPartner) {
+            created_by_client_id = req.user.id;
+        } else if (isSubcontractor) {
             created_by_subcontractor_id = req.user.id;
         } else {
             created_by_id = req.user?.id;
@@ -64,6 +69,11 @@ exports.createStage = async (req, res, next) => {
                     where: { project_id, subcontractor_id: req.user.id }
                 });
                 if (isSubAssigned) isAssigned = true;
+            } else if (isPartner) {
+                const proj = await Project.findOne({
+                    where: { id: project_id, client_id: req.user.id }
+                });
+                if (proj) isAssigned = true;
             } else {
                 const isUserAssigned = await ProjectUser.findOne({
                     where: { project_id, user_id: req.user.id }
@@ -89,6 +99,7 @@ exports.createStage = async (req, res, next) => {
             assigned_to_id: assigned_to_id || null,
             created_by_id,
             created_by_subcontractor_id,
+            created_by_client_id,
             project_id
         });
 
@@ -118,6 +129,7 @@ exports.createStage = async (req, res, next) => {
                 { model: User, as: 'assignee', attributes: ['id', 'name'] },
                 { model: User, as: 'creator', attributes: ['id', 'name'] },
                 { model: Subcontractor, as: 'subcontractor_creator', attributes: ['id', 'name'] },
+                { model: Client, as: 'client_creator', attributes: ['id', 'name'] },
                 { model: ProjectStageImage, as: 'images' }
             ]
         });
@@ -147,7 +159,7 @@ exports.updateStage = async (req, res, next) => {
             allowed = true;
         } else {
             const isManager = userRole === 'Projektleiter' || userRole === 'Gruppenleiter';
-            const isOwner = (stage.created_by_id === req.user.id) || (stage.created_by_subcontractor_id === req.user.id);
+            const isOwner = (stage.created_by_id === req.user.id) || (stage.created_by_subcontractor_id === req.user.id) || (stage.created_by_client_id === req.user.id && req.user.isPartner === true);
             
             if (isOwner) {
                 allowed = true;
@@ -159,12 +171,19 @@ exports.updateStage = async (req, res, next) => {
                     const hasPL = await ProjectUser.findOne({ where: { project_id: stage.project_id, role: 'projektleiter' } });
                     if (hasPL) allowed = false;
                 }
-            } else if (userRole === 'Subcontractor') {
-                // Check project assignment for subcontractor
-                const isSubAssigned = await ProjectSubcontractor.findOne({
-                    where: { project_id: stage.project_id, subcontractor_id: req.user.id }
-                });
-                if (isSubAssigned) {
+            } else if (userRole === 'Subcontractor' || req.user.isPartner) {
+                // Check project assignment for subcontractor/partner
+                let isAssigned = false;
+                if (req.user.isPartner) {
+                    const proj = await Project.findOne({ where: { id: stage.project_id, client_id: req.user.id } });
+                    if (proj) isAssigned = true;
+                } else {
+                    const isSubAssigned = await ProjectSubcontractor.findOne({
+                        where: { project_id: stage.project_id, subcontractor_id: req.user.id }
+                    });
+                    if (isSubAssigned) isAssigned = true;
+                }
+                if (isAssigned) {
                     allowed = true;
                     statusOnly = true;
                 }
@@ -249,6 +268,7 @@ exports.updateStage = async (req, res, next) => {
                 { model: User, as: 'assignee', attributes: ['id', 'name'] },
                 { model: User, as: 'creator', attributes: ['id', 'name'] },
                 { model: Subcontractor, as: 'subcontractor_creator', attributes: ['id', 'name'] },
+                { model: Client, as: 'client_creator', attributes: ['id', 'name'] },
                 { model: ProjectStageImage, as: 'images' }
             ]
         });
@@ -273,7 +293,7 @@ exports.deleteStage = async (req, res, next) => {
         const userRole = req.user.role?.name || req.user.role;
         if (!hasPermission(req.user, 'MANAGE_API_KEYS')) {
             const isManager = userRole === 'Projektleiter' || userRole === 'Gruppenleiter';
-            const isOwner = (stage.created_by_id === req.user.id) || (stage.created_by_subcontractor_id === req.user.id);
+            const isOwner = (stage.created_by_id === req.user.id) || (stage.created_by_subcontractor_id === req.user.id) || (stage.created_by_client_id === req.user.id && req.user.isPartner === true);
             
             if (!isOwner && !isManager) {
                 return next(new AppError('Keine Berechtigung zum Löschen dieser Etappe', 403));

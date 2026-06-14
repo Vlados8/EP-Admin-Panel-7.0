@@ -43,13 +43,13 @@ exports.createUser = async (req, res, next) => {
         const newUser = await User.create({
             name,
             email,
-            phone: phone || null,
+            phone: phone || mobile_phone || null,
             password_hash: hashedPassword,
             role_id: role_id || null,
             manager_id: manager_id || null,
             specialty: specialty || null,
             company_id,
-            mobile_phone: mobile_phone || null,
+            mobile_phone: mobile_phone || phone || null,
             extension_id: extension_id || null,
             sip_user: sip_user || null,
             sip_password: sip_password || null,
@@ -103,7 +103,11 @@ exports.updateUser = async (req, res, next) => {
             user.email = email;
         }
 
-        user.phone = phone !== undefined ? phone : user.phone;
+        if (phone !== undefined || mobile_phone !== undefined) {
+            const finalPhone = phone !== undefined ? phone : mobile_phone;
+            user.phone = finalPhone;
+            user.mobile_phone = finalPhone;
+        }
         
         // Handle UUIDs - convert empty string to null
         user.role_id = role_id && role_id !== '' ? role_id : (role_id === '' ? null : user.role_id);
@@ -112,7 +116,6 @@ exports.updateUser = async (req, res, next) => {
         user.specialty = specialty !== undefined ? specialty : user.specialty;
         user.status = status || user.status;
         user.storage_limit_gb = storage_limit_gb !== undefined ? storage_limit_gb : user.storage_limit_gb;
-        user.mobile_phone = mobile_phone !== undefined ? mobile_phone : user.mobile_phone;
         user.extension_id = extension_id !== undefined ? extension_id : user.extension_id;
         user.is_receiving_calls = is_receiving_calls !== undefined ? is_receiving_calls : user.is_receiving_calls;
         user.sip_user = sip_user !== undefined ? sip_user : user.sip_user;

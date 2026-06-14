@@ -57,7 +57,7 @@ exports.getTasks = async (req, res, next) => {
 // Create a new task
 exports.createTask = async (req, res, next) => {
     try {
-        const { title, description, assigned_to_id, assigned_subcontractor_id, status, project_id, due_date, time } = req.body;
+        const { title, description, assigned_to_id, assigned_subcontractor_id, status, project_id, start_date, due_date, time } = req.body;
 
         let created_by_id = req.user?.id;
         if (!created_by_id) {
@@ -97,6 +97,7 @@ exports.createTask = async (req, res, next) => {
             assigned_to_id: assigned_to_id || null,
             assigned_subcontractor_id: assigned_subcontractor_id || null,
             project_id: project_id || null,
+            start_date: start_date || null,
             due_date: due_date || null,
             time: time || null,
             created_by_id
@@ -133,7 +134,7 @@ exports.createTask = async (req, res, next) => {
                         await sharp(file.path)
                             .jpeg({ quality: 75, progressive: true })
                             .toFile(compressedPath);
-                        
+
                         const compressedR2Key = `tasks/${file.filename}`;
                         fileUrl = await uploadToR2(compressedPath, compressedR2Key, 'image/jpeg');
                         if (fs.existsSync(compressedPath)) fs.unlinkSync(compressedPath);
@@ -186,7 +187,7 @@ exports.createTask = async (req, res, next) => {
 // Update task
 exports.updateTask = async (req, res, next) => {
     try {
-        const { status, title, description, assigned_to_id, assigned_subcontractor_id, project_id, due_date, time } = req.body;
+        const { status, title, description, assigned_to_id, assigned_subcontractor_id, project_id, start_date, due_date, time } = req.body;
         const task = await Task.findByPk(req.params.id);
         if (!task) return next(new AppError('Aufgabe nicht gefunden', 404));
 
@@ -259,6 +260,7 @@ exports.updateTask = async (req, res, next) => {
         if (assigned_to_id !== undefined) task.assigned_to_id = assigned_to_id || null;
         if (assigned_subcontractor_id !== undefined) task.assigned_subcontractor_id = assigned_subcontractor_id || null;
         if (project_id !== undefined) task.project_id = project_id || null;
+        if (start_date !== undefined) task.start_date = start_date || null;
         if (due_date !== undefined) task.due_date = due_date || null;
         if (time !== undefined) task.time = time || null;
 
@@ -295,7 +297,7 @@ exports.updateTask = async (req, res, next) => {
                         await sharp(file.path)
                             .jpeg({ quality: 75, progressive: true })
                             .toFile(compressedPath);
-                        
+
                         const compressedR2Key = `tasks/${file.filename}`;
                         fileUrl = await uploadToR2(compressedPath, compressedR2Key, 'image/jpeg');
                         if (fs.existsSync(compressedPath)) fs.unlinkSync(compressedPath);

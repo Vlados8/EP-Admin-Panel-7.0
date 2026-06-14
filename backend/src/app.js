@@ -1,4 +1,4 @@
-require('dotenv').config(); // Trigger restart
+require('dotenv').config(); // Trigger restart again
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -498,6 +498,17 @@ if (require.main === module) {
                     }
                 });
 
+                await runStep('project_stages created_by_client_id', async () => {
+                    const [projectStagesResults] = await sequelize.query("SHOW TABLES LIKE 'project_stages'");
+                    if (projectStagesResults.length > 0) {
+                        const [createdClientStageCols] = await sequelize.query("SHOW COLUMNS FROM project_stages LIKE 'created_by_client_id'");
+                        if (createdClientStageCols.length === 0) {
+                            console.log('Adding created_by_client_id to project_stages...');
+                            await sequelize.query("ALTER TABLE project_stages ADD COLUMN created_by_client_id INT NULL, ADD CONSTRAINT fk_project_stages_client FOREIGN KEY (created_by_client_id) REFERENCES clients(id) ON DELETE SET NULL");
+                        }
+                    }
+                });
+
                 await runStep('tasks assigned_subcontractor_id', async () => {
                     const [tasksTableResults] = await sequelize.query("SHOW TABLES LIKE 'tasks'");
                     if (tasksTableResults.length > 0) {
@@ -766,6 +777,14 @@ if (require.main === module) {
                     if (taskReminderCols.length === 0) {
                         console.log('Adding reminder_notified column to tasks...');
                         await sequelize.query("ALTER TABLE tasks ADD COLUMN reminder_notified BOOLEAN DEFAULT 0");
+                    }
+                });
+
+                await runStep('tasks start_date column', async () => {
+                    const [taskStartDateCols] = await sequelize.query("SHOW COLUMNS FROM tasks LIKE 'start_date'");
+                    if (taskStartDateCols.length === 0) {
+                        console.log('Adding start_date column to tasks...');
+                        await sequelize.query("ALTER TABLE tasks ADD COLUMN start_date DATE NULL");
                     }
                 });
 

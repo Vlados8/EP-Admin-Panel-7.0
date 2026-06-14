@@ -102,6 +102,8 @@ ProjectStage.belongsTo(User, { foreignKey: 'assigned_to_id', as: 'assignee' });
 ProjectStage.belongsTo(User, { foreignKey: 'created_by_id', as: 'creator' });
 ProjectStage.belongsTo(Subcontractor, { foreignKey: 'created_by_subcontractor_id', as: 'subcontractor_creator' });
 Subcontractor.hasMany(ProjectStage, { foreignKey: 'created_by_subcontractor_id', as: 'created_stages' });
+ProjectStage.belongsTo(Client, { foreignKey: 'created_by_client_id', as: 'client_creator' });
+Client.hasMany(ProjectStage, { foreignKey: 'created_by_client_id', as: 'created_stages' });
 
 // 4. Tasks (General)
 Task.belongsTo(User, { foreignKey: 'assigned_to_id', as: 'assignee' });

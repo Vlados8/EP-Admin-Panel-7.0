@@ -183,7 +183,10 @@ exports.updateSettings = async (req, res, next) => {
         user.sip_password = sip_password !== undefined ? sip_password : user.sip_password;
         user.sip_domain = sip_domain !== undefined ? sip_domain : user.sip_domain;
         user.wss_url = wss_url !== undefined ? wss_url : user.wss_url;
-        user.mobile_phone = req.body.mobile_phone !== undefined ? req.body.mobile_phone : user.mobile_phone;
+        if (req.body.mobile_phone !== undefined) {
+            user.mobile_phone = req.body.mobile_phone;
+            user.phone = req.body.mobile_phone;
+        }
         user.extension_id = req.body.extension_id !== undefined ? req.body.extension_id : user.extension_id;
 
         await user.save();

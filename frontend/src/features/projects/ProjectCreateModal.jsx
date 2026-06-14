@@ -66,6 +66,18 @@ const ProjectCreateModal = ({ isOpen, onClose, onProjectCreated, initialData = n
     const [isStatusSelectOpen, setIsStatusSelectOpen] = useState(false);
     const [openSubcategorySelect, setOpenSubcategorySelect] = useState(null);
     const [isPlSelectOpen, setIsPlSelectOpen] = useState(false);
+    const [isGlSelectOpen, setIsGlSelectOpen] = useState(false);
+    const [isWorkerSelectOpen, setIsWorkerSelectOpen] = useState(false);
+    const [isCategorySelectOpen, setIsCategorySelectOpen] = useState(false);
+    const [isSubcontractorSelectOpen, setIsSubcontractorSelectOpen] = useState(false);
+
+    // Search query states
+    const [clientSearchQuery, setClientSearchQuery] = useState('');
+    const [categorySearchQuery, setCategorySearchQuery] = useState('');
+    const [plSearchQuery, setPlSearchQuery] = useState('');
+    const [glSearchQuery, setGlSearchQuery] = useState('');
+    const [workerSearchQuery, setWorkerSearchQuery] = useState('');
+    const [subcontractorSearchQuery, setSubcontractorSearchQuery] = useState('');
 
     // Fetch initial data
     useEffect(() => {
@@ -81,6 +93,16 @@ const ProjectCreateModal = ({ isOpen, onClose, onProjectCreated, initialData = n
             setIsStatusSelectOpen(false);
             setOpenSubcategorySelect(null);
             setIsPlSelectOpen(false);
+            setIsGlSelectOpen(false);
+            setIsWorkerSelectOpen(false);
+            setIsCategorySelectOpen(false);
+            setIsSubcontractorSelectOpen(false);
+            setClientSearchQuery('');
+            setCategorySearchQuery('');
+            setPlSearchQuery('');
+            setGlSearchQuery('');
+            setWorkerSearchQuery('');
+            setSubcontractorSearchQuery('');
             setFormData({
                 title: '',
                 description: '',
@@ -396,34 +418,51 @@ const ProjectCreateModal = ({ isOpen, onClose, onProjectCreated, initialData = n
                                         <>
                                             <div 
                                                 className="fixed inset-0 z-40" 
-                                                onClick={() => setIsClientSelectOpen(false)}
+                                                onClick={() => {
+                                                    setIsClientSelectOpen(false);
+                                                    setClientSearchQuery('');
+                                                }}
                                             />
-                                            <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setIsNewClient(true);
-                                                        setSelectedClientId('');
-                                                        setIsClientSelectOpen(false);
-                                                    }}
-                                                    className="w-full text-left px-4 py-2.5 text-sm text-emerald-400 font-bold hover:text-emerald-300 hover:bg-white/5 transition-colors border-b border-white/5"
-                                                >
-                                                    + Neuen Kunden anlegen
-                                                </button>
-                                                {clients.map(c => (
+                                            <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto p-2 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar flex flex-col gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={clientSearchQuery}
+                                                    onChange={e => setClientSearchQuery(e.target.value)}
+                                                    placeholder="Kunde suchen..."
+                                                    className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                                                />
+                                                <div className="overflow-y-auto max-h-48 custom-scrollbar">
                                                     <button
-                                                        key={c.id}
                                                         type="button"
                                                         onClick={() => {
-                                                            setIsNewClient(false);
-                                                            setSelectedClientId(c.id.toString());
+                                                            setIsNewClient(true);
+                                                            setSelectedClientId('');
                                                             setIsClientSelectOpen(false);
+                                                            setClientSearchQuery('');
                                                         }}
-                                                        className={`w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate ${String(selectedClientId) === String(c.id) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                        className="w-full text-left px-4 py-2.5 text-sm text-emerald-400 font-bold hover:text-emerald-300 hover:bg-white/5 transition-colors border-b border-white/5"
                                                     >
-                                                        {c.name}
+                                                        + Neuen Kunden anlegen
                                                     </button>
-                                                ))}
+                                                    {clients.filter(c => c.name.toLowerCase().includes(clientSearchQuery.toLowerCase())).map(c => (
+                                                        <button
+                                                            key={c.id}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setIsNewClient(false);
+                                                                setSelectedClientId(c.id.toString());
+                                                                setIsClientSelectOpen(false);
+                                                                setClientSearchQuery('');
+                                                            }}
+                                                            className={`w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate ${String(selectedClientId) === String(c.id) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                        >
+                                                            {c.name}
+                                                        </button>
+                                                    ))}
+                                                    {clients.filter(c => c.name.toLowerCase().includes(clientSearchQuery.toLowerCase())).length === 0 && (
+                                                        <div className="text-xs text-gray-500 text-center py-3">Keine Kunden gefunden.</div>
+                                                    )}
+                                                </div>
                                             </div>
                                         </>
                                     )}
@@ -720,52 +759,93 @@ const ProjectCreateModal = ({ isOpen, onClose, onProjectCreated, initialData = n
                         <div className="grid grid-cols-2 gap-4">
                             {/* Multi-Category Selection */}
                             <div className="col-span-2 space-y-4">
-                                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 block">Kategorien auswählen</label>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                                    {categories.map(c => {
-                                        const isSelected = selectedCategories.some(sc => sc.category_id === c.id);
-                                        return (
-                                            <button
-                                                key={c.id}
-                                                type="button"
+                                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 block">Kategorien verwalten</label>
+                                <div className="relative">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setIsCategorySelectOpen(!isCategorySelectOpen);
+                                            setCategorySearchQuery('');
+                                        }}
+                                        className="w-full bg-[#0a101d]/50 border border-white/10 rounded-xl px-4 py-3 text-white text-left focus:outline-none focus:border-blue-500 transition-colors flex items-center justify-between"
+                                    >
+                                        <span className="truncate">
+                                            {selectedCategories.length > 0 
+                                                ? selectedCategories.map(sc => categories.find(c => c.id === sc.category_id)?.name).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(', ')
+                                                : '-- Kategorien wählen --'}
+                                        </span>
+                                        <i className={`fa-solid fa-chevron-down text-gray-500 text-xs transition-transform duration-200 ${isCategorySelectOpen ? 'rotate-180' : ''}`}></i>
+                                    </button>
+
+                                    {isCategorySelectOpen && (
+                                        <>
+                                            <div 
+                                                className="fixed inset-0 z-40" 
                                                 onClick={() => {
-                                                    if (isSelected) {
-                                                        setSelectedCategories(prev => prev.filter(sc => sc.category_id !== c.id));
-                                                    } else {
-                                                        setSelectedCategories(prev => [...prev, { category_id: c.id, subcategory_id: '' }]);
-                                                    }
+                                                    setIsCategorySelectOpen(false);
+                                                    setCategorySearchQuery('');
                                                 }}
-                                                className={`p-4 rounded-xl border text-left font-medium transition-all flex items-start gap-3 ${isSelected ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'bg-black/20 border-white/10 text-white hover:bg-slate-800'}`}
-                                            >
-                                                <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 mt-1 ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-500'}`}>
-                                                    {isSelected && <i className="fa-solid fa-check text-white text-[10px]"></i>}
+                                            />
+                                            <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 p-4 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] flex flex-col gap-3 max-h-[350px]">
+                                                <input
+                                                    type="text"
+                                                    value={categorySearchQuery}
+                                                    onChange={e => setCategorySearchQuery(e.target.value)}
+                                                    placeholder="Kategorie suchen..."
+                                                    className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                                />
+                                                <div className="overflow-y-auto custom-scrollbar flex-1 space-y-2 pr-1">
+                                                    {categories.filter(c => c.name.toLowerCase().includes(categorySearchQuery.toLowerCase())).map(c => {
+                                                        const isSelected = selectedCategories.some(sc => sc.category_id === c.id);
+                                                        return (
+                                                            <button
+                                                                key={c.id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    if (isSelected) {
+                                                                        setSelectedCategories(prev => prev.filter(sc => sc.category_id !== c.id));
+                                                                    } else {
+                                                                        setSelectedCategories(prev => [...prev, { category_id: c.id, subcategory_id: '' }]);
+                                                                    }
+                                                                }}
+                                                                className={`w-full p-3 rounded-lg border text-left font-medium transition-all flex items-start gap-3 ${isSelected ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'bg-black/20 border-white/10 text-white hover:bg-white/5'}`}
+                                                            >
+                                                                <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 mt-0.5 ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-500'}`}>
+                                                                    {isSelected && <i className="fa-solid fa-check text-white text-[10px]"></i>}
+                                                                </div>
+                                                                <div className="flex-1 flex flex-col gap-1 min-w-0">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <i className={`fa-solid ${c.icon || 'fa-folder'} text-sm shrink-0 ${isSelected ? 'text-blue-400' : 'text-gray-400'}`}></i>
+                                                                        <span className="text-sm font-semibold text-gray-200 truncate">{c.name}</span>
+                                                                    </div>
+                                                                    <div className="flex gap-1">
+                                                                        {c.target === 'admin' && (
+                                                                            <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20 flex items-center gap-1 w-fit">
+                                                                                <i className="fa-solid fa-lock text-[8px]"></i> Admin-Panel
+                                                                            </span>
+                                                                        )}
+                                                                        {c.target === 'site' && (
+                                                                            <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-teal-500/10 text-teal-300 border border-teal-500/20 flex items-center gap-1 w-fit">
+                                                                                <i className="fa-solid fa-globe text-[8px]"></i> Website
+                                                                            </span>
+                                                                        )}
+                                                                        {c.target === 'both' && (
+                                                                            <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20 flex items-center gap-1 w-fit">
+                                                                                <i className="fa-solid fa-circle-check text-[8px]"></i> Beide
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                    {categories.filter(c => c.name.toLowerCase().includes(categorySearchQuery.toLowerCase())).length === 0 && (
+                                                        <div className="text-xs text-gray-500 text-center py-4">Keine Kategorien gefunden.</div>
+                                                    )}
                                                 </div>
-                                                <div className="flex-1 flex flex-col gap-1.5 min-w-0">
-                                                    <div className="flex items-center gap-2">
-                                                        <i className={`fa-solid ${c.icon || 'fa-folder'} text-base shrink-0 ${isSelected ? 'text-blue-400' : 'text-gray-400'}`}></i>
-                                                        <span className="text-sm font-semibold text-gray-200 truncate">{c.name}</span>
-                                                    </div>
-                                                    <div className="flex gap-1">
-                                                        {c.target === 'admin' && (
-                                                            <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20 flex items-center gap-1 w-fit">
-                                                                <i className="fa-solid fa-lock text-[8px]"></i> Admin-Panel
-                                                            </span>
-                                                        )}
-                                                        {c.target === 'site' && (
-                                                            <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-teal-500/10 text-teal-300 border border-teal-500/20 flex items-center gap-1 w-fit">
-                                                                <i className="fa-solid fa-globe text-[8px]"></i> Website
-                                                            </span>
-                                                        )}
-                                                        {c.target === 'both' && (
-                                                            <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20 flex items-center gap-1 w-fit">
-                                                                <i className="fa-solid fa-circle-check text-[8px]"></i> Beide
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </button>
-                                        );
-                                    })}
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                             </div>
 
@@ -1154,27 +1234,50 @@ const ProjectCreateModal = ({ isOpen, onClose, onProjectCreated, initialData = n
                                             <>
                                                 <div 
                                                     className="fixed inset-0 z-40" 
-                                                    onClick={() => setIsPlSelectOpen(false)}
+                                                    onClick={() => {
+                                                        setIsPlSelectOpen(false);
+                                                        setPlSearchQuery('');
+                                                    }}
                                                 />
-                                                <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar">
-                                                    {users.filter(u => {
-                                                        const roleName = u.role?.name?.toLowerCase();
-                                                        return roleName === 'projektleiter' || roleName === 'pl' || roleName === 'admin' || roleName === 'büro' || roleName === 'buero';
-                                                    }).map(u => (
-                                                        <button
-                                                            key={u.id}
-                                                            type="button"
-                                                            onClick={() => {
-                                                                setTreeTopUser(u.id.toString());
-                                                                setTreeGL('');
-                                                                setTreeWorker('');
-                                                                setIsPlSelectOpen(false);
-                                                            }}
-                                                            className={`w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate ${String(treeTopUser) === String(u.id) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
-                                                        >
-                                                            {u.name} ({u.role?.name || 'Keine Rolle'})
-                                                        </button>
-                                                    ))}
+                                                <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto p-2 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar flex flex-col gap-2">
+                                                    <input
+                                                        type="text"
+                                                        value={plSearchQuery}
+                                                        onChange={e => setPlSearchQuery(e.target.value)}
+                                                        placeholder="Projektleiter suchen..."
+                                                        className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                                                    />
+                                                    <div className="overflow-y-auto max-h-48 custom-scrollbar">
+                                                        {users.filter(u => {
+                                                            const roleName = u.role?.name?.toLowerCase();
+                                                            const isPl = roleName === 'projektleiter' || roleName === 'pl' || roleName === 'admin' || roleName === 'büro' || roleName === 'buero';
+                                                            const matches = u.name.toLowerCase().includes(plSearchQuery.toLowerCase());
+                                                            return isPl && matches;
+                                                        }).map(u => (
+                                                            <button
+                                                                key={u.id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setTreeTopUser(u.id.toString());
+                                                                    setTreeGL('');
+                                                                    setTreeWorker('');
+                                                                    setIsPlSelectOpen(false);
+                                                                    setPlSearchQuery('');
+                                                                }}
+                                                                className={`w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate ${String(treeTopUser) === String(u.id) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                            >
+                                                                {u.name} ({u.role?.name || 'Keine Rolle'})
+                                                            </button>
+                                                        ))}
+                                                        {users.filter(u => {
+                                                            const roleName = u.role?.name?.toLowerCase();
+                                                            const isPl = roleName === 'projektleiter' || roleName === 'pl' || roleName === 'admin' || roleName === 'büro' || roleName === 'buero';
+                                                            const matches = u.name.toLowerCase().includes(plSearchQuery.toLowerCase());
+                                                            return isPl && matches;
+                                                        }).length === 0 && (
+                                                            <div className="text-xs text-gray-500 text-center py-3">Keine Personen gefunden.</div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </>
                                         )}
@@ -1205,21 +1308,239 @@ const ProjectCreateModal = ({ isOpen, onClose, onProjectCreated, initialData = n
                                 </div>
                             </div>
 
+                            {/* Gruppenleiter */}
+                            <div className="space-y-3 animate-[fadeIn_0.3s_ease-out]">
+                                <label className="text-xs font-semibold text-gray-400 uppercase">Gruppenleiter</label>
+                                <div className="flex gap-3">
+                                    <div className="relative flex-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsGlSelectOpen(!isGlSelectOpen)}
+                                            className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-white text-left text-sm focus:outline-none focus:border-blue-500 transition-colors flex items-center justify-between"
+                                        >
+                                            <span>
+                                                {treeGL
+                                                    ? (() => {
+                                                        const u = users.find(usr => String(usr.id) === String(treeGL));
+                                                        return u ? `${u.name} ${u.specialty ? `(${u.specialty})` : ''}` : '-- Person wählen --';
+                                                      })()
+                                                    : '-- Person wählen --'}
+                                            </span>
+                                            <i className={`fa-solid fa-chevron-down text-gray-500 text-xs transition-transform duration-200 ${isGlSelectOpen ? 'rotate-180' : ''}`}></i>
+                                        </button>
+
+                                        {isGlSelectOpen && (
+                                            <>
+                                                <div 
+                                                    className="fixed inset-0 z-40" 
+                                                    onClick={() => {
+                                                        setIsGlSelectOpen(false);
+                                                        setGlSearchQuery('');
+                                                    }}
+                                                />
+                                                <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto p-2 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar flex flex-col gap-2">
+                                                    <input
+                                                        type="text"
+                                                        value={glSearchQuery}
+                                                        onChange={e => setGlSearchQuery(e.target.value)}
+                                                        placeholder="Gruppenleiter suchen..."
+                                                        className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                                                    />
+                                                    <div className="overflow-y-auto max-h-48 custom-scrollbar">
+                                                        {users.filter(u => {
+                                                            const isGl = u.role?.name?.toLowerCase() === 'gruppenleiter';
+                                                            const matches = u.name.toLowerCase().includes(glSearchQuery.toLowerCase());
+                                                            return isGl && matches;
+                                                        }).map(u => (
+                                                            <button
+                                                                key={u.id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setTreeGL(u.id.toString());
+                                                                    setTreeWorker('');
+                                                                    setIsGlSelectOpen(false);
+                                                                    setGlSearchQuery('');
+                                                                }}
+                                                                className={`w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate ${String(treeGL) === String(u.id) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                            >
+                                                                {u.name} {u.specialty ? `(${u.specialty})` : ''}
+                                                            </button>
+                                                        ))}
+                                                        {users.filter(u => {
+                                                            const isGl = u.role?.name?.toLowerCase() === 'gruppenleiter';
+                                                            const matches = u.name.toLowerCase().includes(glSearchQuery.toLowerCase());
+                                                            return isGl && matches;
+                                                        }).length === 0 && (
+                                                            <div className="text-xs text-gray-500 text-center py-3">Keine Personen gefunden.</div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (treeGL) {
+                                                if (!assignedUsers.some(au => au.user_id === treeGL)) {
+                                                    setAssignedUsers([...assignedUsers, { user_id: treeGL, role: 'gruppenleiter' }]);
+                                                }
+                                                setTreeGL('');
+                                            }
+                                        }}
+                                        className="bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 px-3 py-2 rounded-xl text-sm font-medium hover:bg-emerald-600/30 transition-all flex-shrink-0 animate-[fadeIn_0.3s_ease-out]"
+                                    >
+                                        <i className="fa-solid fa-plus"></i>
+                                    </button>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    {assignedUsers.filter(au => au.role === 'gruppenleiter').map(au => {
+                                        const u = users.find(user => user.id === au.user_id);
+                                        return u && (
+                                            <div key={u.id} className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-2 py-1 flex items-center gap-2">
+                                                <span className="text-xs text-emerald-300">{u.name}</span>
+                                                <button type="button" onClick={() => setAssignedUsers(assignedUsers.filter(x => x.user_id !== u.id))} className="text-emerald-400 hover:text-red-400 transition-colors">
+                                                    <i className="fa-solid fa-xmark text-[10px]"></i>
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* Worker */}
+                            <div className="space-y-3 animate-[fadeIn_0.3s_ease-out]">
+                                <label className="text-xs font-semibold text-gray-400 uppercase">Mitarbeiter (Worker)</label>
+                                <div className="flex gap-3">
+                                    <div className="relative flex-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsWorkerSelectOpen(!isWorkerSelectOpen)}
+                                            className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-white text-left text-sm focus:outline-none focus:border-blue-500 transition-colors flex items-center justify-between"
+                                        >
+                                            <span>
+                                                {treeWorker
+                                                    ? (() => {
+                                                        const u = users.find(usr => String(usr.id) === String(treeWorker));
+                                                        return u ? `${u.name} ${u.specialty ? `(${u.specialty})` : ''}` : '-- Person wählen --';
+                                                      })()
+                                                    : '-- Person wählen --'}
+                                            </span>
+                                            <i className={`fa-solid fa-chevron-down text-gray-500 text-xs transition-transform duration-200 ${isWorkerSelectOpen ? 'rotate-180' : ''}`}></i>
+                                        </button>
+
+                                        {isWorkerSelectOpen && (
+                                            <>
+                                                <div 
+                                                    className="fixed inset-0 z-40" 
+                                                    onClick={() => {
+                                                        setIsWorkerSelectOpen(false);
+                                                        setWorkerSearchQuery('');
+                                                    }}
+                                                />
+                                                <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto p-2 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar flex flex-col gap-2">
+                                                    <input
+                                                        type="text"
+                                                        value={workerSearchQuery}
+                                                        onChange={e => setWorkerSearchQuery(e.target.value)}
+                                                        placeholder="Mitarbeiter suchen..."
+                                                        className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                                                    />
+                                                    <div className="overflow-y-auto max-h-48 custom-scrollbar">
+                                                        {users.filter(u => {
+                                                            const isWorker = u.role?.name?.toLowerCase() === 'worker';
+                                                            const matches = u.name.toLowerCase().includes(workerSearchQuery.toLowerCase());
+                                                            return isWorker && matches;
+                                                        }).map(u => (
+                                                            <button
+                                                                key={u.id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setTreeWorker(u.id.toString());
+                                                                    setIsWorkerSelectOpen(false);
+                                                                    setWorkerSearchQuery('');
+                                                                }}
+                                                                className={`w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate ${String(treeWorker) === String(u.id) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                            >
+                                                                {u.name} {u.specialty ? `(${u.specialty})` : ''}
+                                                            </button>
+                                                        ))}
+                                                        {users.filter(u => {
+                                                            const isWorker = u.role?.name?.toLowerCase() === 'worker';
+                                                            const matches = u.name.toLowerCase().includes(workerSearchQuery.toLowerCase());
+                                                            return isWorker && matches;
+                                                        }).length === 0 && (
+                                                            <div className="text-xs text-gray-500 text-center py-3">Keine Personen gefunden.</div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (treeWorker) {
+                                                if (!assignedUsers.some(au => au.user_id === treeWorker)) {
+                                                    setAssignedUsers([...assignedUsers, { user_id: treeWorker, role: 'worker' }]);
+                                                }
+                                                setTreeWorker('');
+                                            }
+                                        }}
+                                        className="bg-amber-600/20 text-amber-400 border border-amber-500/30 px-4 py-2 rounded-xl text-sm font-medium hover:bg-amber-600/30 transition-all flex-shrink-0 animate-[fadeIn_0.3s_ease-out]"
+                                    >
+                                        <i className="fa-solid fa-plus"></i>
+                                    </button>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    {assignedUsers.filter(au => au.role === 'worker').map(au => {
+                                        const u = users.find(user => user.id === au.user_id);
+                                        return u && (
+                                            <div key={u.id} className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-2 py-1 flex items-center gap-2">
+                                                <span className="text-xs text-amber-300">{u.name}</span>
+                                                <button type="button" onClick={() => setAssignedUsers(assignedUsers.filter(x => x.user_id !== u.id))} className="text-amber-400 hover:text-red-400 transition-colors">
+                                                    <i className="fa-solid fa-xmark text-[10px]"></i>
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
                             {/* Nachunternehmer */}
-                            <div className="space-y-3">
-                                <label className="text-xs font-semibold text-gray-400 uppercase">Nachunternehmer auswählen</label>
-                                <div className="h-40 overflow-y-auto custom-scrollbar bg-black/20 rounded-xl border border-white/10 p-2 grid grid-cols-2 gap-2">
-                                    {subcontractors.map(sub => {
+                            <div className="space-y-3 animate-[fadeIn_0.3s_ease-out]">
+                                <label className="text-xs font-semibold text-gray-400 uppercase">Nachunternehmer</label>
+                                <input
+                                    type="text"
+                                    value={subcontractorSearchQuery}
+                                    onChange={e => setSubcontractorSearchQuery(e.target.value)}
+                                    placeholder="Nachunternehmer suchen..."
+                                    className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500 transition-colors"
+                                />
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+                                    {subcontractors.filter(sub => {
+                                        const query = subcontractorSearchQuery.toLowerCase();
+                                        return sub.name.toLowerCase().includes(query) || (sub.trade && sub.trade.toLowerCase().includes(query));
+                                    }).map(sub => {
                                         const isAssigned = assignedSubcontractors.includes(sub.id);
                                         return (
                                             <button
-                                                key={sub.id} type="button" onClick={() => toggleSubcontractor(sub.id)}
-                                                className={`p-2 rounded-lg border text-left transition-all flex flex-col justify-center ${isAssigned ? 'bg-amber-500/10 border-amber-500/50 text-white' : 'bg-transparent border-white/5 text-gray-400 hover:bg-white/5'}`}
+                                                key={sub.id}
+                                                type="button"
+                                                onClick={() => toggleSubcontractor(sub.id)}
+                                                className={`p-2 rounded-xl border text-center transition-all ${isAssigned ? 'bg-amber-500/10 border-amber-500/50 text-white' : 'bg-[#0a101d] border-white/10 text-gray-400 hover:bg-slate-700/50 hover:text-white'}`}
                                             >
-                                                <span className="text-xs font-bold truncate w-full">{sub.name}</span>
+                                                <div className="text-[10px] font-bold">{sub.name}</div>
+                                                <div className="text-[9px] opacity-70">{sub.trade}</div>
                                             </button>
                                         );
                                     })}
+                                    {subcontractors.filter(sub => {
+                                        const query = subcontractorSearchQuery.toLowerCase();
+                                        return sub.name.toLowerCase().includes(query) || (sub.trade && sub.trade.toLowerCase().includes(query));
+                                    }).length === 0 && (
+                                        <div className="col-span-full text-xs text-gray-500 text-center py-4">Keine Nachunternehmer gefunden.</div>
+                                    )}
                                 </div>
                             </div>
                         </div>

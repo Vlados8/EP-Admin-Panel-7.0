@@ -67,6 +67,7 @@ const Notes = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isModalEditMode, setIsModalEditMode] = useState(false);
     const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
+    const [projectSearchQuery, setProjectSearchQuery] = useState('');
 
     // Gallery State
     const [isGalleryOpen, setIsGalleryOpen] = useState(false);
@@ -114,6 +115,7 @@ const Notes = () => {
         setEditingNote(null);
         setIsModalEditMode(false);
         setIsProjectDropdownOpen(false);
+        setProjectSearchQuery('');
     };
 
     const handleOpenModal = (note = null, forceEdit = false) => {
@@ -259,6 +261,11 @@ const Notes = () => {
         
         return matchesSearch;
     });
+
+    const filteredProjects = projects.filter(project =>
+        project.title?.toLowerCase().includes(projectSearchQuery.toLowerCase()) ||
+        project.project_number?.toLowerCase().includes(projectSearchQuery.toLowerCase())
+    );
 
     const getColorClass = (color) => {
         switch (color) {
@@ -751,7 +758,10 @@ const Notes = () => {
                                         <div className="relative">
                                             <button
                                                 type="button"
-                                                onClick={() => setIsProjectDropdownOpen(!isProjectDropdownOpen)}
+                                                onClick={() => {
+                                                    setIsProjectDropdownOpen(!isProjectDropdownOpen);
+                                                    setProjectSearchQuery('');
+                                                }}
                                                 className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 px-4 text-sm text-white text-left focus:outline-none focus:border-blue-500 transition-colors flex items-center justify-between"
                                             >
                                                 <span className="truncate">
@@ -766,32 +776,52 @@ const Notes = () => {
                                                 <>
                                                     <div 
                                                         className="fixed inset-0 z-40" 
-                                                        onClick={() => setIsProjectDropdownOpen(false)}
+                                                        onClick={() => {
+                                                            setIsProjectDropdownOpen(false);
+                                                            setProjectSearchQuery('');
+                                                        }}
                                                     />
-                                                    <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto backdrop-blur-md py-1.5 animate-[fadeIn_0.15s_ease-out]">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => {
-                                                                setFormData({ ...formData, project_id: '' });
-                                                                setIsProjectDropdownOpen(false);
-                                                            }}
-                                                            className={`w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors ${!formData.project_id ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
-                                                        >
-                                                            Kein Projekt ausgewählt
-                                                        </button>
-                                                        {projects.map(project => (
+                                                    <div className="absolute left-0 right-0 mt-2 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto backdrop-blur-md py-1.5 animate-[fadeIn_0.15s_ease-out] flex flex-col">
+                                                        <div className="p-2 border-b border-white/10 sticky top-0 bg-[#121212]/95 z-10">
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Projekt suchen..."
+                                                                value={projectSearchQuery}
+                                                                onChange={(e) => setProjectSearchQuery(e.target.value)}
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                                                            />
+                                                        </div>
+                                                        <div className="overflow-y-auto max-h-48 custom-scrollbar">
                                                             <button
-                                                                key={project.id}
                                                                 type="button"
                                                                 onClick={() => {
-                                                                    setFormData({ ...formData, project_id: project.id.toString() });
+                                                                    setFormData({ ...formData, project_id: '' });
                                                                     setIsProjectDropdownOpen(false);
+                                                                    setProjectSearchQuery('');
                                                                 }}
-                                                                className={`w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate ${formData.project_id.toString() === project.id.toString() ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                                className={`w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors ${!formData.project_id ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
                                                             >
-                                                                {project.project_number} - {project.title}
+                                                                Kein Projekt ausgewählt
                                                             </button>
-                                                        ))}
+                                                            {filteredProjects.map(project => (
+                                                                <button
+                                                                    key={project.id}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setFormData({ ...formData, project_id: project.id.toString() });
+                                                                        setIsProjectDropdownOpen(false);
+                                                                        setProjectSearchQuery('');
+                                                                    }}
+                                                                    className={`w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate ${formData.project_id.toString() === project.id.toString() ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                                >
+                                                                    {project.project_number} - {project.title}
+                                                                </button>
+                                                            ))}
+                                                            {filteredProjects.length === 0 && (
+                                                                <div className="px-4 py-2 text-xs text-gray-500 italic text-center">Keine Projekte gefunden</div>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </>
                                             )}

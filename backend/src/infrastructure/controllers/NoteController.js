@@ -15,19 +15,14 @@ exports.getNotes = async (req, res, next) => {
         const whereClause = {};
         const userRole = req.user.role?.name || req.user.role;
         
-        if (req.user.isPartner) {
-            whereClause.client_id = req.user.id;
-        } else if (userRole === 'Subcontractor') {
-            if (req.query.projectId) {
-                whereClause.project_id = req.query.projectId;
-                whereClause.showInDiary = true;
-            } else {
-                whereClause.subcontractor_id = req.user.id;
-            }
+        if (req.query.projectId) {
+            whereClause.project_id = req.query.projectId;
+            whereClause.showInDiary = true;
         } else {
-            if (req.query.projectId) {
-                whereClause.project_id = req.query.projectId;
-                whereClause.showInDiary = true;
+            if (req.user.isPartner) {
+                whereClause.client_id = req.user.id;
+            } else if (userRole === 'Subcontractor') {
+                whereClause.subcontractor_id = req.user.id;
             } else {
                 whereClause.user_id = req.user.id;
             }

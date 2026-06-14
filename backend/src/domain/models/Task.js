@@ -23,6 +23,10 @@ const Task = sequelize.define('Task', {
         type: DataTypes.UUID,
         allowNull: true
     },
+    start_date: {
+        type: DataTypes.DATEONLY,
+        allowNull: true
+    },
     due_date: {
         type: DataTypes.DATEONLY,
         allowNull: true

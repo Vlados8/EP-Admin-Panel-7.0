@@ -34,6 +34,10 @@ const ProjectStage = sequelize.define('ProjectStage', {
     created_by_subcontractor_id: {
         type: DataTypes.INTEGER,
         allowNull: true
+    },
+    created_by_client_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true
     }
 }, {
     tableName: 'project_stages',

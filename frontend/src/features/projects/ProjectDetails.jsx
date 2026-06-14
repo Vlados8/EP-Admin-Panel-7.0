@@ -93,51 +93,23 @@ const ProjectDetails = () => {
         return R * c;
     };
 
-    const calculateDistance = async (fromAddr, toAddr) => {
-        try {
-            // 1. Geocode Company address
-            const fromRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(fromAddr)}&format=json&limit=1`, {
+    useEffect(() => {
+        if (project?.address) {
+            fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(project.address)}&format=json&limit=1`, {
                 headers: { 'User-Agent': 'EP-Admin-Panel-Geocoder' }
-            });
-            const fromData = await fromRes.json();
-            if (!fromData || fromData.length === 0) return null;
-            const fromLat = parseFloat(fromData[0].lat);
-            const fromLon = parseFloat(fromData[0].lon);
-
-            // 2. Geocode Project address
-            const toRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(toAddr)}&format=json&limit=1`, {
-                headers: { 'User-Agent': 'EP-Admin-Panel-Geocoder' }
-            });
-            const toData = await toRes.json();
-            if (!toData || toData.length === 0) return null;
-            const toLat = parseFloat(toData[0].lat);
-            const toLon = parseFloat(toData[0].lon);
-            
-            // Save coordinates to state for weather fetching
-            setProjectCoords({ lat: toLat, lon: toLon });
-
-            // 3. Get OSRM road distance
-            try {
-                const osrmRes = await fetch(`https://router.project-osrm.org/route/v1/driving/${fromLon},${fromLat};${toLon},${toLat}?overview=false`);
-                const osrmData = await osrmRes.json();
-                if (osrmData.code === 'Ok' && osrmData.routes && osrmData.routes.length > 0) {
-                    const route = osrmData.routes[0];
-                    const distanceKm = (route.distance / 1000).toFixed(1); // Convert meters to km
-                    const durationMin = Math.round(route.duration / 60); // Convert seconds to minutes
-                    return { distance: distanceKm, duration: durationMin };
-                }
-            } catch (osrmErr) {
-                console.warn('OSRM router failed, using Haversine fallback:', osrmErr);
-            }
-            
-            // Fallback to straight-line distance
-            const distanceKm = haversineDistance(fromLat, fromLon, toLat, toLon).toFixed(1);
-            return { distance: distanceKm, duration: Math.round(distanceKm * 1.2) }; // Estimate 1.2 min per km
-        } catch (err) {
-            console.error('Error calculating distance:', err);
-            return null;
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data && data.length > 0) {
+                        setProjectCoords({
+                            lat: parseFloat(data[0].lat),
+                            lon: parseFloat(data[0].lon)
+                        });
+                    }
+                })
+                .catch(err => console.error('Error geocoding project address:', err));
         }
-    };
+    }, [project?.address]);
 
     // Fetch Weather Forecast when coordinates are available
     useEffect(() => {
@@ -303,17 +275,59 @@ const ProjectDetails = () => {
     };
 
     useEffect(() => {
-        if (project?.address && companyData?.settings?.address) {
-            const fromAddr = `${companyData.settings.address}, ${companyData.settings.zipCity || ''}`;
-            const toAddr = project.address;
-            
-            setCalculatingRoute(true);
-            calculateDistance(fromAddr, toAddr).then(info => {
-                setRouteInfo(info);
-                setCalculatingRoute(false);
-            });
+        if (projectCoords && companyData?.settings?.address) {
+            const calculateDistanceInfo = async () => {
+                try {
+                    setCalculatingRoute(true);
+                    const fromAddr = `${companyData.settings.address}, ${companyData.settings.zipCity || ''}`;
+                    
+                    // Geocode Company address
+                    const fromRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(fromAddr)}&format=json&limit=1`, {
+                        headers: { 'User-Agent': 'EP-Admin-Panel-Geocoder' }
+                    });
+                    const fromData = await fromRes.json();
+                    if (!fromData || fromData.length === 0) {
+                        setCalculatingRoute(false);
+                        return;
+                    }
+                    const fromLat = parseFloat(fromData[0].lat);
+                    const fromLon = parseFloat(fromData[0].lon);
+
+                    const toLat = projectCoords.lat;
+                    const toLon = projectCoords.lon;
+
+                    // Get OSRM road distance
+                    let distanceKm;
+                    let durationMin;
+                    try {
+                        const osrmRes = await fetch(`https://router.project-osrm.org/route/v1/driving/${fromLon},${fromLat};${toLon},${toLat}?overview=false`);
+                        const osrmData = await osrmRes.json();
+                        if (osrmData.code === 'Ok' && osrmData.routes && osrmData.routes.length > 0) {
+                            const route = osrmData.routes[0];
+                            distanceKm = (route.distance / 1000).toFixed(1);
+                            durationMin = Math.round(route.duration / 60);
+                        }
+                    } catch (osrmErr) {
+                        console.warn('OSRM router failed, using Haversine fallback:', osrmErr);
+                    }
+
+                    if (!distanceKm) {
+                        // Fallback to straight-line distance
+                        distanceKm = haversineDistance(fromLat, fromLon, toLat, toLon).toFixed(1);
+                        durationMin = Math.round(distanceKm * 1.2);
+                    }
+
+                    setRouteInfo({ distance: distanceKm, duration: durationMin });
+                } catch (err) {
+                    console.error('Error calculating distance:', err);
+                } finally {
+                    setCalculatingRoute(false);
+                }
+            };
+
+            calculateDistanceInfo();
         }
-    }, [project?.address, companyData?.settings?.address]);
+    }, [projectCoords, companyData?.settings?.address]);
 
     useEffect(() => {
         const fetchProject = async () => {
@@ -789,6 +803,11 @@ const ProjectDetails = () => {
                                                     {log.subcontractor && (
                                                         <span className="text-[10px] text-amber-400 font-bold flex items-center gap-1.5">
                                                             von {log.subcontractor.name} <i className="fa-solid fa-helmet-safety text-amber-400 text-[10px]"></i>
+                                                        </span>
+                                                    )}
+                                                    {log.client && (
+                                                        <span className="text-[10px] text-purple-400 font-bold flex items-center gap-1.5">
+                                                            von {log.client.contact_person ? `${log.client.contact_person} (${log.client.name})` : log.client.name} (Partner) <i className="fa-solid fa-handshake text-purple-400 text-[10px]"></i>
                                                         </span>
                                                     )}
                                                 </div>
@@ -1632,7 +1651,7 @@ const ProjectDetails = () => {
                                                 {idx + 1}
                                             </div>
                                             {/* Mobile Actions: Show always or on group hover */}
-                                            {(canManageStages || task.creator?.id === currentUser.id || (task.created_by_subcontractor_id === currentUser.id && isSubcontractor)) && (
+                                            {(canManageStages || task.creator?.id === currentUser.id || (task.created_by_subcontractor_id === currentUser.id && isSubcontractor) || (task.created_by_client_id === currentUser.id && currentUser?.isPartner)) && (
                                                 <div className="flex sm:hidden items-center gap-4 ml-auto">
                                                     <button onClick={() => handleStartEditTask(task)} className="text-gray-400 hover:text-blue-400 transition-colors p-2">
                                                         <i className="fa-solid fa-pen-to-square"></i>
@@ -1784,6 +1803,11 @@ const ProjectDetails = () => {
                                                                 <i className="fa-solid fa-helmet-safety text-[10px] text-amber-400"></i>
                                                                 {task.subcontractor_creator.name}
                                                             </div>
+                                                        ) : task.client_creator ? (
+                                                            <div className="text-[11px] md:text-[12px] text-purple-400 font-bold flex items-center gap-1.5">
+                                                                <i className="fa-solid fa-handshake text-[10px]"></i>
+                                                                {task.client_creator.contact_person ? `${task.client_creator.contact_person} (${task.client_creator.name})` : task.client_creator.name} (Partner)
+                                                            </div>
                                                         ) : null}
                                                         <div className="text-[11px] md:text-[12px] text-gray-400 flex items-center gap-1.5">
                                                             <i className="fa-solid fa-clock text-[10px]"></i>
@@ -1840,7 +1864,7 @@ const ProjectDetails = () => {
 
                                         <div className="flex items-center justify-between sm:justify-end gap-6 pt-4 sm:pt-0 border-t sm:border-t-0 border-white/5 mt-2 sm:mt-0">
                                             {/* Desktop Actions: Hidden on mobile, show on group hover */}
-                                            {(canManageStages || task.creator?.id === currentUser.id || (task.created_by_subcontractor_id === currentUser.id && isSubcontractor)) && (
+                                            {(canManageStages || task.creator?.id === currentUser.id || (task.created_by_subcontractor_id === currentUser.id && isSubcontractor) || (task.created_by_client_id === currentUser.id && currentUser?.isPartner)) && (
                                                 <div className="hidden sm:flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
                                                     <button onClick={() => handleStartEditTask(task)} className="text-gray-400 hover:text-blue-400 transition-colors">
                                                         <i className="fa-solid fa-pen-to-square"></i>
@@ -2121,6 +2145,11 @@ const ProjectDetails = () => {
                                                             <i className="fa-solid fa-user-pen text-[10px]"></i>
                                                             {log.user.name}
                                                         </span>
+                                                    ) : log.client ? (
+                                                        <span className="text-xs text-purple-400 font-bold flex items-center gap-1.5 pl-2 border-l border-white/10" title="Partner">
+                                                            <i className="fa-solid fa-handshake text-[10px] text-purple-400"></i>
+                                                            {log.client.contact_person ? `${log.client.contact_person} (${log.client.name})` : log.client.name} (Partner)
+                                                        </span>
                                                     ) : null}
                                                 </div>
                                                 
@@ -2133,7 +2162,7 @@ const ProjectDetails = () => {
                                                         <i className="fa-solid fa-thumbtack text-xs"></i>
                                                     </button>
                                                     
-                                                    {(canManageStages || log.user_id === currentUser.id || (log.subcontractor_id === currentUser.id && isSubcontractor)) && (
+                                                    {(canManageStages || log.user_id === currentUser.id || (log.subcontractor_id === currentUser.id && isSubcontractor) || (log.client_id === currentUser.id && currentUser?.isPartner)) && (
                                                         <button 
                                                             onClick={() => handleDeleteDiaryLog(log.id)}
                                                             className="text-gray-600 hover:text-red-400 transition-colors p-1.5 opacity-0 group-hover:opacity-100"
