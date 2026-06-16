@@ -39,6 +39,7 @@ const ProjectDetails = () => {
     const [selectedFiles, setSelectedFiles] = useState([]);
     const [isUpdatingMainImage, setIsUpdatingMainImage] = useState(false);
     const mainImageInputRef = React.useRef(null);
+    const [heroImageError, setHeroImageError] = useState(false);
 
     const { companyData } = useCompany();
     const [routeInfo, setRouteInfo] = useState(null);
@@ -92,6 +93,10 @@ const ProjectDetails = () => {
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         return R * c;
     };
+
+    useEffect(() => {
+        setHeroImageError(false);
+    }, [project?.main_image]);
 
     useEffect(() => {
         if (project?.address) {
@@ -734,11 +739,12 @@ const ProjectDetails = () => {
                     <div className="lg:col-span-2 space-y-6">
                         {/* Hero Banner / Progress */}
                         <div className="glass-card rounded-2xl p-6 relative overflow-hidden min-h-[200px] flex flex-col justify-end group">
-                            {project.main_image ? (
+                            {project.main_image && !heroImageError ? (
                                 <img
                                     src={getImageUrl(project.main_image)}
                                     alt="Project Hero"
                                     className="absolute inset-0 w-full h-full object-cover opacity-20"
+                                    onError={() => setHeroImageError(true)}
                                 />
                             ) : (
                                 <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-purple-500/10 opacity-30"></div>

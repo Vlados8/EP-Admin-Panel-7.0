@@ -9,7 +9,27 @@ import { getImageUrl } from '../../utils/config';
 const monthNamesGerman = [
     'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
     'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'
-];
+];const ProjectBannerImage = ({ mainImage, title, className, fallbackClassName }) => {
+    const [hasError, setHasError] = useState(false);
+
+    useEffect(() => {
+        setHasError(false);
+    }, [mainImage]);
+
+    if (mainImage && !hasError) {
+        return (
+            <img
+                src={getImageUrl(mainImage)}
+                alt={title}
+                className={className}
+                onError={() => setHasError(true)}
+            />
+        );
+    }
+    return (
+        <div className={fallbackClassName}></div>
+    );
+};
 
 const Projects = () => {
     const { user: currentUser } = useSelector(state => state.auth);
@@ -368,15 +388,12 @@ const Projects = () => {
 
                 {/* Banner Section */}
                 <div className={`bg-slate-950/60 h-32 relative overflow-hidden flex justify-between items-start border-b ${bannerBorder}`}>
-                    {project.main_image ? (
-                        <img
-                            src={getImageUrl(project.main_image)}
-                            alt={project.title}
-                            className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-85 transition-all duration-700 scale-100 group-hover:scale-110"
-                        />
-                    ) : (
-                        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 to-[#1e293b]/50 opacity-60"></div>
-                    )}
+                    <ProjectBannerImage
+                        mainImage={project.main_image}
+                        title={project.title}
+                        className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-85 transition-all duration-700 scale-100 group-hover:scale-110"
+                        fallbackClassName="absolute inset-0 bg-gradient-to-br from-slate-900 to-[#1e293b]/50 opacity-60"
+                    />
                     
                     {/* Animated grid overlay inside banner for modern look */}
                     <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:14px_14px]"></div>
@@ -1083,15 +1100,12 @@ const ProjectQuickViewModal = ({ project, isSubcontractor, isPartner, onClose, o
                 
                 {/* Header Image or Gradient Banner */}
                 <div className="h-24 relative overflow-hidden flex justify-between items-start border-b border-white/5">
-                    {project.main_image ? (
-                        <img
-                            src={getImageUrl(project.main_image)}
-                            alt={project.title}
-                            className="absolute inset-0 w-full h-full object-cover opacity-35"
-                        />
-                    ) : (
-                        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 to-[#1e293b]/50 opacity-60"></div>
-                    )}
+                    <ProjectBannerImage
+                        mainImage={project.main_image}
+                        title={project.title}
+                        className="absolute inset-0 w-full h-full object-cover opacity-35"
+                        fallbackClassName="absolute inset-0 bg-gradient-to-br from-slate-900 to-[#1e293b]/50 opacity-60"
+                    />
                     <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:14px_14px]"></div>
                     
                     <div className="relative z-10 w-full p-4 flex justify-between items-center">
