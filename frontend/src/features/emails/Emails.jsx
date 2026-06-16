@@ -18,10 +18,12 @@ const Emails = () => {
     const [showQuickUser, setShowQuickUser] = useState(false);
     const [quickUser, setQuickUser] = useState({ name: '', password: '', role_id: '', phone: '', specialty: '' });
     const [newAccount, setNewAccount] = useState({ email: '', type: 'smtp', user_id: '', is_shared: true, display_name: '' });
+    const [selectedUserIds, setSelectedUserIds] = useState([]);
 
     // Custom select dropdown state hooks
     const [isUserSelectOpen, setIsUserSelectOpen] = useState(false);
     const [isRoleSelectOpen, setIsRoleSelectOpen] = useState(false);
+    const [isEditUserSelectOpen, setIsEditUserSelectOpen] = useState(false);
 
     const [domain, setDomain] = useState('empire-premium.de'); // Default if fetch fails
     const [searchQuery, setSearchQuery] = useState('');
@@ -44,7 +46,7 @@ const Emails = () => {
 
     const fetchAccounts = async () => {
         try {
-            const res = await api.get('/emails');
+            const res = await api.get('/emails?manage=true');
             setAccounts(res.data.data.accounts);
         } catch (err) {
             console.error('Error fetching accounts:', err);
@@ -100,16 +102,18 @@ const Emails = () => {
                 return;
             }
             if (!newAccount.is_shared && !newAccount.user_id) {
-                alert('Bitte wählen Sie einen Nutzer aus oder создайте нового в панели ниже.');
+                alert('Bitte wählen Sie einen Nutzer aus oder erstellen Sie einen in der Liste.');
                 return;
             }
             let emailFull = newAccount.email;
             if (!emailFull.includes('@')) {
                 emailFull = `${emailFull}@${domain}`;
             }
-            await api.post('/emails', { ...newAccount, email: emailFull });
+            const userIds = newAccount.is_shared ? selectedUserIds : (newAccount.user_id ? [newAccount.user_id] : []);
+            await api.post('/emails', { ...newAccount, email: emailFull, userIds });
             setShowAddModal(false);
             setNewAccount({ email: '', type: 'smtp', user_id: '', is_shared: true, display_name: '' });
+            setSelectedUserIds([]);
             setIsUserSelectOpen(false);
             setIsRoleSelectOpen(false);
             fetchAccounts();
@@ -139,15 +143,25 @@ const Emails = () => {
     const handleUpdateAccount = async (e) => {
         e.preventDefault();
         try {
-            if (!editingAccount.display_name?.trim()) {
-                alert('Anzeigename ist erforderlich.');
+            if (editingAccount.is_shared && !editingAccount.display_name?.trim()) {
+                alert('Bitte geben Sie einen Anzeigenamen für dieses öffentliche Konto an.');
                 return;
             }
+            if (!editingAccount.is_shared && !editingAccount.user_id) {
+                alert('Bitte wählen Sie einen Nutzer für dieses private Konto aus.');
+                return;
+            }
+            const userIds = editingAccount.is_shared ? selectedUserIds : (editingAccount.user_id ? [editingAccount.user_id] : []);
             await api.patch(`/emails/${editingAccount.id}`, {
-                display_name: editingAccount.display_name
+                is_shared: editingAccount.is_shared,
+                display_name: editingAccount.is_shared ? editingAccount.display_name : null,
+                user_id: editingAccount.is_shared ? null : editingAccount.user_id,
+                userIds
             });
             setShowEditModal(false);
             setEditingAccount(null);
+            setSelectedUserIds([]);
+            setIsEditUserSelectOpen(false);
             fetchAccounts();
         } catch (err) {
             alert(err.response?.data?.message || 'Fehler beim Aktualisieren.');
@@ -156,6 +170,7 @@ const Emails = () => {
 
     const handleEditAccount = (acc) => {
         setEditingAccount({ ...acc });
+        setSelectedUserIds(acc.users ? acc.users.map(u => u.id) : []);
         setShowEditModal(true);
     };
 
@@ -257,13 +272,25 @@ const Emails = () => {
                                     <tr key={account.id} className="hover:bg-white/5 transition-colors group">
                                         <td className="px-6 py-4">
                                             <div className="font-semibold text-white">{account.email}</div>
-                                            {account.assigned_user ? (
-                                                <div className="text-[10px] text-blue-400 flex items-center gap-1">
+                                            {account.is_shared ? (
+                                                <div className="text-[10px] text-gray-500 flex flex-wrap gap-1 items-center mt-1">
+                                                    <i className="fa-solid fa-users text-[8px]"></i>
+                                                    <span>Öffentlich:</span>
+                                                    {account.users && account.users.length > 0 ? (
+                                                        <span className="text-white font-medium">
+                                                            {account.users.map(u => u.name).join(', ')}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="italic text-gray-600">Keine Zugriffe</span>
+                                                    )}
+                                                </div>
+                                            ) : account.assigned_user ? (
+                                                <div className="text-[10px] text-blue-400 flex items-center gap-1 mt-1">
                                                     <i className="fa-solid fa-user text-[8px]"></i> {account.assigned_user.name}
                                                 </div>
                                             ) : (
-                                                <div className="text-[10px] text-gray-500 flex items-center gap-1">
-                                                    <i className="fa-solid fa-users text-[8px]"></i> Öffentlich
+                                                <div className="text-[10px] text-gray-500 flex items-center gap-1 mt-1">
+                                                    <i className="fa-solid fa-user-xmark text-[8px]"></i> Nicht zugewiesen
                                                 </div>
                                             )}
                                             {account.type === 'forward' && <div className="text-[10px] text-gray-400 mt-1 italic opacity-60">→ {account.forward_to}</div>}
@@ -281,15 +308,13 @@ const Emails = () => {
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex gap-2 justify-end">
-                                                {account.is_shared && (
-                                                    <button
-                                                        onClick={() => handleEditAccount(account)}
-                                                        className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center border border-blue-500/20 text-blue-400 hover:bg-blue-500/20 transition-all"
-                                                        title="Bearbeiten"
-                                                    >
-                                                        <i className="fa-solid fa-pencil text-sm"></i>
-                                                    </button>
-                                                )}
+                                                <button
+                                                    onClick={() => handleEditAccount(account)}
+                                                    className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center border border-blue-500/20 text-blue-400 hover:bg-blue-500/20 transition-all"
+                                                    title="Bearbeiten"
+                                                >
+                                                    <i className="fa-solid fa-pencil text-sm"></i>
+                                                </button>
                                                 <button
                                                     onClick={() => handleDeleteAccount(account.id)}
                                                     className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-all"
@@ -420,7 +445,28 @@ const Emails = () => {
                                     </button>
                                 </div>
 
-                                {!newAccount.is_shared && (
+                                {newAccount.is_shared ? (
+                                    <div className="space-y-2 max-h-40 overflow-y-auto border border-white/10 rounded-xl p-3 bg-white/5 custom-scrollbar text-left animate-[slideDown_0.3s_ease-out]">
+                                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Nutzer auswählen (Zugriffsrechte)</label>
+                                        {users.map(user => (
+                                            <label key={user.id} className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer hover:text-white mb-1">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedUserIds.includes(user.id)}
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) {
+                                                            setSelectedUserIds([...selectedUserIds, user.id]);
+                                                        } else {
+                                                            setSelectedUserIds(selectedUserIds.filter(id => id !== user.id));
+                                                        }
+                                                    }}
+                                                    className="rounded border-white/15 bg-white/5 text-blue-600 focus:ring-0 w-3.5 h-3.5"
+                                                />
+                                                <span>{user.name} <span className="text-gray-500">({user.role?.name || 'Gast'})</span></span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                ) : (
                                     <div className="animate-[slideDown_0.3s_ease-out] space-y-4">
                                         <div className="flex justify-between items-end gap-2">
                                             <div className="flex-1 relative">
@@ -581,7 +627,7 @@ const Emails = () => {
                             <div className="pt-4 flex gap-4">
                                 <button
                                     type="button"
-                                    onClick={() => setShowAddModal(false)}
+                                    onClick={() => { setShowAddModal(false); setSelectedUserIds([]); }}
                                     className="flex-1 px-6 py-3 rounded-2xl border border-white/10 hover:bg-white/5 text-sm font-bold transition-colors"
                                 >
                                     Abbrechen
@@ -621,22 +667,121 @@ const Emails = () => {
                         <form onSubmit={handleUpdateAccount}>
                             <div className="space-y-6 mb-8">
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-2 font-semibold">Anzeigename (Текущий: {editingAccount.display_name})</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        className="w-full glass-input rounded-xl px-4 py-3 text-white font-semibold"
-                                        placeholder="Neuer Name"
-                                        value={editingAccount.display_name}
-                                        onChange={(e) => setEditingAccount({ ...editingAccount, display_name: e.target.value })}
-                                    />
+                                    <label className="block text-sm text-gray-400 mb-2 font-semibold">Zugriffstyp</label>
+                                    <div className="flex gap-4 mb-4">
+                                        <button
+                                            type="button"
+                                            onClick={() => setEditingAccount({ ...editingAccount, is_shared: true, user_id: '' })}
+                                            className={`flex-1 py-2 rounded-xl border text-xs font-bold transition-all ${editingAccount.is_shared ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'border-white/10 text-gray-500'}`}
+                                        >
+                                            Öffentlich
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setEditingAccount({ ...editingAccount, is_shared: false })}
+                                            className={`flex-1 py-2 rounded-xl border text-xs font-bold transition-all ${!editingAccount.is_shared ? 'bg-purple-600/20 border-purple-500 text-purple-400' : 'border-white/10 text-gray-500'}`}
+                                        >
+                                            Privat
+                                        </button>
+                                    </div>
                                 </div>
+
+                                {editingAccount.is_shared ? (
+                                    <>
+                                        <div className="animate-[slideDown_0.3s_ease-out] mb-4">
+                                            <label className="block text-sm text-gray-400 mb-2 font-semibold">Anzeigename (z.B. Support)</label>
+                                            <input
+                                                type="text"
+                                                required={editingAccount.is_shared}
+                                                className="w-full glass-input rounded-xl px-4 py-3 text-white font-semibold"
+                                                placeholder="Empire Support"
+                                                value={editingAccount.display_name || ''}
+                                                onChange={(e) => setEditingAccount({ ...editingAccount, display_name: e.target.value })}
+                                            />
+                                        </div>
+
+                                        <div className="space-y-2 max-h-40 overflow-y-auto border border-white/10 rounded-xl p-3 bg-white/5 custom-scrollbar text-left animate-[slideDown_0.3s_ease-out]">
+                                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Nutzer auswählen (Zugriffsrechte)</label>
+                                            {users.map(user => (
+                                                <label key={user.id} className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer hover:text-white mb-1">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedUserIds.includes(user.id)}
+                                                        onChange={(e) => {
+                                                            if (e.target.checked) {
+                                                                setSelectedUserIds([...selectedUserIds, user.id]);
+                                                            } else {
+                                                                setSelectedUserIds(selectedUserIds.filter(id => id !== user.id));
+                                                            }
+                                                        }}
+                                                        className="rounded border-white/15 bg-white/5 text-blue-600 focus:ring-0 w-3.5 h-3.5"
+                                                    />
+                                                    <span>{user.name} <span className="text-gray-500">({user.role?.name || 'Gast'})</span></span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="animate-[slideDown_0.3s_ease-out] space-y-4">
+                                        <div className="relative">
+                                            <label className="block text-xs text-gray-500 mb-2 uppercase tracking-widest font-bold text-[10px]">Nutzer auswählen</label>
+                                            <button
+                                                type="button"
+                                                disabled={loading}
+                                                onClick={() => setIsEditUserSelectOpen(!isEditUserSelectOpen)}
+                                                className="w-full glass-input rounded-xl px-4 py-3 text-white font-semibold text-sm disabled:opacity-50 text-left flex items-center justify-between"
+                                            >
+                                                <span className="truncate">
+                                                    {loading 
+                                                        ? 'Lade Nutzer...' 
+                                                        : editingAccount.user_id 
+                                                            ? (() => {
+                                                                const u = users.find(usr => String(usr.id) === String(editingAccount.user_id));
+                                                                return u ? `${u.name} (${u.role?.name || 'Gast'})` : 'Wählen Sie einen Nutzer...';
+                                                              })()
+                                                            : 'Wählen Sie einen Nutzer...'}
+                                                </span>
+                                                <i className={`fa-solid fa-chevron-down text-gray-400 text-xs transition-transform duration-200 ${isEditUserSelectOpen ? 'rotate-180' : ''}`}></i>
+                                            </button>
+                                            {isEditUserSelectOpen && !loading && (
+                                                <>
+                                                    <div className="fixed inset-0 z-40" onClick={() => setIsEditUserSelectOpen(false)} />
+                                                    <div className="absolute left-0 right-0 mt-1 bg-[#121212]/95 border border-white/10 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto py-1.5 backdrop-blur-md animate-[fadeIn_0.15s_ease-out] custom-scrollbar text-left font-normal">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setEditingAccount({ ...editingAccount, user_id: '' });
+                                                                setIsEditUserSelectOpen(false);
+                                                            }}
+                                                            className="w-full text-left px-4 py-2.5 text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+                                                        >
+                                                            Wählen Sie einen Nutzer...
+                                                        </button>
+                                                        {users.map(user => (
+                                                            <button
+                                                                key={user.id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setEditingAccount({ ...editingAccount, user_id: user.id });
+                                                                    setIsEditUserSelectOpen(false);
+                                                                }}
+                                                                className={`w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors truncate ${String(editingAccount.user_id) === String(user.id) ? 'bg-white/5 text-blue-400 font-medium' : ''}`}
+                                                            >
+                                                                {user.name} <span className="text-xs text-gray-500">({user.role?.name || 'Gast'})</span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="flex gap-4">
                                 <button
                                     type="button"
-                                    onClick={() => setShowEditModal(false)}
+                                    onClick={() => { setShowEditModal(false); setEditingAccount(null); setSelectedUserIds([]); setIsEditUserSelectOpen(false); }}
                                     className="flex-1 px-6 py-3 rounded-xl border border-white/10 text-white font-bold hover:bg-white/5 transition-all"
                                 >
                                     Abbrechen

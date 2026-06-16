@@ -4,7 +4,7 @@ const path = require('path');
 const crypto = require('crypto');
 const FormData = require('form-data');
 const Mailgun = require('mailgun.js');
-const { EmailAccount, Email, Attachment, Company, User, Client } = require('../../domain/models');
+const { EmailAccount, Email, Attachment, Company, User, Client, EmailAccountUser } = require('../../domain/models');
 const { emitToCompany, getIO } = require('../websocket');
 const AppError = require('../../utils/appError');
 const { hasPermission } = require('../../utils/permissions');
@@ -160,25 +160,23 @@ exports.getEmailAccounts = async (req, res, next) => {
         const company_id = req.user.company_id;
 
         let accountWhere = { company_id };
-        const userRole = req.user.role?.name || req.user.role;
-        if (!hasPermission(req.user, 'MANAGE_EMAIL_ACCOUNTS')) {
-            if (userRole === 'Projektleiter') {
-                // Projektleiter sees personal + shared
-                accountWhere[Op.or] = [
-                    { user_id: req.user.id },
-                    { is_shared: true }
-                ];
-            } else {
-                // Workers and Gruppenleiter see ONLY personal
-                accountWhere.user_id = req.user.id;
-                accountWhere.is_shared = false;
-            }
+        const isManage = req.query.manage === 'true' && hasPermission(req.user, 'MANAGE_EMAIL_ACCOUNTS');
+
+        if (!isManage) {
+            // Only return accounts where this user explicitly has access in EmailAccountUser
+            const userAccess = await EmailAccountUser.findAll({
+                where: { user_id: req.user.id },
+                attributes: ['email_account_id']
+            });
+            const allowedAccountIds = userAccess.map(ua => ua.email_account_id);
+            accountWhere.id = { [Op.in]: allowedAccountIds };
         }
 
         const accounts = await EmailAccount.findAll({
             where: accountWhere,
             include: [
-                { model: User, as: 'assigned_user', attributes: ['id', 'name', 'email'] }
+                { model: User, as: 'assigned_user', attributes: ['id', 'name', 'email'] },
+                { model: User, as: 'users', attributes: ['id', 'name', 'email'], through: { attributes: [] } }
             ],
             order: [['createdAt', 'DESC']]
         });
@@ -253,6 +251,15 @@ exports.createEmailAccount = async (req, res, next) => {
             user_id: user_id || null,
             is_shared: is_shared !== undefined ? is_shared : (user_id ? false : true)
         });
+
+        // Save access permissions in EmailAccountUser join table
+        const userIds = req.body.userIds || [];
+        if (!newAccount.is_shared && user_id && !userIds.includes(user_id)) {
+            userIds.push(user_id);
+        }
+        if (userIds && userIds.length > 0) {
+            await newAccount.setUsers(userIds);
+        }
 
         // --- NEW: Sync User Email ---
         if (newAccount.user_id && !newAccount.is_shared) {
@@ -424,7 +431,7 @@ exports.getDomain = async (req, res, next) => {
 exports.updateEmailAccount = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const { display_name, status } = req.body;
+        const { display_name, status, userIds, is_shared, user_id } = req.body;
         const company_id = req.user.company_id;
 
         const account = await EmailAccount.findOne({ where: { id, company_id } });
@@ -432,15 +439,58 @@ exports.updateEmailAccount = async (req, res, next) => {
             return next(new AppError('E-Mail-Konto nicht gefunden.', 404));
         }
 
-        // Restriction: Only shared accounts can have their display_name updated
-        if (!account.is_shared && display_name !== undefined) {
-            return next(new AppError('Anzeigename kann nur für öffentliche Konten geändert werden.', 400));
-        }
-
-        if (display_name !== undefined) account.display_name = display_name;
+        // Update status if provided
         if (status !== undefined) account.status = status;
 
+        // Determine target sharing state: request body or current state
+        const targetShared = is_shared !== undefined ? is_shared : account.is_shared;
+
+        if (targetShared) {
+            // Shared account
+            if (display_name !== undefined) {
+                if (!display_name.trim()) {
+                    return next(new AppError('Bitte geben Sie einen Anzeigenamen für dieses öffentliche Konto an.', 400));
+                }
+                account.display_name = display_name;
+            }
+            account.is_shared = true;
+            account.user_id = null;
+        } else {
+            // Private account
+            const targetUserId = user_id !== undefined ? user_id : account.user_id;
+            if (!targetUserId) {
+                return next(new AppError('Bitte wählen Sie einen Nutzer für dieses private Konto aus.', 400));
+            }
+            account.is_shared = false;
+            account.user_id = targetUserId;
+            account.display_name = null;
+        }
+
         await account.save();
+
+        // Update access permissions in EmailAccountUser join table
+        let finalUserIds = userIds;
+        if (!account.is_shared && account.user_id) {
+            finalUserIds = [account.user_id];
+        }
+
+        if (finalUserIds !== undefined && Array.isArray(finalUserIds)) {
+            await account.setUsers(finalUserIds);
+        }
+
+        // Sync User Email if private and has user_id
+        if (!account.is_shared && account.user_id) {
+            try {
+                const user = await User.findByPk(account.user_id);
+                if (user) {
+                    user.email = account.email;
+                    await user.save();
+                    console.log(`[Sync] Updated User ${user.id} email to ${account.email}`);
+                }
+            } catch (syncErr) {
+                console.error('[Sync] Error updating user email:', syncErr);
+            }
+        }
 
         res.status(200).json({
             status: 'success',
@@ -746,24 +796,19 @@ exports.getEmailMessages = async (req, res, next) => {
     try {
         const companyId = req.user.company_id;
 
-        // 1. Get allowed email accounts for this user
-        const accountWhere = { company_id: companyId };
-        const userRole = req.user.role?.name || req.user.role;
-        if (!hasPermission(req.user, 'MANAGE_EMAIL_ACCOUNTS')) {
-            if (userRole === 'Projektleiter') {
-                // Projektleiter sees personal + shared
-                accountWhere[Op.or] = [
-                    { user_id: req.user.id },
-                    { is_shared: true }
-                ];
-            } else {
-                // Workers and Gruppenleiter see ONLY personal
-                accountWhere.user_id = req.user.id;
-                accountWhere.is_shared = false;
-            }
-        }
+        // 1. Get allowed email accounts for this user (only the ones explicitly assigned via EmailAccountUser)
+        const userAccess = await EmailAccountUser.findAll({
+            where: { user_id: req.user.id },
+            attributes: ['email_account_id']
+        });
+        const allowedAccountIds = userAccess.map(ua => ua.email_account_id);
 
-        const accounts = await EmailAccount.findAll({ where: accountWhere });
+        const accounts = await EmailAccount.findAll({
+            where: {
+                id: { [Op.in]: allowedAccountIds },
+                company_id: companyId
+            }
+        });
         const allowedEmails = accounts.map(a => a.email);
 
         if (allowedEmails.length === 0) {
@@ -774,14 +819,13 @@ exports.getEmailMessages = async (req, res, next) => {
         }
 
         // 2. Fetch emails involving these accounts
-        const whereClause = { company_id: companyId };
-
-        if (!hasPermission(req.user, 'MANAGE_EMAIL_ACCOUNTS')) {
-            whereClause[Op.or] = [
+        const whereClause = {
+            company_id: companyId,
+            [Op.or]: [
                 { sender_email: { [Op.in]: allowedEmails } },
                 { recipient_email: { [Op.in]: allowedEmails } }
-            ];
-        }
+            ]
+        };
 
         const messages = await Email.findAll({
             where: whereClause,
@@ -1096,3 +1140,4 @@ exports.sendBulkEmail = async (req, res, next) => {
         next(err);
     }
 };
+// restart trigger

@@ -24,6 +24,7 @@ const SupportResponse = require('./SupportResponse');
 const ApiKey = require('./ApiKey');
 const EmailAccount = require('./EmailAccount');
 const Email = require('./Email');
+const EmailAccountUser = require('./EmailAccountUser');
 const Attachment = require('./Attachment');
 const ProjectFolder = require('./ProjectFolder');
 const ProjectFile = require('./ProjectFile');
@@ -169,6 +170,16 @@ EmailAccount.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
 User.hasMany(EmailAccount, { foreignKey: 'user_id', as: 'assigned_email_accounts' });
 EmailAccount.belongsTo(User, { foreignKey: 'user_id', as: 'assigned_user' });
 
+// N:M EmailAccount <-> User Access
+EmailAccount.belongsToMany(User, { through: EmailAccountUser, foreignKey: 'email_account_id', as: 'users' });
+User.belongsToMany(EmailAccount, { through: EmailAccountUser, foreignKey: 'user_id', as: 'email_accounts' });
+
+EmailAccount.hasMany(EmailAccountUser, { foreignKey: 'email_account_id', as: 'account_users', onDelete: 'CASCADE' });
+EmailAccountUser.belongsTo(EmailAccount, { foreignKey: 'email_account_id', as: 'email_account' });
+
+User.hasMany(EmailAccountUser, { foreignKey: 'user_id', as: 'user_email_accounts', onDelete: 'CASCADE' });
+EmailAccountUser.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
 // 9. Emails & Attachments
 Email.hasMany(Attachment, { foreignKey: 'email_id', as: 'attachments', onDelete: 'CASCADE' });
 Attachment.belongsTo(Email, { foreignKey: 'email_id', as: 'email' });
@@ -304,6 +315,7 @@ module.exports = {
     ApiKey,
     EmailAccount,
     Email,
+    EmailAccountUser,
     Attachment,
     ProjectFolder,
     ProjectFile,
