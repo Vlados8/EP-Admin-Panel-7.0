@@ -1074,7 +1074,7 @@ const ProjectQuickViewModal = ({ project, onClose, onOpenDetails }) => {
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]">
+        <div className="fixed inset-y-0 right-0 left-0 md:left-64 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]">
             {/* Modal Container */}
             <div className="relative w-full max-w-lg bg-[#0f1322]/90 border border-white/10 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-xl flex flex-col animate-[slideUp_0.3s_ease-out]">
                 
@@ -1124,6 +1124,25 @@ const ProjectQuickViewModal = ({ project, onClose, onOpenDetails }) => {
                                 {project.status || 'Aktiv'}
                             </span>
                         </div>
+
+                        {/* Category & Subcategory */}
+                        {(project.category || project.subcategory) && (
+                            <div className="flex flex-wrap gap-2 mb-2">
+                                {project.category && (
+                                    <span className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-md font-semibold flex items-center gap-1">
+                                        <i className="fa-solid fa-tag text-[9px]"></i>
+                                        {project.category.name}
+                                    </span>
+                                )}
+                                {project.subcategory && (
+                                    <span className="text-[10px] bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2 py-0.5 rounded-md font-semibold flex items-center gap-1">
+                                        <i className="fa-solid fa-tags text-[9px]"></i>
+                                        {project.subcategory.name}
+                                    </span>
+                                )}
+                            </div>
+                        )}
+
                         {project.address && (
                             <p className="text-gray-400 text-xs flex items-center gap-2">
                                 <i className="fa-solid fa-location-dot text-blue-500/80 text-xs"></i>
