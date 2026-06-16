@@ -35,6 +35,12 @@ exports.createPublicApplication = async (req, res, next) => {
             source_website: req.source_website || 'Direkt/Manuell'
         });
 
+        // Send automated confirmation email via Mailgun (non-blocking)
+        const { sendAutoReply } = require('../../utils/mailHelper');
+        sendAutoReply(email, '', bewerbung.id, stelle, 'bewerbung', companyId).catch(mailErr => {
+            console.error('[Mailgun] Bewerbung auto-reply failed:', mailErr);
+        });
+
         res.status(201).json({
             status: 'success',
             data: {
@@ -67,15 +73,10 @@ exports.getAllApplications = async (req, res, next) => {
     }
 };
 
-exports.updateApplicationStatus = async (req, res, next) => {
+exports.updateApplication = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const { status } = req.body;
         const companyId = req.user.company_id;
-
-        if (!status) {
-            return next(new AppError('Status is required', 400));
-        }
 
         const bewerbung = await Bewerbung.findOne({
             where: { id, company_id: companyId }
@@ -85,7 +86,13 @@ exports.updateApplicationStatus = async (req, res, next) => {
             return next(new AppError('Bewerbung not found', 404));
         }
 
-        bewerbung.status = status;
+        const allowedFields = ['stelle', 'email', 'telefon', 'erfahrung', 'nachricht', 'status', 'notizen'];
+        allowedFields.forEach(field => {
+            if (req.body[field] !== undefined) {
+                bewerbung[field] = req.body[field];
+            }
+        });
+
         await bewerbung.save();
 
         res.status(200).json({

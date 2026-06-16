@@ -9,7 +9,7 @@ router.post('/public/:companyId', apiKeyAuth, bewerbungController.createPublicAp
 
 // Protected admin endpoints (Auth required)
 router.get('/', auth.protect, bewerbungController.getAllApplications);
-router.patch('/:id/status', auth.protect, bewerbungController.updateApplicationStatus);
+router.patch('/:id', auth.protect, bewerbungController.updateApplication);
 router.delete('/:id', auth.protect, bewerbungController.deleteApplication);
 
 module.exports = router;

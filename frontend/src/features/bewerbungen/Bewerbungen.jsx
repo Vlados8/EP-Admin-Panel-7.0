@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import api from '../../services/api';
 
 const STATUS_OPTIONS = [
@@ -30,6 +30,27 @@ const Bewerbungen = () => {
     const [selectedApplication, setSelectedApplication] = useState(null);
     const [updatingId, setUpdatingId] = useState(null);
 
+    // Edit and Note state hooks
+    const [isEditing, setIsEditing] = useState(false);
+    const [editForm, setEditForm] = useState({ stelle: '', email: '', telefon: '', erfahrung: '', nachricht: '' });
+    const [noteText, setNoteText] = useState('');
+    const [savingNote, setSavingNote] = useState(false);
+    const [savingEdit, setSavingEdit] = useState(false);
+
+    useEffect(() => {
+        if (selectedApplication) {
+            setEditForm({
+                stelle: selectedApplication.stelle || '',
+                email: selectedApplication.email || '',
+                telefon: selectedApplication.telefon || '',
+                erfahrung: selectedApplication.erfahrung || '',
+                nachricht: selectedApplication.nachricht || ''
+            });
+            setNoteText(selectedApplication.notizen || '');
+            setIsEditing(false);
+        }
+    }, [selectedApplication]);
+
     const fetchApplications = async () => {
         try {
             setLoading(true);
@@ -50,7 +71,7 @@ const Bewerbungen = () => {
         try {
             setUpdatingId(id);
             setApplications(prev => prev.map(app => app.id === id ? { ...app, status: newStatus } : app));
-            await api.patch(`/bewerbungen/${id}/status`, { status: newStatus });
+            await api.patch(`/bewerbungen/${id}`, { status: newStatus });
             if (selectedApplication && selectedApplication.id === id) {
                 setSelectedApplication(prev => ({ ...prev, status: newStatus }));
             }
@@ -59,6 +80,37 @@ const Bewerbungen = () => {
             fetchApplications();
         } finally {
             setUpdatingId(null);
+        }
+    };
+
+    const handleSaveNote = async () => {
+        try {
+            setSavingNote(true);
+            const res = await api.patch(`/bewerbungen/${selectedApplication.id}`, { notizen: noteText });
+            const updated = res.data.data.bewerbung;
+            setApplications(prev => prev.map(app => app.id === updated.id ? updated : app));
+            setSelectedApplication(updated);
+        } catch (error) {
+            console.error('Error saving note:', error);
+            alert('Fehler beim Speichern der Notiz.');
+        } finally {
+            setSavingNote(false);
+        }
+    };
+
+    const handleSaveEdit = async () => {
+        try {
+            setSavingEdit(true);
+            const res = await api.patch(`/bewerbungen/${selectedApplication.id}`, editForm);
+            const updated = res.data.data.bewerbung;
+            setApplications(prev => prev.map(app => app.id === updated.id ? updated : app));
+            setSelectedApplication(updated);
+            setIsEditing(false);
+        } catch (error) {
+            console.error('Error updating application:', error);
+            alert('Fehler beim Aktualisieren der Bewerbung.');
+        } finally {
+            setSavingEdit(false);
         }
     };
 
@@ -111,12 +163,12 @@ const Bewerbungen = () => {
     };
 
     return (
-        <div className="flex flex-col gap-6 h-full min-h-0">
+        <div className="flex flex-col gap-6 md:h-full md:min-h-0">
             {/* Header section with Stats */}
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
                 <div 
                     onClick={() => setSelectedStatusTab('All')}
-                    className={`glass-card p-4 rounded-2xl cursor-pointer border hover:border-blue-500/40 transition-all ${selectedStatusTab === 'All' ? 'bg-blue-500/10 border-blue-500/40' : 'border-white/5'}`}
+                    className={`glass-card p-4 rounded-2xl cursor-pointer border hover:border-blue-500/40 transition-all col-span-2 md:col-span-1 ${selectedStatusTab === 'All' ? 'bg-blue-500/10 border-blue-500/40' : 'border-white/5'}`}
                 >
                     <div className="flex items-center justify-between">
                         <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Gesamt</span>
@@ -161,10 +213,10 @@ const Bewerbungen = () => {
                     )}
                 </div>
 
-                <div className="flex gap-2 self-stretch md:self-auto overflow-x-auto">
+                <div className="flex gap-2 self-stretch md:self-auto overflow-x-auto py-1">
                     <button 
                         onClick={() => setSelectedStatusTab('All')}
-                        className={`px-4 py-1.5 rounded-xl text-xs font-semibold border transition-all ${selectedStatusTab === 'All' ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' : 'bg-white/5 text-gray-400 border-white/5 hover:bg-white/10 hover:text-white'}`}
+                        className={`px-4 py-1.5 rounded-xl text-xs font-semibold border transition-all shrink-0 ${selectedStatusTab === 'All' ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' : 'bg-white/5 text-gray-400 border-white/5 hover:bg-white/10 hover:text-white'}`}
                     >
                         Alle
                     </button>
@@ -172,7 +224,7 @@ const Bewerbungen = () => {
                         <button
                             key={opt.id}
                             onClick={() => setSelectedStatusTab(opt.id)}
-                            className={`px-4 py-1.5 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 ${selectedStatusTab === opt.id ? `${opt.bg} ${opt.color} ${opt.border}` : 'bg-white/5 text-gray-400 border-white/5 hover:bg-white/10 hover:text-white'}`}
+                            className={`px-4 py-1.5 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 shrink-0 ${selectedStatusTab === opt.id ? `${opt.bg} ${opt.color} ${opt.border}` : 'bg-white/5 text-gray-400 border-white/5 hover:bg-white/10 hover:text-white'}`}
                         >
                             <i className={`fa-solid ${opt.icon}`}></i>
                             {opt.title}
@@ -182,7 +234,7 @@ const Bewerbungen = () => {
             </div>
 
             {/* Application List/Grid */}
-            <div className="flex-1 overflow-y-auto min-h-0">
+            <div className="flex-1 md:overflow-y-auto md:min-h-0">
                 {loading ? (
                     <div className="h-48 flex items-center justify-center">
                         <i className="fa-solid fa-circle-notch fa-spin text-3xl text-blue-400"></i>
@@ -210,14 +262,16 @@ const Bewerbungen = () => {
                                             </div>
                                             <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-bold border flex items-center gap-1 shrink-0 ${currentOpt.bg} ${currentOpt.color} ${currentOpt.border}`}>
                                                 <i className={`fa-solid ${currentOpt.icon}`}></i>
-                                                {app.title}
+                                                {currentOpt.title}
                                             </span>
                                         </div>
 
                                         <div className="flex flex-col gap-2 text-sm text-gray-400 mb-4">
-                                            <div className="flex items-center gap-2">
-                                                <i className="fa-solid fa-envelope w-4 text-center text-gray-500"></i>
-                                                <span className="truncate">{app.email}</span>
+                                            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                                <i className="fa-solid fa-envelope w-4 text-center text-blue-400"></i>
+                                                <Link to={`/email-messages?to=${encodeURIComponent(app.email)}`} className="truncate hover:text-blue-400 hover:underline">
+                                                    {app.email}
+                                                </Link>
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <i className="fa-solid fa-phone w-4 text-center text-gray-500"></i>
@@ -264,107 +318,214 @@ const Bewerbungen = () => {
                 return (
                     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
                         <div 
-                            className="glass-card w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-3xl border border-white/10 flex flex-col"
+                            className="glass-card w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-3xl border border-white/10 flex flex-col animate-[modalIn_0.25s_ease-out]"
                             onClick={(e) => e.stopPropagation()}
                         >
                             {/* Modal Header */}
-                            <div className="p-6 border-b border-white/5 flex items-center justify-between">
-                                <div className="flex flex-col">
+                            <div className="p-4 md:p-6 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
+                                <div className="flex flex-col min-w-0">
                                     <span className="text-[10px] text-blue-400 tracking-wider font-semibold uppercase">Kurzbewerbung</span>
-                                    <h3 className="text-xl font-bold text-white mt-1">{selectedApplication.stelle}</h3>
+                                    <h3 className="text-lg md:text-xl font-bold text-white mt-1 break-words">{selectedApplication.stelle}</h3>
                                 </div>
-                                <button 
-                                    onClick={() => setSelectedApplication(null)}
-                                    className="w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white flex items-center justify-center transition-all"
-                                >
-                                    <i className="fa-solid fa-xmark text-lg"></i>
-                                </button>
+                                <div className="flex items-center gap-2">
+                                    {!isEditing ? (
+                                        <button 
+                                            onClick={() => setIsEditing(true)}
+                                            className="px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-bold text-gray-300 hover:text-white transition-all flex items-center gap-1.5"
+                                        >
+                                            <i className="fa-solid fa-pen-to-square"></i>
+                                            Bearbeiten
+                                        </button>
+                                    ) : (
+                                        <button 
+                                            onClick={() => setIsEditing(false)}
+                                            className="px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-bold text-red-400 hover:text-red-300 transition-all flex items-center gap-1.5"
+                                        >
+                                            Abbrechen
+                                        </button>
+                                    )}
+                                    <button 
+                                        onClick={() => setSelectedApplication(null)}
+                                        className="w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white flex items-center justify-center transition-all"
+                                    >
+                                        <i className="fa-solid fa-xmark text-lg"></i>
+                                    </button>
+                                </div>
                             </div>
 
                             {/* Modal Body */}
-                            <div className="p-6 overflow-y-auto flex flex-col gap-6 scrollbar-thin">
-                                {/* Contacts */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="bg-white/5 border border-white/5 rounded-2xl p-4 flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
-                                            <i className="fa-solid fa-envelope text-blue-400"></i>
+                            <div className="p-4 md:p-6 overflow-y-auto flex flex-col gap-5 md:gap-6 scrollbar-thin">
+                                {isEditing ? (
+                                    <div className="flex flex-col gap-4">
+                                        <div className="form-group">
+                                            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5 block">Stelle / Position *</label>
+                                            <input 
+                                                type="text" 
+                                                value={editForm.stelle}
+                                                onChange={(e) => setEditForm(prev => ({ ...prev, stelle: e.target.value }))}
+                                                className="w-full bg-white/5 border border-white/10 hover:border-white/20 focus:border-blue-500/50 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none"
+                                            />
                                         </div>
-                                        <div className="min-w-0">
-                                            <span className="text-[10px] text-gray-500 block">E-Mail Adresse</span>
-                                            <a href={`mailto:${selectedApplication.email}`} className="text-sm font-semibold text-white hover:text-blue-400 hover:underline truncate block">
-                                                {selectedApplication.email}
-                                            </a>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="form-group">
+                                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5 block">E-Mail Adresse *</label>
+                                                <input 
+                                                    type="email" 
+                                                    value={editForm.email}
+                                                    onChange={(e) => setEditForm(prev => ({ ...prev, email: e.target.value }))}
+                                                    className="w-full bg-white/5 border border-white/10 hover:border-white/20 focus:border-blue-500/50 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none"
+                                                />
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5 block">Telefonnummer *</label>
+                                                <input 
+                                                    type="text" 
+                                                    value={editForm.telefon}
+                                                    onChange={(e) => setEditForm(prev => ({ ...prev, telefon: e.target.value }))}
+                                                    className="w-full bg-white/5 border border-white/10 hover:border-white/20 focus:border-blue-500/50 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none"
+                                                />
+                                            </div>
                                         </div>
+                                        <div className="form-group">
+                                            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5 block">Berufserfahrung / Qualifikationen *</label>
+                                            <textarea 
+                                                rows="5"
+                                                value={editForm.erfahrung}
+                                                onChange={(e) => setEditForm(prev => ({ ...prev, erfahrung: e.target.value }))}
+                                                className="w-full bg-white/5 border border-white/10 hover:border-white/20 focus:border-blue-500/50 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none leading-relaxed"
+                                            />
+                                        </div>
+                                        <div className="form-group">
+                                            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5 block">Nachricht / Anschreiben (Optional)</label>
+                                            <textarea 
+                                                rows="4"
+                                                value={editForm.nachricht}
+                                                onChange={(e) => setEditForm(prev => ({ ...prev, nachricht: e.target.value }))}
+                                                className="w-full bg-white/5 border border-white/10 hover:border-white/20 focus:border-blue-500/50 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none leading-relaxed"
+                                            />
+                                        </div>
+                                        <button 
+                                            onClick={handleSaveEdit}
+                                            disabled={savingEdit || !editForm.stelle || !editForm.email || !editForm.telefon || !editForm.erfahrung}
+                                            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50 mt-2 flex items-center justify-center gap-2"
+                                        >
+                                            {savingEdit ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-floppy-disk"></i>}
+                                            Bewerbungsdaten speichern
+                                        </button>
                                     </div>
+                                ) : (
+                                    <>
+                                        {/* Contacts */}
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="bg-white/5 border border-white/5 rounded-2xl p-4 flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
+                                                    <i className="fa-solid fa-envelope text-blue-400"></i>
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <span className="text-[10px] text-gray-500 block">E-Mail Adresse</span>
+                                                    <Link to={`/email-messages?to=${encodeURIComponent(selectedApplication.email)}`} className="text-sm font-semibold text-white hover:text-blue-400 hover:underline truncate block">
+                                                        {selectedApplication.email}
+                                                    </Link>
+                                                </div>
+                                            </div>
 
-                                    <div className="bg-white/5 border border-white/5 rounded-2xl p-4 flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
-                                            <i className="fa-solid fa-phone text-amber-400"></i>
+                                            <div className="bg-white/5 border border-white/5 rounded-2xl p-4 flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
+                                                    <i className="fa-solid fa-phone text-amber-400"></i>
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <span className="text-[10px] text-gray-500 block">Telefonnummer</span>
+                                                    <a href={`tel:${selectedApplication.telefon}`} className="text-sm font-semibold text-white hover:text-amber-400 hover:underline truncate block">
+                                                        {selectedApplication.telefon}
+                                                    </a>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="min-w-0">
-                                            <span className="text-[10px] text-gray-500 block">Telefonnummer</span>
-                                            <a href={`tel:${selectedApplication.telefon}`} className="text-sm font-semibold text-white hover:text-amber-400 hover:underline truncate block">
-                                                {selectedApplication.telefon}
-                                            </a>
-                                        </div>
-                                    </div>
-                                </div>
 
-                                {/* Status & Date */}
-                                <div className="flex flex-wrap items-center justify-between gap-4 bg-white/5 border border-white/5 rounded-2xl p-4">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs text-gray-400">Status:</span>
-                                        <div className="relative">
-                                            <select
-                                                value={selectedApplication.status}
-                                                disabled={updatingId !== null}
-                                                onChange={(e) => handleStatusChange(selectedApplication.id, e.target.value)}
-                                                className="appearance-none bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 focus:border-blue-500/50 rounded-xl pl-4 pr-10 py-1.5 text-xs text-white focus:outline-none transition-all cursor-pointer font-semibold"
-                                            >
-                                                {STATUS_OPTIONS.map(opt => (
-                                                    <option key={opt.id} value={opt.id} className="bg-[#121214] text-white">
-                                                        {opt.title}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                            <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-[10px] pointer-events-none"></i>
+                                        {/* Status & Date */}
+                                        <div className="flex flex-wrap items-center justify-between gap-4 bg-white/5 border border-white/5 rounded-2xl p-4">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs text-gray-400">Status:</span>
+                                                <div className="relative">
+                                                    <select
+                                                        value={selectedApplication.status}
+                                                        disabled={updatingId !== null}
+                                                        onChange={(e) => handleStatusChange(selectedApplication.id, e.target.value)}
+                                                        className="appearance-none bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 focus:border-blue-500/50 rounded-xl pl-4 pr-10 py-1.5 text-xs text-white focus:outline-none transition-all cursor-pointer font-semibold"
+                                                    >
+                                                        {STATUS_OPTIONS.map(opt => (
+                                                            <option key={opt.id} value={opt.id} className="bg-[#121214] text-white">
+                                                                {opt.title}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                    <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-[10px] pointer-events-none"></i>
+                                                </div>
+                                            </div>
+                                            <div className="text-xs text-gray-400 text-left sm:text-right w-full sm:w-auto">
+                                                <div>Eingegangen am: <span className="text-white font-semibold">{formatDate(selectedApplication.createdAt)}</span></div>
+                                                {selectedApplication.source_website && (
+                                                    <div className="mt-1">Quelle: <span className="text-blue-400 font-semibold">{selectedApplication.source_website}</span></div>
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div className="text-xs text-gray-400 text-right">
-                                        <div>Eingegangen am: <span className="text-white font-semibold">{formatDate(selectedApplication.createdAt)}</span></div>
-                                        {selectedApplication.source_website && (
-                                            <div className="mt-1">Quelle: <span className="text-blue-400 font-semibold">{selectedApplication.source_website}</span></div>
+
+                                        {/* Experience Detail */}
+                                        <div>
+                                            <h4 className="text-sm font-bold text-white mb-2 flex items-center gap-2">
+                                                <i className="fa-solid fa-briefcase text-blue-400"></i>
+                                                Berufserfahrung / Qualifikationen
+                                            </h4>
+                                            <div className="bg-white/5 border border-white/5 rounded-2xl p-4 text-sm text-gray-300 whitespace-pre-line leading-relaxed">
+                                                {selectedApplication.erfahrung}
+                                            </div>
+                                        </div>
+
+                                        {/* Nachricht Detail */}
+                                        {selectedApplication.nachricht && (
+                                            <div>
+                                                <h4 className="text-sm font-bold text-white mb-2 flex items-center gap-2">
+                                                    <i className="fa-solid fa-envelope-open-text text-amber-400"></i>
+                                                    Nachricht / Anschreiben
+                                                </h4>
+                                                <div className="bg-white/5 border border-white/5 rounded-2xl p-4 text-sm text-gray-300 whitespace-pre-line leading-relaxed">
+                                                    {selectedApplication.nachricht}
+                                                </div>
+                                            </div>
                                         )}
-                                    </div>
-                                </div>
 
-                                {/* Experience Detail */}
-                                <div>
-                                    <h4 className="text-sm font-bold text-white mb-2 flex items-center gap-2">
-                                        <i className="fa-solid fa-briefcase text-blue-400"></i>
-                                        Berufserfahrung / Qualifikationen
-                                    </h4>
-                                    <div className="bg-white/5 border border-white/5 rounded-2xl p-4 text-sm text-gray-300 whitespace-pre-line leading-relaxed">
-                                        {selectedApplication.erfahrung}
-                                    </div>
-                                </div>
-
-                                {/* Nachricht Detail */}
-                                {selectedApplication.nachricht && (
-                                    <div>
-                                        <h4 className="text-sm font-bold text-white mb-2 flex items-center gap-2">
-                                            <i className="fa-solid fa-envelope-open-text text-amber-400"></i>
-                                            Nachricht / Anschreiben
-                                        </h4>
-                                        <div className="bg-white/5 border border-white/5 rounded-2xl p-4 text-sm text-gray-300 whitespace-pre-line leading-relaxed">
-                                            {selectedApplication.nachricht}
+                                        {/* Interne Notizen Section (Always available below in non-edit mode) */}
+                                        <div className="border-t border-white/5 pt-6 mt-2">
+                                            <h4 className="text-sm font-bold text-white mb-2 flex items-center gap-2">
+                                                <i className="fa-solid fa-clipboard text-blue-400"></i>
+                                                Interne Notiz (Kommentar)
+                                            </h4>
+                                            <div className="flex flex-col gap-2">
+                                                <textarea
+                                                    rows="3"
+                                                    placeholder="Hier interne Notiz eintragen (z.B. Qualifikation, Bewertung, Anmerkungen)..."
+                                                    value={noteText}
+                                                    onChange={(e) => setNoteText(e.target.value)}
+                                                    className="w-full bg-white/5 border border-white/10 hover:border-white/20 focus:border-blue-500/50 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none leading-relaxed"
+                                                />
+                                                <div className="flex justify-end">
+                                                    <button
+                                                        onClick={handleSaveNote}
+                                                        disabled={savingNote}
+                                                        className="w-full sm:w-auto bg-blue-500/20 text-blue-300 border border-blue-500/30 hover:bg-blue-500/30 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                                                    >
+                                                        {savingNote ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-floppy-disk"></i>}
+                                                        Notiz speichern
+                                                    </button>
+                                                </div>
+                                            </div>
                                         </div>
-                                    </div>
+                                    </>
                                 )}
                             </div>
 
                             {/* Modal Footer */}
-                            <div className="p-6 border-t border-white/5 flex items-center justify-between bg-white/[0.02] shrink-0">
+                            <div className="p-4 md:p-6 border-t border-white/5 flex items-center justify-between bg-white/[0.02] shrink-0">
                                 <button 
                                     onClick={() => handleDelete(selectedApplication.id)}
                                     className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2"

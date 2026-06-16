@@ -152,7 +152,7 @@ const sendAutoReply = async (clientEmail, clientName, itemId, subject, type = 's
 
     const firmName = settings.firmName || 'Empire Premium Bau GmbH';
     const domain = process.env.MAILGUN_DOMAIN;
-    const fromEmail = `no-reply@${domain}`;
+    const fromEmail = type === 'bewerbung' ? `info@${domain}` : `no-reply@${domain}`;
     const fromName = `${firmName} Team`;
     
     const frontendUrl = process.env.FRONTEND_URL || 'https://www.empire-premium-bau.de';
@@ -186,6 +186,16 @@ const sendAutoReply = async (clientEmail, clientName, itemId, subject, type = 's
         `;
         emailSubject = `Ihre Anfrage: ${subject}`;
         templateSubject = 'Ihre Anfrage';
+    } else if (type === 'bewerbung') {
+        rawContent = `
+            <p>${greeting}</p>
+            <p>Vielen Dank für Ihre Bewerbung für die Stelle als <strong>${subject}</strong>. Wir haben Ihre Bewerbungsdaten erfolgreich erhalten (Bewerbungsnummer: <strong>#BEW-${paddedItemId}</strong>).</p>
+            <p>Unser Recruiting-Team wird Ihre Bewerbungsunterlagen sorgfältig prüfen. Wir werden uns so schnell wie möglich mit Ihnen in Verbindung setzen, um die nächsten Schritte zu besprechen.</p>
+            <p>Mit freundlichen Grüßen,</p>
+            <p>Ihr Recruiting-Team</p>
+        `;
+        emailSubject = `Bewerbung erhalten: ${subject}`;
+        templateSubject = 'Ihre Bewerbung';
     }
 
     const finalHtml = wrapInMonochromeTemplate(rawContent, templateSubject, fromName, settings, frontendUrl);

@@ -42,6 +42,10 @@ const Bewerbung = sequelize.define('Bewerbung', {
     source_website: {
         type: DataTypes.STRING,
         allowNull: true
+    },
+    notizen: {
+        type: DataTypes.TEXT,
+        allowNull: true
     }
 }, {
     tableName: 'bewerbungen',
