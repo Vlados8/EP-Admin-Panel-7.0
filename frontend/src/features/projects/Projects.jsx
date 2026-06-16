@@ -1143,19 +1143,40 @@ const ProjectQuickViewModal = ({ project, isSubcontractor, isPartner, onClose, o
                         </div>
 
                         {/* Category & Subcategory */}
-                        {(project.category || project.subcategory) && (
+                        {((project.categories_list && project.categories_list.length > 0) || project.category || project.subcategory) && (
                             <div className="flex flex-wrap gap-2 mb-2">
-                                {project.category && (
-                                    <span className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-md font-semibold flex items-center gap-1">
-                                        <i className="fa-solid fa-tag text-[9px]"></i>
-                                        {project.category.name}
-                                    </span>
-                                )}
-                                {project.subcategory && (
-                                    <span className="text-[10px] bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2 py-0.5 rounded-md font-semibold flex items-center gap-1">
-                                        <i className="fa-solid fa-tags text-[9px]"></i>
-                                        {project.subcategory.name}
-                                    </span>
+                                {project.categories_list && project.categories_list.length > 0 ? (
+                                    project.categories_list.map((catItem, idx) => (
+                                        <React.Fragment key={idx}>
+                                            {catItem.category && (
+                                                <span className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-md font-semibold flex items-center gap-1 animate-[fadeIn_0.2s_ease-out]">
+                                                    <i className={`fa-solid ${catItem.category.icon || 'fa-tag'} text-[9px]`}></i>
+                                                    {catItem.category.name}
+                                                </span>
+                                            )}
+                                            {catItem.subcategory && (
+                                                <span className="text-[10px] bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2 py-0.5 rounded-md font-semibold flex items-center gap-1 animate-[fadeIn_0.2s_ease-out]">
+                                                    <i className="fa-solid fa-tags text-[9px]"></i>
+                                                    {catItem.subcategory.name}
+                                                </span>
+                                            )}
+                                        </React.Fragment>
+                                    ))
+                                ) : (
+                                    <>
+                                        {project.category && (
+                                            <span className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-md font-semibold flex items-center gap-1">
+                                                <i className="fa-solid fa-tag text-[9px]"></i>
+                                                {project.category.name}
+                                            </span>
+                                        )}
+                                        {project.subcategory && (
+                                            <span className="text-[10px] bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2 py-0.5 rounded-md font-semibold flex items-center gap-1">
+                                                <i className="fa-solid fa-tags text-[9px]"></i>
+                                                {project.subcategory.name}
+                                            </span>
+                                        )}
+                                    </>
                                 )}
                             </div>
                         )}
