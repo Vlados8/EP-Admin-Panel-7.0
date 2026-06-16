@@ -6,6 +6,11 @@ import ProjectWizard from './ProjectWizard';
 import usePermission from '../../hooks/usePermission';
 import { getImageUrl } from '../../utils/config';
 
+const monthNamesGerman = [
+    'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+    'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'
+];
+
 const Projects = () => {
     const { user: currentUser } = useSelector(state => state.auth);
     const [projects, setProjects] = useState([]);
@@ -13,6 +18,11 @@ const Projects = () => {
     const [loading, setLoading] = useState(true);
     const [isWizardOpen, setIsWizardOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    
+    // Multi-View state
+    const [activeView, setActiveView] = useState('grid'); // 'grid', 'calendar', 'timeline'
+    const [currentMonth, setCurrentMonth] = useState(new Date());
+    const [isEditUserSelectOpen, setIsEditUserSelectOpen] = useState(false);
     
     // Premium Date Filters
     const [dateFilter, setDateFilter] = useState('all'); // 'all' or 'custom'
@@ -43,6 +53,64 @@ const Projects = () => {
         return `${year}-${month}-${day}`;
     }
     const todayStr = getLocalDateString(0);
+
+    const isProjectOnDate = (project, dateStr) => {
+        const start = cleanDate(project.start_date);
+        const end = cleanDate(project.end_date);
+        if (!start) return false;
+        const matchesStart = dateStr >= start;
+        const matchesEnd = !end || dateStr <= end;
+        return matchesStart && matchesEnd;
+    };
+
+    const getDaysInMonth = (date) => {
+        const year = date.getFullYear();
+        const month = date.getMonth();
+        const firstDay = new Date(year, month, 1);
+        let startDayOfWeek = firstDay.getDay();
+        startDayOfWeek = startDayOfWeek === 0 ? 6 : startDayOfWeek - 1;
+        const totalDays = new Date(year, month + 1, 0).getDate();
+        const days = [];
+        const prevMonthTotalDays = new Date(year, month, 0).getDate();
+        for (let i = startDayOfWeek - 1; i >= 0; i--) {
+            const dayNum = prevMonthTotalDays - i;
+            const prevMonthDate = new Date(year, month - 1, dayNum);
+            days.push({
+                dayNum,
+                date: prevMonthDate,
+                isCurrentMonth: false,
+                dateStr: formatDateISO(prevMonthDate)
+            });
+        }
+        for (let i = 1; i <= totalDays; i++) {
+            const currentMonthDate = new Date(year, month, i);
+            days.push({
+                dayNum: i,
+                date: currentMonthDate,
+                isCurrentMonth: true,
+                dateStr: formatDateISO(currentMonthDate)
+            });
+        }
+        const totalCells = days.length <= 35 ? 35 : 42;
+        const nextMonthPadding = totalCells - days.length;
+        for (let i = 1; i <= nextMonthPadding; i++) {
+            const nextMonthDate = new Date(year, month + 1, i);
+            days.push({
+                dayNum: i,
+                date: nextMonthDate,
+                isCurrentMonth: false,
+                dateStr: formatDateISO(nextMonthDate)
+            });
+        }
+        return days;
+    };
+
+    function formatDateISO(d) {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
 
     const cleanDate = (dStr) => {
         if (!dStr) return '';
@@ -150,19 +218,6 @@ const Projects = () => {
         return matchesStart && matchesEnd;
     };
 
-    // Classify into three main categories
-    const completedProjects = filteredProjects.filter(p => p.status?.toLowerCase() === 'abgeschlossen');
-    
-    const overdueProjects = filteredProjects.filter(p => {
-        const end = cleanDate(p.end_date);
-        return p.status?.toLowerCase() !== 'abgeschlossen' && end && end < todayStr;
-    });
-
-    const activeOrFutureProjects = filteredProjects.filter(p => {
-        const end = cleanDate(p.end_date);
-        return p.status?.toLowerCase() !== 'abgeschlossen' && (!end || end >= todayStr);
-    });
-
     // Unified list based on statusFilter
     const statusFilteredProjects = filteredProjects.filter(p => {
         if (statusFilter === 'overdue') {
@@ -175,8 +230,21 @@ const Projects = () => {
         if (statusFilter === 'completed') {
             return p.status?.toLowerCase() === 'abgeschlossen';
         }
-        // 'all' represents active and ongoing projects (excluding completed ones)
-        return p.status?.toLowerCase() !== 'abgeschlossen';
+        // 'all' represents all projects
+        return true;
+    });
+
+    // Classify into three main categories based on statusFilteredProjects
+    const completedProjects = statusFilteredProjects.filter(p => p.status?.toLowerCase() === 'abgeschlossen');
+    
+    const overdueProjects = statusFilteredProjects.filter(p => {
+        const end = cleanDate(p.end_date);
+        return p.status?.toLowerCase() !== 'abgeschlossen' && end && end < todayStr;
+    });
+
+    const activeOrFutureProjects = statusFilteredProjects.filter(p => {
+        const end = cleanDate(p.end_date);
+        return p.status?.toLowerCase() !== 'abgeschlossen' && (!end || end >= todayStr);
     });
 
     // Grouping for Day-by-Day View (Display next 7 days week agenda)
@@ -446,76 +514,388 @@ const Projects = () => {
         );
     };
 
+    const renderGridView = () => {
+        const sorted = [...statusFilteredProjects].sort((a, b) => {
+            const isCompletedA = a.status?.toLowerCase() === 'abgeschlossen';
+            const isCompletedB = b.status?.toLowerCase() === 'abgeschlossen';
+            if (isCompletedA && !isCompletedB) return 1;
+            if (!isCompletedA && isCompletedB) return -1;
+            return new Date(b.createdAt) - new Date(a.createdAt);
+        });
+
+        if (sorted.length === 0) {
+            return renderEmptyState();
+        }
+
+        return (
+            <div className="space-y-6 animate-[fadeIn_0.3s_ease-out]">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {sorted.map(project => renderProjectCard(project))}
+                </div>
+            </div>
+        );
+    };
+
+    const renderEmptyState = () => (
+        <div className="bg-[#0f1322]/50 border border-white/5 rounded-2xl p-16 text-center text-gray-400 backdrop-blur-md animate-[fadeIn_0.3s_ease-out]">
+            <i className="fa-solid fa-magnifying-glass text-5xl mb-4 text-slate-700/60"></i>
+            <p className="text-lg font-medium text-white mb-2">Keine Projekte gefunden</p>
+            <p className="text-sm text-gray-500 max-w-sm mx-auto">Es konnten keine passenden Einträge für Ihre aktuelle Auswahl gefunden werden.</p>
+            <button
+                onClick={() => {
+                    setSearchQuery('');
+                    setStatusFilter('all');
+                }}
+                className="mt-6 bg-white/5 border border-white/10 hover:bg-white/10 text-white px-5 py-2.5 rounded-xl transition-all text-xs font-bold uppercase tracking-wider"
+            >
+                Filter zurücksetzen
+            </button>
+        </div>
+    );
+
+    const renderCalendarView = () => {
+        const days = getDaysInMonth(currentMonth);
+        const weekdays = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+        
+        return (
+            <div className="glass-card rounded-3xl border border-white/10 bg-[#0f1322]/40 backdrop-blur-md p-6 animate-[fadeIn_0.3s_ease-out] relative z-20">
+                {/* Weekdays Header */}
+                <div className="grid grid-cols-7 gap-2 mb-4 text-center">
+                    {weekdays.map(d => (
+                        <div key={d} className="text-[10px] font-extrabold uppercase tracking-widest text-gray-500 py-2">
+                            {d}
+                        </div>
+                    ))}
+                </div>
+                
+                {/* Days Grid */}
+                <div className="grid grid-cols-7 gap-2 auto-rows-[120px]">
+                    {days.map((day, idx) => {
+                        const dayProjects = statusFilteredProjects.filter(p => isProjectOnDate(p, day.dateStr));
+                        const isToday = day.dateStr === todayStr;
+                        
+                        return (
+                            <div
+                                key={idx}
+                                className={`rounded-2xl border p-2 text-left flex flex-col justify-between transition-all duration-300 relative ${
+                                    day.isCurrentMonth
+                                        ? isToday
+                                            ? 'bg-blue-600/5 border-blue-500/40 shadow-[0_0_15px_rgba(59,130,246,0.1)]'
+                                            : 'bg-white/[0.02] border-white/5 hover:border-white/10 hover:bg-white/[0.04]'
+                                        : 'bg-black/10 border-transparent opacity-40'
+                                }`}
+                            >
+                                <div className="flex justify-between items-center mb-1">
+                                    <span className={`text-xs font-bold font-mono ${
+                                        isToday 
+                                            ? 'w-5 h-5 rounded-md bg-blue-600 text-white flex items-center justify-center' 
+                                            : 'text-gray-400'
+                                    }`}>
+                                        {day.dayNum}
+                                    </span>
+                                    {dayProjects.length > 0 && (
+                                        <span className="text-[8px] font-black text-gray-500 bg-white/5 px-1.5 py-0.5 rounded border border-white/5">
+                                            {dayProjects.length}
+                                        </span>
+                                    )}
+                                </div>
+                                
+                                <div className="flex-1 overflow-y-auto space-y-1 scrollbar-thin">
+                                    {dayProjects.slice(0, 3).map(project => {
+                                        const isCompleted = project.status?.toLowerCase() === 'abgeschlossen';
+                                        const isPaused = project.status?.toLowerCase() === 'pausiert';
+                                        const end = cleanDate(project.end_date);
+                                        const isOverdue = !isCompleted && end && end < todayStr;
+                                        
+                                        let badgeColor = 'bg-blue-500/10 text-blue-400 border-blue-500/20';
+                                        if (isCompleted) badgeColor = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+                                        else if (isOverdue) badgeColor = 'bg-rose-500/10 text-rose-400 border-rose-500/20';
+                                        else if (isPaused) badgeColor = 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
+                                        
+                                        return (
+                                            <div
+                                                key={project.id}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleOpenProject(project.id);
+                                                }}
+                                                className={`text-[9px] font-bold px-1.5 py-0.5 rounded border truncate cursor-pointer transition-all hover:scale-[1.03] ${badgeColor}`}
+                                                title={project.title}
+                                            >
+                                                {project.title}
+                                            </div>
+                                        );
+                                    })}
+                                    {dayProjects.length > 3 && (
+                                        <div className="text-[8px] font-black text-gray-500 text-center py-0.5">
+                                            +{dayProjects.length - 3} weitere
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        );
+    };
+
+    const renderTimelineView = () => {
+        return (
+            <div className="space-y-12">
+                {/* A. OVERDUE PROJECTS WARNING HEADER SECTION */}
+                {overdueProjects.length > 0 && (
+                    <div className="space-y-4 animate-[fadeIn_0.3s_ease-out] bg-red-950/15 border border-red-500/20 p-6 rounded-2xl backdrop-blur-md shadow-[0_0_30px_rgba(239,68,68,0.05)]">
+                        <div className="flex items-center justify-between pb-2 border-b border-red-500/10">
+                            <div className="flex items-center gap-3">
+                                <span className="text-xs font-extrabold uppercase tracking-wider px-3 py-1 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 shadow-[0_0_12px_rgba(239,68,68,0.25)] animate-pulse">
+                                    ⚠️ Handlungsbedarf
+                                </span>
+                                <h4 className="text-sm font-bold text-red-200">Überfällige aktive Projekte (Frist abgelaufen)</h4>
+                            </div>
+                            <span className="text-[10px] text-red-400 font-bold bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20 font-mono">
+                                {overdueProjects.length} {overdueProjects.length === 1 ? 'Eintrag' : 'Einträge'}
+                            </span>
+                        </div>
+                        <p className="text-xs text-red-300/80 leading-relaxed max-w-2xl font-light">
+                            Die folgenden Projekte haben ihr geplantes Enddatum überschritten, sind aber noch aktiv. Bitte aktualisieren Sie den Status auf "Abgeschlossen" oder passen Sie die Projektdaten an.
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2">
+                            {overdueProjects.map(project => renderProjectCard(project))}
+                        </div>
+                    </div>
+                )}
+
+                {/* 1. CHRONOLOGICAL ACTIVE & FUTURE SECTIONS */}
+                {chronologicalDays.map(day => (
+                    <div key={day.dateStr} className="space-y-4 animate-[fadeIn_0.3s_ease-out]">
+                        {/* Day Header Badges with premium glows */}
+                        <div className="flex items-center gap-3 pb-2 border-b border-white/5">
+                            <span className={`text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full ${
+                                day.label === 'Heute'
+                                    ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20 shadow-[0_0_12px_rgba(59,130,246,0.15)]'
+                                    : day.label === 'Morgen'
+                                        ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20 shadow-[0_0_12px_rgba(168,85,247,0.15)]'
+                                        : 'bg-slate-800 text-gray-300 border border-white/5'
+                            }`}>
+                                {day.label}
+                            </span>
+                            {day.dateStr && (
+                                <span className="text-xs text-gray-500 font-mono font-medium">
+                                    {new Date(day.dateStr).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                </span>
+                            )}
+                            <span className="text-[10px] text-gray-500 font-bold bg-white/5 px-2 py-0.5 rounded border border-white/5">
+                                {day.projects.length} {day.projects.length === 1 ? 'Projekt' : 'Projekte'}
+                            </span>
+                        </div>
+
+                        {/* Projects Grid */}
+                        {day.projects.length > 0 ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {day.projects.map(project => renderProjectCard(project))}
+                            </div>
+                        ) : (
+                            <div className="bg-[#0f1322]/20 border border-white/[0.03] rounded-2xl py-6 px-8 text-center text-gray-600 text-xs italic font-medium backdrop-blur-md">
+                                Keine geplanten Projekte für diesen Tag.
+                            </div>
+                        )}
+                    </div>
+                ))}
+
+                {/* 2. PROJECTS FAR IN THE FUTURE */}
+                {farFutureProjects.length > 0 && (
+                    <div className="space-y-4 animate-[fadeIn_0.3s_ease-out] pt-4">
+                        <div className="flex items-center gap-3 pb-2 border-b border-white/5">
+                            <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-slate-800 text-gray-300 border border-white/5">
+                                Zukünftige Projekte
+                            </span>
+                            <span className="text-[10px] text-gray-500 font-bold bg-white/5 px-2 py-0.5 rounded border border-white/5">
+                                {farFutureProjects.length} {farFutureProjects.length === 1 ? 'Projekt' : 'Projekte'}
+                            </span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {farFutureProjects.map(project => renderProjectCard(project))}
+                        </div>
+                    </div>
+                )}
+
+                {/* 3. PAUSED PROJECTS SECTION */}
+                {statusFilteredProjects.filter(p => p.status?.toLowerCase() === 'pausiert').length > 0 && (
+                    <div className="space-y-4 animate-[fadeIn_0.3s_ease-out] pt-4">
+                        <div className="flex items-center gap-3 pb-2 border-b border-white/5">
+                            <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 shadow-[0_0_12px_rgba(245,158,11,0.15)]">
+                                Pausiert
+                            </span>
+                            <span className="text-[10px] text-gray-500 font-bold bg-white/5 px-2 py-0.5 rounded border border-white/5">
+                                {statusFilteredProjects.filter(p => p.status?.toLowerCase() === 'pausiert').length} {statusFilteredProjects.filter(p => p.status?.toLowerCase() === 'pausiert').length === 1 ? 'Projekt' : 'Projekte'}
+                            </span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {statusFilteredProjects.filter(p => p.status?.toLowerCase() === 'pausiert').map(project => renderProjectCard(project))}
+                        </div>
+                    </div>
+                )}
+
+                {/* 4. COMPLETED PROJECTS SECTION */}
+                {completedProjects.length > 0 && (
+                    <div className="space-y-4 animate-[fadeIn_0.3s_ease-out] pt-4">
+                        <div className="flex items-center gap-3 pb-2 border-b border-white/5">
+                            <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 shadow-[0_0_12px_rgba(59,130,246,0.15)]">
+                                Abgeschlossen
+                            </span>
+                            <span className="text-[10px] text-gray-500 font-bold bg-white/5 px-2 py-0.5 rounded border border-white/5 font-mono">
+                                {completedProjects.length} {completedProjects.length === 1 ? 'Eintrag' : 'Einträge'}
+                            </span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {completedProjects.map(project => renderProjectCard(project))}
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
     return (
         <div className="animate-[fadeIn_0.4s_ease-out_forwards]">
-            {/* Header / Top Toolbar with high z-index stacking context to stay above lower grids */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 relative z-30">
+            {/* Header with Title and Tab Switcher */}
+            <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-8 gap-6 relative z-30">
                 <div>
                     <h2 className="text-3xl font-extrabold text-white tracking-tight bg-gradient-to-r from-white via-white to-gray-400 bg-clip-text text-transparent">Bauprojekte</h2>
                     <p className="text-gray-400 text-sm mt-1">Übersicht und Verwaltung aller Bauprojekte.</p>
                 </div>
-                
-                {/* Advanced Premium Navigation / Filters Row */}
+
+                {/* View Tabs Switcher - Glassmorphic Layout */}
+                <div className="flex bg-[#0f1322]/40 p-1 rounded-xl border border-white/5 backdrop-blur-md w-full xl:w-auto relative z-50">
+                    <button
+                        onClick={() => setActiveView('grid')}
+                        className={`flex-1 xl:flex-initial px-4 py-2 rounded-lg text-[11px] font-bold tracking-wider uppercase transition-all duration-300 flex items-center justify-center gap-1.5 ${
+                            activeView === 'grid'
+                                ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.18)]'
+                                : 'text-gray-400 hover:text-white border border-transparent'
+                        }`}
+                    >
+                        <i className="fa-solid fa-grip-horizontal"></i> Alle Projekte
+                    </button>
+                    <button
+                        onClick={() => setActiveView('calendar')}
+                        className={`flex-1 xl:flex-initial px-4 py-2 rounded-lg text-[11px] font-bold tracking-wider uppercase transition-all duration-300 flex items-center justify-center gap-1.5 ${
+                            activeView === 'calendar'
+                                ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.18)]'
+                                : 'text-gray-400 hover:text-white border border-transparent'
+                        }`}
+                    >
+                        <i className="fa-solid fa-calendar"></i> Kalender
+                    </button>
+                    <button
+                        onClick={() => setActiveView('timeline')}
+                        className={`flex-1 xl:flex-initial px-4 py-2 rounded-lg text-[11px] font-bold tracking-wider uppercase transition-all duration-300 flex items-center justify-center gap-1.5 ${
+                            activeView === 'timeline'
+                                ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.18)]'
+                                : 'text-gray-400 hover:text-white border border-transparent'
+                        }`}
+                    >
+                        <i className="fa-solid fa-clock"></i> Wochenansicht
+                    </button>
+                </div>
+            </div>
+            
+            {/* Top Toolbar - Conditional Filters Row */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 relative z-30">
                 <div className="flex flex-wrap items-center gap-3 w-full md:w-auto relative z-40">
-                    {/* Interactive Glassmorphic Date Filter Dropdown */}
-                    <div className="flex flex-wrap items-center gap-2 bg-[#0f1322]/40 p-1 rounded-xl border border-white/5 backdrop-blur-md relative z-50">
-                        <button
-                            onClick={() => {
-                                setDateFilter('all');
-                                setIsDatePickerOpen(false);
-                            }}
-                            className={`px-3 py-1.5 rounded-lg text-[11px] font-bold tracking-wider uppercase transition-all duration-300 flex items-center gap-1.5 ${
-                                dateFilter === 'all'
-                                    ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.18)]'
-                                    : 'text-gray-400 hover:text-white border border-transparent'
-                            }`}
-                        >
-                            <i className="fa-solid fa-calendar-days"></i> Alle Tage (Zeitplan)
-                        </button>
-                        <div className="relative">
+                    {/* Conditional Calendar Month Navigator */}
+                    {activeView === 'calendar' && (
+                        <div className="flex items-center bg-[#0f1322]/40 p-1 rounded-xl border border-white/5 backdrop-blur-md relative z-50">
                             <button
                                 onClick={() => {
-                                    setDateFilter('custom');
-                                    setIsDatePickerOpen(!isDatePickerOpen);
+                                    const prev = new Date(currentMonth);
+                                    prev.setMonth(prev.getMonth() - 1);
+                                    setCurrentMonth(prev);
+                                }}
+                                className="px-2 py-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-all text-xs font-bold"
+                                title="Vorheriger Monat"
+                            >
+                                <i className="fa-solid fa-chevron-left"></i>
+                            </button>
+                            <span className="px-3 py-1.5 text-xs text-white font-bold tracking-wide uppercase font-mono min-w-[120px] text-center">
+                                {monthNamesGerman[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+                            </span>
+                            <button
+                                onClick={() => {
+                                    const next = new Date(currentMonth);
+                                    next.setMonth(next.getMonth() + 1);
+                                    setCurrentMonth(next);
+                                }}
+                                className="px-2 py-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-all text-xs font-bold"
+                                title="Nächster Monat"
+                            >
+                                <i className="fa-solid fa-chevron-right"></i>
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Conditional Date Filter Dropdown for Timeline View */}
+                    {activeView === 'timeline' && (
+                        <div className="flex flex-wrap items-center gap-2 bg-[#0f1322]/40 p-1 rounded-xl border border-white/5 backdrop-blur-md relative z-50">
+                            <button
+                                onClick={() => {
+                                    setDateFilter('all');
+                                    setIsDatePickerOpen(false);
                                 }}
                                 className={`px-3 py-1.5 rounded-lg text-[11px] font-bold tracking-wider uppercase transition-all duration-300 flex items-center gap-1.5 ${
-                                    dateFilter === 'custom'
-                                        ? 'bg-purple-600/20 text-purple-400 border border-purple-500/30 shadow-[0_0_15px_rgba(168,85,247,0.18)]'
+                                    dateFilter === 'all'
+                                        ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.18)]'
                                         : 'text-gray-400 hover:text-white border border-transparent'
                                 }`}
                             >
-                                <i className="fa-solid fa-calendar-day"></i> {dateFilter === 'custom' ? `Datum: ${new Date(selectedDate).toLocaleDateString('de-DE')}` : 'Bestimmtes Datum...'}
-                                <i className={`fa-solid fa-chevron-down text-[9px] transition-transform ${isDatePickerOpen ? 'rotate-180' : ''}`}></i>
+                                <i className="fa-solid fa-calendar-days"></i> Alle Tage (Zeitplan)
                             </button>
-                            {isDatePickerOpen && (
-                                <div className="absolute right-0 mt-2 z-50 bg-[#0f1322]/95 border border-white/10 backdrop-blur-xl p-4 rounded-xl shadow-2xl animate-[fadeIn_0.2s_ease-out] w-64">
-                                    <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-2">Datum auswählen</label>
-                                    <input
-                                        type="date"
-                                        value={selectedDate}
-                                        onChange={(e) => {
-                                            setSelectedDate(e.target.value);
-                                            setDateFilter('custom');
-                                            setIsDatePickerOpen(false);
-                                        }}
-                                        className="w-full bg-black/40 border border-white/10 rounded-lg py-2 px-3 text-xs text-white focus:outline-none focus:border-purple-500 transition-all font-mono"
-                                    />
-                                    <div className="mt-3 flex justify-end gap-2">
-                                        <button
-                                            onClick={() => {
-                                                setSelectedDate(todayStr);
+                            <div className="relative">
+                                <button
+                                    onClick={() => {
+                                        setDateFilter('custom');
+                                        setIsDatePickerOpen(!isDatePickerOpen);
+                                    }}
+                                    className={`px-3 py-1.5 rounded-lg text-[11px] font-bold tracking-wider uppercase transition-all duration-300 flex items-center gap-1.5 ${
+                                        dateFilter === 'custom'
+                                            ? 'bg-purple-600/20 text-purple-400 border border-purple-500/30 shadow-[0_0_15px_rgba(168,85,247,0.18)]'
+                                            : 'text-gray-400 hover:text-white border border-transparent'
+                                    }`}
+                                >
+                                    <i className="fa-solid fa-calendar-day"></i> {dateFilter === 'custom' ? `Datum: ${new Date(selectedDate).toLocaleDateString('de-DE')}` : 'Bestimmtes Datum...'}
+                                    <i className={`fa-solid fa-chevron-down text-[9px] transition-transform ${isDatePickerOpen ? 'rotate-180' : ''}`}></i>
+                                </button>
+                                {isDatePickerOpen && (
+                                    <div className="absolute left-0 mt-2 z-50 bg-[#0f1322]/95 border border-white/10 backdrop-blur-xl p-4 rounded-xl shadow-2xl animate-[fadeIn_0.2s_ease-out] w-64">
+                                        <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-2">Datum auswählen</label>
+                                        <input
+                                            type="date"
+                                            value={selectedDate}
+                                            onChange={(e) => {
+                                                setSelectedDate(e.target.value);
                                                 setDateFilter('custom');
                                                 setIsDatePickerOpen(false);
                                             }}
-                                            className="text-[9px] uppercase font-bold text-gray-400 hover:text-white transition-colors"
-                                        >
-                                            Heute
-                                        </button>
+                                            className="w-full bg-black/40 border border-white/10 rounded-lg py-2 px-3 text-xs text-white focus:outline-none focus:border-purple-500 transition-all font-mono"
+                                        />
+                                        <div className="mt-3 flex justify-end gap-2">
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedDate(todayStr);
+                                                    setDateFilter('custom');
+                                                    setIsDatePickerOpen(false);
+                                                }}
+                                                className="text-[9px] uppercase font-bold text-gray-400 hover:text-white transition-colors"
+                                            >
+                                                Heute
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
-                            )}
+                                )}
+                            </div>
                         </div>
-                    </div>
+                    )}
 
                     {/* Interactive Glassmorphic Status Filter Dropdown */}
                     <div className="flex items-center bg-[#0f1322]/40 p-1 rounded-xl border border-white/5 backdrop-blur-md relative z-50">
@@ -532,14 +912,14 @@ const Projects = () => {
                                 }`}
                             >
                                 <i className="fa-solid fa-filter"></i>
-                                {statusFilter === 'all' && 'Alle aktiven'}
+                                {statusFilter === 'all' && 'Alle Projekte'}
                                 {statusFilter === 'overdue' && '⚠️ Überfällig'}
                                 {statusFilter === 'paused' && '⏸️ Pausiert'}
                                 {statusFilter === 'completed' && '✅ Abgeschlossen'}
                                 <i className={`fa-solid fa-chevron-down text-[9px] transition-transform ${isStatusDropdownOpen ? 'rotate-180' : ''}`}></i>
                             </button>
                             {isStatusDropdownOpen && (
-                                <div className="absolute right-0 mt-2 z-50 bg-[#0f1322]/95 border border-white/10 backdrop-blur-xl p-2 rounded-xl shadow-2xl animate-[fadeIn_0.2s_ease-out] w-64 flex flex-col gap-1">
+                                <div className="absolute left-0 mt-2 z-50 bg-[#0f1322]/95 border border-white/10 backdrop-blur-xl p-2 rounded-xl shadow-2xl animate-[fadeIn_0.2s_ease-out] w-64 flex flex-col gap-1">
                                     <button
                                         onClick={() => {
                                             setStatusFilter('all');
@@ -549,7 +929,7 @@ const Projects = () => {
                                             statusFilter === 'all' ? 'bg-white/10 text-white font-bold' : 'text-gray-400 hover:text-white hover:bg-white/5'
                                         }`}
                                     >
-                                        <i className="fa-solid fa-layer-group text-blue-400"></i> Alle aktiven Projekte
+                                        <i className="fa-solid fa-layer-group text-blue-400"></i> Alle Projekte
                                     </button>
                                     <button
                                         onClick={() => {
@@ -560,7 +940,7 @@ const Projects = () => {
                                             statusFilter === 'overdue' ? 'bg-red-500/10 text-red-400 font-bold' : 'text-gray-400 hover:text-red-400 hover:bg-red-500/5'
                                         }`}
                                     >
-                                        <span>⚠️</span> Überfällig / Handlungsbedarf
+                                        <span>⚠️</span> Überfällig
                                     </button>
                                     <button
                                         onClick={() => {
@@ -589,6 +969,7 @@ const Projects = () => {
                         </div>
                     </div>
 
+                    {/* Search Input */}
                     <div className="relative flex-1 md:flex-none">
                         <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
                         <input
@@ -599,183 +980,31 @@ const Projects = () => {
                             className="bg-black/20 border border-white/10 rounded-xl py-2 pl-9 pr-4 text-xs text-white focus:outline-none focus:border-blue-500 transition-all w-full md:w-64 backdrop-blur-sm placeholder:text-gray-500"
                         />
                     </div>
-                    
-                    {canManageProjects && (
-                        <button
-                            onClick={() => setIsWizardOpen(true)}
-                            className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)] hover:shadow-[0_0_25px_rgba(37,99,235,0.5)] hover:-translate-y-0.5 flex items-center gap-2 text-xs font-semibold whitespace-nowrap"
-                        >
-                            <i className="fa-solid fa-wand-magic-sparkles mr-0.5 text-xs"></i> Neues Projekt
-                        </button>
-                    )}
                 </div>
+
+                {canManageProjects && (
+                    <button
+                        onClick={() => setIsWizardOpen(true)}
+                        className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)] hover:shadow-[0_0_25px_rgba(37,99,235,0.5)] hover:-translate-y-0.5 flex items-center gap-2 text-xs font-semibold whitespace-nowrap w-full md:w-auto justify-center"
+                    >
+                        <i className="fa-solid fa-wand-magic-sparkles mr-0.5 text-xs"></i> Neues Projekt
+                    </button>
+                )}
             </div>
 
+            {/* Content Area */}
             {loading ? (
                 <div className="flex flex-col items-center justify-center py-20 text-gray-400">
                     <div className="w-10 h-10 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4"></div>
                     <p className="text-sm font-medium tracking-wide">Lade Projekte...</p>
                 </div>
             ) : statusFilteredProjects.length === 0 ? (
-                <div className="bg-[#0f1322]/50 border border-white/5 rounded-2xl p-16 text-center text-gray-400 backdrop-blur-md animate-[fadeIn_0.3s_ease-out]">
-                    <i className="fa-solid fa-magnifying-glass text-5xl mb-4 text-slate-700/60"></i>
-                    <p className="text-lg font-medium text-white mb-2">Keine Projekte gefunden</p>
-                    <p className="text-sm text-gray-500 max-w-sm mx-auto">Es konnten keine passenden Einträge für Ihre aktuelle Auswahl gefunden werden.</p>
-                    <button
-                        onClick={() => {
-                            setSearchQuery('');
-                            setStatusFilter('all');
-                        }}
-                        className="mt-6 bg-white/5 border border-white/10 hover:bg-white/10 text-white px-5 py-2.5 rounded-xl transition-all text-xs font-bold uppercase tracking-wider"
-                    >
-                        Filter zurücksetzen
-                    </button>
-                </div>
-            ) : searchQuery.trim() ? (
-                /* Search Active Mode: Show single flat premium grid of matched projects directly */
-                <div className="space-y-6 animate-[fadeIn_0.3s_ease-out]">
-                    <div className="flex items-center gap-3 pb-2 border-b border-white/5">
-                        <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 shadow-[0_0_12px_rgba(59,130,246,0.15)]">
-                            Suchergebnisse
-                        </span>
-                        <span className="text-[10px] text-gray-500 font-bold bg-white/5 px-2 py-0.5 rounded border border-white/5 font-mono">
-                            {statusFilteredProjects.length} {statusFilteredProjects.length === 1 ? 'Treffer' : 'Treffer'}
-                        </span>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {searchSortedProjects.map(project => renderProjectCard(project))}
-                    </div>
-                </div>
-            ) : statusFilter !== 'all' ? (
-                /* Flat Filtered Layout (Overdue, Paused, Completed) */
-                <div className="space-y-6 animate-[fadeIn_0.3s_ease-out]">
-                    <div className="flex items-center gap-3 pb-2 border-b border-white/5">
-                        <span className={`text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full ${
-                            statusFilter === 'overdue'
-                                ? 'bg-red-500/10 text-red-400 border border-red-500/20 shadow-[0_0_12px_rgba(239,68,68,0.15)]'
-                                : statusFilter === 'paused'
-                                    ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 shadow-[0_0_12px_rgba(245,158,11,0.15)]'
-                                    : 'bg-blue-500/10 text-blue-400 border border-blue-500/20 shadow-[0_0_12px_rgba(59,130,246,0.15)]'
-                        }`}>
-                            {statusFilter === 'overdue' && 'Überfällig / Handlungsbedarf'}
-                            {statusFilter === 'paused' && 'Pausierte Projekte'}
-                            {statusFilter === 'completed' && 'Abgeschlossene Projekte'}
-                        </span>
-                        <span className="text-[10px] text-gray-500 font-bold bg-white/5 px-2 py-0.5 rounded border border-white/5 font-mono">
-                            {statusFilteredProjects.length} {statusFilteredProjects.length === 1 ? 'Eintrag' : 'Einträge'}
-                        </span>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {searchSortedProjects.map(project => renderProjectCard(project))}
-                    </div>
-                </div>
+                renderEmptyState()
             ) : (
-                /* Normal Mode: Chronological Weekly Timeline & Sections */
-                <div className="space-y-12">
-                    {/* A. OVERDUE PROJECTS WARNING HEADER SECTION */}
-                    {overdueProjects.length > 0 && (
-                        <div className="space-y-4 animate-[fadeIn_0.3s_ease-out] bg-red-950/15 border border-red-500/20 p-6 rounded-2xl backdrop-blur-md shadow-[0_0_30px_rgba(239,68,68,0.05)]">
-                            <div className="flex items-center justify-between pb-2 border-b border-red-500/10">
-                                <div className="flex items-center gap-3">
-                                    <span className="text-xs font-extrabold uppercase tracking-wider px-3 py-1 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 shadow-[0_0_12px_rgba(239,68,68,0.25)] animate-pulse">
-                                        ⚠️ Handlungsbedarf
-                                    </span>
-                                    <h4 className="text-sm font-bold text-red-200">Überfällige aktive Projekte (Frist abgelaufen)</h4>
-                                </div>
-                                <span className="text-[10px] text-red-400 font-bold bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20 font-mono">
-                                    {overdueProjects.length} {overdueProjects.length === 1 ? 'Eintrag' : 'Einträge'}
-                                </span>
-                            </div>
-                            <p className="text-xs text-red-300/80 leading-relaxed max-w-2xl font-light">
-                                Die folgenden Projekte haben ihr geplantes Enddatum überschritten, sind aber noch aktiv. Bitte aktualisieren Sie den Status auf "Abgeschlossen" oder passen Sie die Projektdaten an.
-                            </p>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2">
-                                {overdueProjects.map(project => renderProjectCard(project))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* 1. CHRONOLOGICAL ACTIVE & FUTURE SECTIONS */}
-                    {chronologicalDays.map(day => (
-                        <div key={day.dateStr} className="space-y-4 animate-[fadeIn_0.3s_ease-out]">
-                            {/* Day Header Badges with premium glows */}
-                            <div className="flex items-center gap-3 pb-2 border-b border-white/5">
-                                <span className={`text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full ${
-                                    day.label === 'Heute'
-                                        ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20 shadow-[0_0_12px_rgba(59,130,246,0.15)]'
-                                        : day.label === 'Morgen'
-                                            ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20 shadow-[0_0_12px_rgba(168,85,247,0.15)]'
-                                            : 'bg-slate-800 text-gray-300 border border-white/5'
-                                }`}>
-                                    {day.label}
-                                </span>
-                                {day.dateStr && (
-                                    <span className="text-xs text-gray-500 font-mono font-medium">
-                                        {new Date(day.dateStr).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-                                    </span>
-                                )}
-                                <span className="text-[10px] text-gray-500 font-bold bg-white/5 px-2 py-0.5 rounded border border-white/5">
-                                    {day.projects.length} {day.projects.length === 1 ? 'Projekt' : 'Projekte'}
-                                </span>
-                            </div>
-
-                            {/* Projects Grid or premium compact glass empty placeholder */}
-                            {day.projects.length > 0 ? (
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {day.projects.map(project => renderProjectCard(project))}
-                                </div>
-                            ) : (
-                                <div className="bg-[#0f1322]/30 border border-white/[0.03] rounded-xl p-4 flex items-center gap-3 text-gray-500 backdrop-blur-sm">
-                                    <i className="fa-regular fa-calendar-check text-blue-500/40 text-sm"></i>
-                                    <span className="text-xs tracking-wide">Keine Projekte für diesen Tag geplant</span>
-                                </div>
-                            )}
-                        </div>
-                    ))}
-
-                    {/* Notice if Day-by-Day schedule has no items but we have far-future items */}
-                    {chronologicalDays.every(d => d.projects.length === 0) && activeOrFutureProjects.length > 0 && (
-                        <div className="bg-[#0f1322]/30 border border-white/5 p-8 rounded-2xl text-center text-gray-400 backdrop-blur-md">
-                            <i className="fa-regular fa-calendar-xmark text-3xl mb-3 text-slate-700"></i>
-                            <p className="text-sm">Keine aktiven Projekte für den ausgewählten Zeitraum geplant.</p>
-                        </div>
-                    )}
-
-                    {/* 2. FAR FUTURE PROJECTS SECTON (if dateFilter === 'all' and any exist) */}
-                    {dateFilter === 'all' && farFutureProjects.length > 0 && (
-                        <div className="space-y-4 pt-4 border-t border-white/5 animate-[fadeIn_0.3s_ease-out]">
-                            <div className="flex items-center gap-3 pb-2 border-b border-white/5">
-                                <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-slate-800 text-gray-300 border border-white/5">
-                                    Zukünftige Projekte (in mehr als 7 Tagen)
-                                </span>
-                                <span className="text-[10px] text-gray-500 font-bold bg-white/5 px-2 py-0.5 rounded border border-white/5">
-                                    {farFutureProjects.length}
-                                </span>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {farFutureProjects.map(project => renderProjectCard(project))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* 3. PAST & COMPLETED PROJECTS SECTION (ALWAYS AT THE BOTTOM) */}
-                    {completedProjects.length > 0 && (
-                        <div className="space-y-4 pt-8 border-t border-white/10 animate-[fadeIn_0.3s_ease-out]">
-                            <div className="flex items-center gap-3 pb-2 border-b border-white/5">
-                                <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-slate-900/60 text-gray-400 border border-white/5 shadow-inner">
-                                    Vergangene & Abgeschlossene Projekte
-                                </span>
-                                <span className="text-[10px] text-gray-500 font-bold bg-white/5 px-2 py-0.5 rounded border border-white/5">
-                                    {completedProjects.length}
-                                </span>
-                            </div>
-                            
-                            {/* Render completed/past projects with slightly dimmed/ghostly/glass aesthetic to visually prioritize active ones */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 opacity-75 hover:opacity-100 transition-opacity duration-300">
-                                {completedProjects.map(project => renderProjectCard(project))}
-                            </div>
-                        </div>
-                    )}
+                <div className="relative">
+                    {activeView === 'grid' && renderGridView()}
+                    {activeView === 'calendar' && renderCalendarView()}
+                    {activeView === 'timeline' && renderTimelineView()}
                 </div>
             )}
 
