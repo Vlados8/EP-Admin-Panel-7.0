@@ -1074,7 +1074,7 @@ const ProjectQuickViewModal = ({ project, onClose, onOpenDetails }) => {
     };
 
     return (
-        <div className="fixed inset-y-0 right-0 left-0 md:left-64 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]">
+        <div className="fixed inset-y-0 right-0 left-0 md:left-64 z-50 flex items-center justify-center p-4 bg-black/50 animate-[fadeIn_0.2s_ease-out]">
             {/* Modal Container */}
             <div className="relative w-full max-w-lg bg-[#0f1322]/90 border border-white/10 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-xl flex flex-col animate-[slideUp_0.3s_ease-out]">
                 
