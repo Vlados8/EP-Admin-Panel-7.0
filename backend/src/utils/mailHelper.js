@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const FormData = require('form-data');
 const Mailgun = require('mailgun.js');
-const { Company } = require('../domain/models');
+const { Company, Email } = require('../domain/models');
 
 // Initialize Mailgun
 const mailgun = new Mailgun(FormData);
@@ -152,7 +152,7 @@ const sendAutoReply = async (clientEmail, clientName, itemId, subject, type = 's
 
     const firmName = settings.firmName || 'Empire Premium Bau GmbH';
     const domain = process.env.MAILGUN_DOMAIN;
-    const fromEmail = type === 'bewerbung' ? `info@${domain}` : `no-reply@${domain}`;
+    const fromEmail = `no-reply@${domain}`;
     const fromName = `${firmName} Team`;
     
     const frontendUrl = process.env.FRONTEND_URL || 'https://www.empire-premium-bau.de';
@@ -209,6 +209,29 @@ const sendAutoReply = async (clientEmail, clientName, itemId, subject, type = 's
 
     try {
         const result = await mg.messages.create(domain, messageData);
+
+        // Save sent auto-reply to the database
+        try {
+            await Email.create({
+                mailgun_id: result.id,
+                sender: messageData.from,
+                sender_name: fromName,
+                sender_email: fromEmail,
+                recipient: clientEmail,
+                recipient_name: clientName || null,
+                recipient_email: clientEmail,
+                subject: emailSubject,
+                body_html: finalHtml,
+                body_plain: rawContent.replace(/<[^>]*>/g, ''),
+                company_id: companyId,
+                received_at: new Date(),
+                is_read: true,
+                direction: 'outbound'
+            });
+        } catch (dbErr) {
+            console.error('[Mailgun] Auto-reply DB Save Error:', dbErr);
+        }
+
         return { success: true, id: result.id, message: rawContent };
     } catch (error) {
         console.error('[Mailgun] Auto-reply Send Error:', error);
