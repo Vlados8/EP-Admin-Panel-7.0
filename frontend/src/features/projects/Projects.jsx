@@ -36,6 +36,7 @@ const Projects = () => {
     
     const canManageProjects = usePermission('MANAGE_PROJECTS');
     const isSubcontractor = currentUser?.role?.name === 'Subcontractor' || currentUser?.role === 'Subcontractor';
+    const isPartner = currentUser?.isPartner || currentUser?.role?.name === 'Partner' || currentUser?.role === 'Partner';
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -422,7 +423,7 @@ const Projects = () => {
                         {(project.client || [project.client_first_name, project.client_last_name].some(Boolean)) && (
                             <p className="text-slate-300 text-xs flex items-center gap-1.5 mb-1.5 flex-wrap">
                                 <i className="fa-solid fa-user-tie text-purple-400 text-[12px]"></i>
-                                {project.client && !(isSubcontractor && [project.client_first_name, project.client_last_name].some(Boolean)) ? (
+                                {project.client && !((isSubcontractor || isPartner) && [project.client_first_name, project.client_last_name].some(Boolean)) ? (
                                     <>
                                         <span className="font-medium">
                                             Kunde: <span className="text-white font-semibold">{project.client.name}</span>
@@ -1018,6 +1019,8 @@ const Projects = () => {
             {selectedQuickViewProject && (
                 <ProjectQuickViewModal
                     project={selectedQuickViewProject}
+                    isSubcontractor={isSubcontractor}
+                    isPartner={isPartner}
                     onClose={() => setSelectedQuickViewProject(null)}
                     onOpenDetails={(id) => {
                         setSelectedQuickViewProject(null);
@@ -1029,7 +1032,7 @@ const Projects = () => {
     );
 };
 
-const ProjectQuickViewModal = ({ project, onClose, onOpenDetails }) => {
+const ProjectQuickViewModal = ({ project, isSubcontractor, isPartner, onClose, onOpenDetails }) => {
     if (!project) return null;
 
     const formattedDuration = (() => {
@@ -1179,12 +1182,12 @@ const ProjectQuickViewModal = ({ project, onClose, onOpenDetails }) => {
                             <div className="bg-white/[0.02] border border-white/5 rounded-xl p-3 flex flex-col justify-center">
                                 <span className="text-[9px] uppercase tracking-wider text-gray-500 font-bold mb-1">Kunden</span>
                                 <div className="text-xs text-gray-300 flex flex-col gap-0.5">
-                                    {project.client && (
+                                    {project.client && !((isSubcontractor || isPartner) && [project.client_first_name, project.client_last_name].some(Boolean)) ? (
                                         <div className="flex items-center gap-1.5">
                                             <i className="fa-solid fa-user-tie text-purple-400 text-[11px]"></i>
                                             <span className="font-semibold">{project.client.name}</span>
                                         </div>
-                                    )}
+                                    ) : null}
                                     {[project.client_first_name, project.client_last_name].some(Boolean) && (
                                         <div className="flex items-center gap-1.5">
                                             <i className="fa-solid fa-user text-emerald-400 text-[10px]"></i>
