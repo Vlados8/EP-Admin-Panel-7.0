@@ -68,10 +68,34 @@ exports.getAllProjects = async (req, res) => {
             order: [['createdAt', 'DESC']]
         });
 
-        if (!canSeeInternalDesc) {
-            projects.forEach(p => {
-                p.setDataValue('internal_description', undefined);
-            });
+        for (const project of projects) {
+            if (!canSeeInternalDesc) {
+                project.setDataValue('internal_description', undefined);
+            }
+
+            let categoriesList = [];
+            if (project.categories_json) {
+                try {
+                    const parsed = JSON.parse(project.categories_json);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        for (const item of parsed) {
+                            const cat = await Category.findByPk(item.category_id, {
+                                include: [{ model: Subcategory, as: 'subcategories' }]
+                            });
+                            const sub = item.subcategory_id ? await Subcategory.findByPk(item.subcategory_id) : null;
+                            if (cat) {
+                                categoriesList.push({
+                                    category: cat,
+                                    subcategory: sub
+                                });
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error('Error parsing categories_json in getAllProjects:', err);
+                }
+            }
+            project.setDataValue('categories_list', categoriesList);
         }
 
         res.status(200).json({
