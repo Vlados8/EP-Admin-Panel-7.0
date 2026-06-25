@@ -93,7 +93,11 @@ const ProjectFileManager = ({ project }) => {
                 params: { path }
             });
             if (res.data?.status === 'success') {
-                setItems(res.data.data);
+                const fetchedItems = res.data.data || [];
+                setItems(fetchedItems);
+                if (fetchedItems.length > 20) {
+                    setViewMode('list');
+                }
             }
         } catch (error) {
             console.error('Error fetching files:', error);
