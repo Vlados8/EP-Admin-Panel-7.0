@@ -789,7 +789,7 @@ const Projects = () => {
                 <div className="flex bg-[#0f1322]/40 p-1 rounded-xl border border-white/5 backdrop-blur-md w-full xl:w-auto relative z-50">
                     <button
                         onClick={() => setActiveView('grid')}
-                        className={`flex-1 xl:flex-initial px-4 py-2 rounded-lg text-[11px] font-bold tracking-wider uppercase transition-all duration-300 flex items-center justify-center gap-1.5 ${
+                        className={`flex-1 xl:flex-initial px-2.5 sm:px-4 py-2 rounded-lg text-[10px] sm:text-[11px] font-bold tracking-wider uppercase transition-all duration-300 flex items-center justify-center gap-1 sm:gap-1.5 whitespace-nowrap ${
                             activeView === 'grid'
                                 ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.18)]'
                                 : 'text-gray-400 hover:text-white border border-transparent'
@@ -799,7 +799,7 @@ const Projects = () => {
                     </button>
                     <button
                         onClick={() => setActiveView('calendar')}
-                        className={`flex-1 xl:flex-initial px-4 py-2 rounded-lg text-[11px] font-bold tracking-wider uppercase transition-all duration-300 flex items-center justify-center gap-1.5 ${
+                        className={`flex-1 xl:flex-initial px-2.5 sm:px-4 py-2 rounded-lg text-[10px] sm:text-[11px] font-bold tracking-wider uppercase transition-all duration-300 flex items-center justify-center gap-1 sm:gap-1.5 whitespace-nowrap ${
                             activeView === 'calendar'
                                 ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.18)]'
                                 : 'text-gray-400 hover:text-white border border-transparent'
@@ -809,7 +809,7 @@ const Projects = () => {
                     </button>
                     <button
                         onClick={() => setActiveView('timeline')}
-                        className={`flex-1 xl:flex-initial px-4 py-2 rounded-lg text-[11px] font-bold tracking-wider uppercase transition-all duration-300 flex items-center justify-center gap-1.5 ${
+                        className={`flex-1 xl:flex-initial px-2.5 sm:px-4 py-2 rounded-lg text-[10px] sm:text-[11px] font-bold tracking-wider uppercase transition-all duration-300 flex items-center justify-center gap-1 sm:gap-1.5 whitespace-nowrap ${
                             activeView === 'timeline'
                                 ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.18)]'
                                 : 'text-gray-400 hover:text-white border border-transparent'
