@@ -408,41 +408,65 @@ const ProjectFileManager = ({ project }) => {
         <div className="glass-card rounded-2xl p-6 animate-[fadeIn_0.3s_ease-out]">
             {/* Toolbar */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 custom-scrollbar">
-                    <button
-                        onClick={() => setCurrentPath('')}
-                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${currentPath === '' ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20' : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'}`}
-                    >
-                        <i className="fa-solid fa-home mr-2"></i> Stammordner
-                    </button>
-                    {currentPath && currentPath.split('/').map((part, index, arr) => {
-                        const pathSoFar = arr.slice(0, index + 1).join('/');
-                        const isLast = index === arr.length - 1;
-                        let displayPart = part;
-                        if (index === 0 && part === 'stages') displayPart = 'Etappen';
-                        if (index === 0 && part === 'gallery') displayPart = 'Galerie';
-                        if (index === 1 && arr[0] === 'stages') {
-                            const stageIndex = project.stages?.findIndex(s => String(s.id) === part);
-                            if (stageIndex !== -1) displayPart = `Etappe ${stageIndex + 1}`;
-                        }
+                {/* Left Side: Breadcrumbs and Mobile View Switcher */}
+                <div className="flex items-center justify-between gap-3 w-full sm:w-auto overflow-hidden">
+                    <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 custom-scrollbar flex-1">
+                        <button
+                            onClick={() => setCurrentPath('')}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${currentPath === '' ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20' : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'}`}
+                        >
+                            <i className="fa-solid fa-home mr-2"></i> Stammordner
+                        </button>
+                        {currentPath && currentPath.split('/').map((part, index, arr) => {
+                            const pathSoFar = arr.slice(0, index + 1).join('/');
+                            const isLast = index === arr.length - 1;
+                            let displayPart = part;
+                            if (index === 0 && part === 'stages') displayPart = 'Etappen';
+                            if (index === 0 && part === 'gallery') displayPart = 'Galerie';
+                            if (index === 1 && arr[0] === 'stages') {
+                                const stageIndex = project.stages?.findIndex(s => String(s.id) === part);
+                                if (stageIndex !== -1) displayPart = `Etappe ${stageIndex + 1}`;
+                            }
 
-                        return (
-                            <React.Fragment key={pathSoFar}>
-                                <i className="fa-solid fa-chevron-right text-gray-600 text-xs"></i>
-                                <button
-                                    onClick={() => setCurrentPath(pathSoFar)}
-                                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${isLast ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20' : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'}`}
-                                >
-                                    {displayPart}
-                                </button>
-                            </React.Fragment>
-                        );
-                    })}
+                            return (
+                                <React.Fragment key={pathSoFar}>
+                                    <i className="fa-solid fa-chevron-right text-gray-600 text-xs"></i>
+                                    <button
+                                        onClick={() => setCurrentPath(pathSoFar)}
+                                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${isLast ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20' : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'}`}
+                                    >
+                                        {displayPart}
+                                    </button>
+                                </React.Fragment>
+                            );
+                        })}
+                    </div>
+
+                    {/* Mobile View mode toggle */}
+                    <div className="flex sm:hidden bg-white/5 rounded-xl border border-white/10 p-0.5 relative z-40 shrink-0">
+                        <button
+                            type="button"
+                            onClick={() => setViewMode('grid')}
+                            className={`p-2 rounded-lg text-xs transition-colors flex items-center justify-center ${viewMode === 'grid' ? 'bg-blue-500 text-white shadow-md' : 'text-gray-400 hover:text-white'}`}
+                            title="Kachelansicht"
+                        >
+                            <i className="fa-solid fa-grip-vertical"></i>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setViewMode('list')}
+                            className={`p-2 rounded-lg text-xs transition-colors flex items-center justify-center ${viewMode === 'list' ? 'bg-blue-500 text-white shadow-md' : 'text-gray-400 hover:text-white'}`}
+                            title="Listenansicht"
+                        >
+                            <i className="fa-solid fa-list"></i>
+                        </button>
+                    </div>
                 </div>
 
-                <div className="flex items-center gap-3">
-                    {/* View mode toggle */}
-                    <div className="flex bg-white/5 rounded-xl border border-white/10 p-0.5 relative z-40">
+                {/* Right Side: Actions and Desktop View Switcher */}
+                <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
+                    {/* Desktop View mode toggle */}
+                    <div className="hidden sm:flex bg-white/5 rounded-xl border border-white/10 p-0.5 relative z-40 shrink-0">
                         <button
                             type="button"
                             onClick={() => setViewMode('grid')}
@@ -466,7 +490,7 @@ const ProjectFileManager = ({ project }) => {
                             {canCreateFolder && (
                                 <button
                                     onClick={handleCreateFolder}
-                                    className="bg-white/5 hover:bg-white/10 border border-white/10 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2"
+                                    className="bg-white/5 hover:bg-white/10 border border-white/10 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2 whitespace-nowrap shrink-0"
                                 >
                                     <i className="fa-solid fa-folder-plus text-blue-400"></i> Neuer Ordner
                                 </button>
@@ -475,7 +499,7 @@ const ProjectFileManager = ({ project }) => {
                             {canUploadFiles && (
                                 <button
                                     onClick={() => fileInputRef.current?.click()}
-                                    className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl border border-blue-500/50 text-sm font-medium transition-colors shadow-[0_0_15px_rgba(37,99,235,0.3)] flex items-center gap-2"
+                                    className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl border border-blue-500/50 text-sm font-medium transition-colors shadow-[0_0_15px_rgba(37,99,235,0.3)] flex items-center gap-2 whitespace-nowrap shrink-0"
                                 >
                                     <i className="fa-solid fa-cloud-arrow-up"></i> Hochladen
                                 </button>
