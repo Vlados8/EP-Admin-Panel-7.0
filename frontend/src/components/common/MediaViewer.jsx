@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import api from '../../services/api';
 import { getImageUrl } from '../../utils/config';
 
-const MediaViewer = ({ isOpen, onClose, items = [], initialIndex = 0, onShare }) => {
+const MediaViewer = ({ isOpen, onClose, items = [], initialIndex = 0, onShare, showThumbnails = true }) => {
     const [currentIndex, setCurrentIndex] = useState(initialIndex);
     const [zoom, setZoom] = useState(1);
 
@@ -262,7 +262,7 @@ const MediaViewer = ({ isOpen, onClose, items = [], initialIndex = 0, onShare })
             </div>
 
             {/* Thumbnail Strip */}
-            {items.length > 1 && (
+            {items.length > 1 && showThumbnails && (
                 <div 
                     className="h-24 bg-black/40 backdrop-blur-md border-t border-white/5 flex items-center justify-center p-2 gap-2 overflow-x-auto scrollbar-none"
                     onClick={(e) => e.stopPropagation()}

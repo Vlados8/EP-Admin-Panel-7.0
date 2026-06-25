@@ -775,6 +775,7 @@ const ProjectFileManager = ({ project }) => {
                 onClose={() => setIsGalleryOpen(false)}
                 items={galleryItems}
                 initialIndex={galleryIndex}
+                showThumbnails={viewMode !== 'list'}
             />
             {/* Folder Permissions Modal */}
             {selectedFolderForPermissions && (
