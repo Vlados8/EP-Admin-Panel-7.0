@@ -29,6 +29,13 @@ const ProjectFileManager = ({ project }) => {
     const [isUploading, setIsUploading] = useState(false);
     const [downloadingFolders, setDownloadingFolders] = useState({});
     const fileInputRef = useRef(null);
+    const [viewMode, setViewMode] = useState(() => {
+        return localStorage.getItem('project_files_view_mode') || 'grid';
+    });
+
+    useEffect(() => {
+        localStorage.setItem('project_files_view_mode', viewMode);
+    }, [viewMode]);
 
     // Upload Queue State
     const [uploadQueue, setUploadQueue] = useState([]); // { id, fileName, progress, status, error }
@@ -430,6 +437,26 @@ const ProjectFileManager = ({ project }) => {
                 </div>
 
                 <div className="flex items-center gap-3">
+                    {/* View mode toggle */}
+                    <div className="flex bg-white/5 rounded-xl border border-white/10 p-0.5 relative z-40">
+                        <button
+                            type="button"
+                            onClick={() => setViewMode('grid')}
+                            className={`p-2 rounded-lg text-xs transition-colors flex items-center justify-center ${viewMode === 'grid' ? 'bg-blue-500 text-white shadow-md' : 'text-gray-400 hover:text-white'}`}
+                            title="Kachelansicht"
+                        >
+                            <i className="fa-solid fa-grip-vertical"></i>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setViewMode('list')}
+                            className={`p-2 rounded-lg text-xs transition-colors flex items-center justify-center ${viewMode === 'list' ? 'bg-blue-500 text-white shadow-md' : 'text-gray-400 hover:text-white'}`}
+                            title="Listenansicht"
+                        >
+                            <i className="fa-solid fa-list"></i>
+                        </button>
+                    </div>
+
                     {!isStagesDir && (
                         <>
                             {canCreateFolder && (
@@ -473,6 +500,142 @@ const ProjectFileManager = ({ project }) => {
                         <i className="fa-regular fa-folder-open text-5xl mb-4 opacity-30"></i>
                         <p>Dieser Ordner ist leer.</p>
                         <p className="text-xs mt-2 text-gray-600">Laden Sie Dateien hoch oder erstellen Sie einen Ordner.</p>
+                    </div>
+                ) : viewMode === 'list' ? (
+                    <div className="flex flex-col divide-y divide-white/5 bg-white/[0.01] rounded-xl border border-white/5">
+                        {/* Go Up Directory Item in List View */}
+                        {currentPath && (
+                            <div
+                                onClick={navigateUp}
+                                className="group hover:bg-white/5 px-4 py-3 flex items-center gap-3.5 cursor-pointer transition-colors"
+                            >
+                                <div className="w-8 h-8 flex items-center justify-center rounded bg-white/5 text-gray-400 group-hover:text-white border border-white/5 transition-colors">
+                                    <i className="fa-solid fa-reply text-sm"></i>
+                                </div>
+                                <span className="text-sm font-medium text-gray-400 group-hover:text-white">.. (Zurück)</span>
+                            </div>
+                        )}
+
+                        {items.map((item, idx) => {
+                            const displayName = getDisplayName(item, currentPath);
+                            const isSpecialFolder = currentPath === '' && (item.physicalName === 'stages' || item.name === 'stages');
+
+                            // RBAC check:
+                            let canDelete = false;
+                            if (isSubcontractor) {
+                                if (user?.isPartner) {
+                                    canDelete = item.created_by_client_id === user.id;
+                                } else {
+                                    canDelete = item.created_by_subcontractor_id === user.id;
+                                }
+                            } else if (isManagement) {
+                                canDelete = !isSpecialFolder && !isStagesDir;
+                            } else {
+                                // Worker: Can delete files if they are the owner, but NEVER folders.
+                                canDelete = !item.isDirectory && item.created_by_id === user.id;
+                            }
+
+                            // Icon logic for list view (no network images!)
+                            let fileIcon = <i className="fa-solid fa-file-lines text-lg text-gray-400"></i>;
+                            if (item.isDirectory) {
+                                fileIcon = <i className="fa-solid fa-folder text-lg text-blue-400"></i>;
+                            } else if (isImage(item.name)) {
+                                fileIcon = <i className="fa-solid fa-file-image text-lg text-emerald-400"></i>;
+                            } else if (item.name.match(/\.(mp4|webm|mov|avi|mkv|wmv|flv|m4v|3gp)$/i)) {
+                                fileIcon = <i className="fa-solid fa-file-video text-lg text-blue-400"></i>;
+                            }
+
+                            return (
+                                <div
+                                    key={idx}
+                                    className="group hover:bg-white/5 px-4 py-3.5 flex items-center justify-between gap-4 transition-colors relative"
+                                >
+                                    <div
+                                        onClick={() => {
+                                            if (item.isDirectory) {
+                                                navigateTo(item);
+                                            } else {
+                                                const isVid = item.name.match(/\.(mp4|webm|mov|avi|mkv|wmv|flv|m4v|3gp)$/i);
+                                                if (isVid || isImage(item.name)) {
+                                                    openGallery(items, idx);
+                                                } else {
+                                                    window.open(getImageUrl(item.url), '_blank');
+                                                }
+                                            }
+                                        }}
+                                        className="flex-1 min-w-0 flex items-center gap-3.5 cursor-pointer"
+                                    >
+                                        <div className="w-8 h-8 flex items-center justify-center shrink-0 rounded bg-white/5 border border-white/5 group-hover:border-blue-500/30 transition-colors">
+                                            {fileIcon}
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="text-sm font-semibold text-gray-200 truncate group-hover:text-white" title={`${displayName}${item.creator_name ? ` (Erstellt von ${item.creator_name})` : ''}`}>
+                                                {displayName}
+                                            </div>
+                                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-gray-500 mt-0.5">
+                                                <span>{!item.isDirectory ? formatSize(item.size) : 'Ordner'}</span>
+                                                {item.creator_name && (
+                                                    <span className={item.created_by_subcontractor_id ? 'text-amber-500/70 font-semibold' : (item.created_by_client_id ? 'text-purple-500/70 font-semibold' : 'text-gray-500')}>
+                                                        • von {item.creator_name} {item.created_by_subcontractor_id && <i className="fa-solid fa-helmet-safety text-amber-500/70 text-[9px]"></i>} {item.created_by_client_id && <i className="fa-solid fa-handshake text-purple-500/70 text-[9px]"></i>}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Action Buttons */}
+                                    <div className="flex items-center gap-2 shrink-0 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                        {/* Permission button for folder */}
+                                        {item.isDirectory && !isStagesDir && canManagePermissions && (
+                                            <button
+                                                onClick={(e) => handleOpenPermissions(item, e)}
+                                                className="w-8 h-8 rounded-lg bg-blue-500/10 hover:bg-blue-500 border border-blue-500/20 text-blue-400 hover:text-white flex items-center justify-center text-xs transition-all shadow-md"
+                                                title="Berechtigungen"
+                                            >
+                                                <i className="fa-solid fa-shield-halved"></i>
+                                            </button>
+                                        )}
+
+                                        {/* Download button */}
+                                        {item.isDirectory ? (
+                                            !isSpecialFolder && (
+                                                <button
+                                                    onClick={(e) => handleDownloadFolder(item, e)}
+                                                    disabled={downloadingFolders[item.path || (currentPath ? `${currentPath}/${item.physicalName || item.name}` : (item.physicalName || item.name))]}
+                                                    className="w-8 h-8 bg-blue-500/10 hover:bg-blue-500 disabled:bg-blue-500/50 text-blue-400 hover:text-white border border-blue-500/20 rounded-lg flex items-center justify-center text-xs transition-all shadow-md"
+                                                    title="Ordner als ZIP herunterladen"
+                                                >
+                                                    {downloadingFolders[item.path || (currentPath ? `${currentPath}/${item.physicalName || item.name}` : (item.physicalName || item.name))] ? (
+                                                        <i className="fa-solid fa-circle-notch fa-spin"></i>
+                                                    ) : (
+                                                        <i className="fa-solid fa-download"></i>
+                                                    )}
+                                                </button>
+                                            )
+                                        ) : (
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleDownload(item, e); }}
+                                                className="w-8 h-8 bg-blue-500/10 hover:bg-blue-500 text-blue-400 hover:text-white border border-blue-500/20 rounded-lg flex items-center justify-center text-xs transition-all shadow-md"
+                                                title="Herunterladen"
+                                            >
+                                                <i className="fa-solid fa-download"></i>
+                                            </button>
+                                        )}
+
+                                        {/* Delete button */}
+                                        {canDelete && canDeleteItems && (
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleDelete(item); }}
+                                                className="w-8 h-8 rounded-lg bg-red-500/10 hover:bg-red-500 border border-red-500/20 text-red-400 hover:text-white flex items-center justify-center text-xs transition-all shadow-md"
+                                                title="Löschen"
+                                            >
+                                                <i className="fa-solid fa-trash"></i>
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
